@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { hasIK, animateLegsIK, animateBody } from './procanim.js';
 import { CELL } from './sim/defs.js';
+import { biomeOf } from './biomes.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -214,17 +215,17 @@ export function makeUnitMaterial(U, base) {
 
 // ------------------------------------------------------------------ sky dome + environment
 export class Sky {
-  constructor(U) {
+  constructor(U, hor = [0.50, 0.66, 0.84], zen = [0.10, 0.28, 0.66]) {
     this.U = U;
     this.mat = new THREE.ShaderMaterial({
-      uniforms: { uSun: U.uSunDir, uTime: U.uTime, uCld: U.uCld, uWind: U.uWind },
+      uniforms: { uHor: { value: new THREE.Vector3(...hor) }, uZen: { value: new THREE.Vector3(...zen) }, uSun: U.uSunDir, uTime: U.uTime, uCld: U.uCld, uWind: U.uWind },
       side: THREE.BackSide, depthWrite: false, fog: false,
       vertexShader: 'varying vec3 vDir; void main() { vDir = position; vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w * 0.99999; }',
       fragmentShader: `
-      varying vec3 vDir; uniform vec3 uSun; uniform float uTime; uniform sampler2D uCld; uniform vec2 uWind;
+      varying vec3 vDir; uniform vec3 uHor; uniform vec3 uZen; uniform vec3 uSun; uniform float uTime; uniform sampler2D uCld; uniform vec2 uWind;
       void main() {
         vec3 d = normalize(vDir); float h = d.y;
-        vec3 zen = vec3(0.10, 0.28, 0.66), hor = vec3(0.50, 0.66, 0.84);
+        vec3 zen = uZen, hor = uHor;
         vec3 col = mix(hor, zen, pow(clamp(h, 0.0, 1.0), 0.5));
         col = mix(hor * vec3(0.9, 0.95, 1.0), vec3(0.10, 0.20, 0.30), smoothstep(0.0, -0.5, h));
         float sd = max(dot(d, normalize(uSun)), 0.0);
@@ -362,6 +363,67 @@ function palmGeo() {
   for (let i = 0; i < 7; i++) { const a = i / 7 * 6.283; parts.push({ geo: cone, pos: [0.5 + Math.cos(a) * 0.9, 4.2 - 0.2, Math.sin(a) * 0.9], rot: [Math.sin(a) * 1.15, 0, -Math.cos(a) * 1.15], scl: [0.8, 2.4, 0.15], color: i & 1 ? 0x4f8a3a : 0x5e9a44, grad: [3.2, 4.6] }); }
   return mergeParts(parts);
 }
+
+// ---- biome vegetation and rocks
+function oakGeo() {
+  const ico = new THREE.IcosahedronGeometry(1, 1), cyl = new THREE.CylinderGeometry(0.28, 0.42, 1, 6);
+  return mergeParts([{ geo: cyl, pos: [0, 1.1, 0], scl: [1, 2.2, 1], color: 0x5a4632 }, { geo: cyl, pos: [0.6, 2.6, 0.2], rot: [0, 0, -0.8], scl: [0.5, 1.4, 0.5], color: 0x5a4632 },
+    { geo: jitterGeo(ico.clone(), 0.3, 11), pos: [0, 3.9, 0], scl: [2.3, 1.8, 2.3], color: 0x3f7a35, grad: [2, 6] }, { geo: jitterGeo(ico.clone(), 0.3, 12), pos: [1.3, 3.3, 0.5], scl: [1.5, 1.3, 1.5], color: 0x4b8a3c, grad: [2, 5] }, { geo: jitterGeo(ico.clone(), 0.3, 13), pos: [-1.2, 3.5, -0.4], scl: [1.6, 1.4, 1.6], color: 0x36702f, grad: [2, 5] }]);
+}
+function birchGeo() {
+  const ico = new THREE.IcosahedronGeometry(1, 1), cyl = new THREE.CylinderGeometry(0.12, 0.18, 1, 5);
+  return mergeParts([{ geo: cyl, pos: [0, 1.6, 0], rot: [0, 0, 0.05], scl: [1, 3.2, 1], color: 0xdad6c8 }, { geo: jitterGeo(ico.clone(), 0.25, 21), pos: [0, 4.0, 0], scl: [1.15, 1.7, 1.15], color: 0x9bb84a, grad: [2, 6] }, { geo: jitterGeo(ico.clone(), 0.25, 22), pos: [0.5, 3.1, 0.2], scl: [0.8, 1.0, 0.8], color: 0x86a63f, grad: [2, 4] }]);
+}
+function deadTreeGeo() {
+  const cyl = new THREE.CylinderGeometry(0.1, 0.3, 1, 5), parts = [{ geo: cyl, pos: [0, 1.5, 0], rot: [0, 0, 0.06], scl: [1, 3.0, 1], color: 0x5c5148 }];
+  for (let i = 0; i < 5; i++) { const a = i * 1.37; parts.push({ geo: cyl, pos: [Math.cos(a) * 0.5, 2.2 + i * 0.4, Math.sin(a) * 0.5], rot: [Math.sin(a) * 0.9, 0, -Math.cos(a) * 0.9], scl: [0.45, 1.4 - i * 0.14, 0.45], color: 0x6b5f54 }); }
+  return mergeParts(parts);
+}
+function cactusGeo() {
+  const cyl = new THREE.CylinderGeometry(0.35, 0.38, 1, 7), ico = new THREE.IcosahedronGeometry(1, 1), g1 = 0x4d8a4a, g2 = 0x5a9a52;
+  return mergeParts([{ geo: cyl, pos: [0, 1.5, 0], scl: [1, 3.0, 1], color: g1, grad: [0, 3] }, { geo: ico, pos: [0, 3.0, 0], scl: [0.37, 0.45, 0.37], color: g2 },
+    { geo: cyl, pos: [0.75, 1.9, 0], rot: [0, 0, 1.57], scl: [0.7, 1.0, 0.7], color: g1 }, { geo: cyl, pos: [1.1, 2.5, 0], scl: [0.6, 1.4, 0.6], color: g2, grad: [1.8, 3.2] }, { geo: ico, pos: [1.1, 3.2, 0], scl: [0.3, 0.38, 0.3], color: g2 },
+    { geo: cyl, pos: [-0.7, 1.5, 0], rot: [0, 0, -1.57], scl: [0.6, 0.9, 0.6], color: g1 }, { geo: cyl, pos: [-1.0, 2.0, 0], scl: [0.5, 1.0, 0.5], color: g2, grad: [1.2, 2.6] }, { geo: ico, pos: [-1.0, 2.55, 0], scl: [0.26, 0.32, 0.26], color: g2 }]);
+}
+function agaveGeo() {
+  const cone = new THREE.ConeGeometry(0.2, 1, 4), parts = [];
+  for (let i = 0; i < 9; i++) { const a = i / 9 * 6.283; parts.push({ geo: cone, pos: [Math.cos(a) * 0.45, 0.55, Math.sin(a) * 0.45], rot: [Math.sin(a) * 0.85, 0, -Math.cos(a) * 0.85], scl: [1, 1.3, 0.5], color: i & 1 ? 0x7d9a62 : 0x6a8a55, grad: [0, 1.2] }); }
+  return mergeParts(parts);
+}
+function snowPineGeo() {
+  const cone = new THREE.ConeGeometry(1, 1, 7), cyl = new THREE.CylinderGeometry(0.22, 0.34, 1, 6), parts = [{ geo: cyl, pos: [0, 0.9, 0], scl: [1, 1.8, 1], color: 0x4f4034 }];
+  const cols = [0x2b4a3a, 0x335544, 0x3d6150, 0x4b7060];
+  for (let i = 0; i < 4; i++) { parts.push({ geo: cone, pos: [0, 1.7 + i * 1.25, 0], scl: [2.1 - i * 0.42, 2.3, 2.1 - i * 0.42], color: cols[i], grad: [0, 8] }); parts.push({ geo: cone, pos: [0, 2.0 + i * 1.25, 0], scl: [1.7 - i * 0.36, 1.6, 1.7 - i * 0.36], color: 0xeef4f8 }); }
+  parts.push({ geo: cone, pos: [0, 6.8, 0], scl: [0.5, 1.3, 0.5], color: 0xf4f8fb });
+  return mergeParts(parts);
+}
+function iceGeo() {
+  const cone = new THREE.ConeGeometry(0.6, 1, 5), parts = [];
+  for (let i = 0; i < 6; i++) { const a = i * 1.1; parts.push({ geo: cone, pos: [Math.cos(a) * 0.7 * (i ? 1 : 0), 0.9 + (i ? 0 : 0.8), Math.sin(a) * 0.7 * (i ? 1 : 0)], rot: [Math.sin(a) * 0.3, 0, -Math.cos(a) * 0.3], scl: [i ? 0.7 : 1.1, i ? 1.9 : 3.4, i ? 0.7 : 1.1], color: i & 1 ? 0xc4e6f4 : 0xa8d4ea, grad: [-0.5, 3] }); }
+  return mergeParts(parts);
+}
+function lavaRockGeo(seed) {
+  const cone = new THREE.ConeGeometry(0.8, 1, 5), ico = jitterGeo(new THREE.IcosahedronGeometry(1, 1), 0.55, seed);
+  return mergeParts([{ geo: ico, pos: [0, 0.4, 0], scl: [1, 0.8, 1], color: 0x2d2927, grad: [-0.5, 1.2] }, { geo: cone, pos: [0.3, 1.2, 0.1], rot: [0.15, 0, -0.1], scl: [0.6, 1.8, 0.6], color: 0x3a3330 }, { geo: new THREE.IcosahedronGeometry(0.28, 0), pos: [-0.3, 0.55, 0.5], color: 0xd2541c }]);
+}
+function mesaRockGeo(seed) {
+  return mergeParts([{ geo: jitterGeo(new THREE.CylinderGeometry(0.8, 1.1, 1, 7, 2), 0.18, seed), pos: [0, 1.4, 0], scl: [1.3, 2.8, 1.3], color: 0xb0825a, grad: [0, 3] }, { geo: jitterGeo(new THREE.CylinderGeometry(0.85, 0.9, 1, 7), 0.12, seed + 3), pos: [0, 2.9, 0], scl: [1.35, 0.5, 1.35], color: 0xc59a6b }]);
+}
+function jungleTreeGeo() {
+  const cyl = new THREE.CylinderGeometry(0.35, 0.6, 1, 6), ico = new THREE.IcosahedronGeometry(1, 1), parts = [{ geo: cyl, pos: [0, 2.6, 0], scl: [1, 5.2, 1], color: 0x5a4a38 }];
+  for (let i = 0; i < 3; i++) parts.push({ geo: jitterGeo(ico.clone(), 0.3, 31 + i), pos: [Math.cos(i * 2.1) * 1.6, 5.6 + i * 0.4, Math.sin(i * 2.1) * 1.6], scl: [2.6, 0.9, 2.6], color: [0x2a6a28, 0x347a2c, 0x2f7030][i], grad: [4.5, 7] });
+  for (let i = 0; i < 4; i++) { const a = i * 1.6; parts.push({ geo: cyl, pos: [Math.cos(a) * 1.9, 4.2, Math.sin(a) * 1.9], scl: [0.07, 2.4, 0.07], color: 0x3d7a34 }); }
+  return mergeParts(parts);
+}
+function fernGeo() {
+  const cone = new THREE.ConeGeometry(0.25, 1, 4), parts = [];
+  for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283; parts.push({ geo: cone, pos: [Math.cos(a) * 0.55, 0.45, Math.sin(a) * 0.55], rot: [Math.sin(a) * 1.0, 0, -Math.cos(a) * 1.0], scl: [1, 1.9, 0.18], color: i & 1 ? 0x3f8a3a : 0x2f7a32, grad: [0, 1] }); }
+  return mergeParts(parts);
+}
+function logGeo() {
+  const cyl = new THREE.CylinderGeometry(0.35, 0.4, 1, 7);
+  return mergeParts([{ geo: cyl, pos: [0, 0.35, 0], rot: [0, 0, 1.57], scl: [1, 3.2, 1], color: 0x5b4733 }, { geo: new THREE.CylinderGeometry(0.3, 0.3, 0.05, 7), pos: [1.6, 0.35, 0], rot: [0, 0, 1.57], color: 0xb8956a }]);
+}
 function bushGeo() { return mergeParts([{ geo: jitterGeo(new THREE.IcosahedronGeometry(1, 1), 0.35, 5), pos: [0, 0.55, 0], scl: [1.2, 0.8, 1.2], color: 0x486d33, grad: [0, 1.3] }, { geo: jitterGeo(new THREE.IcosahedronGeometry(0.7, 1), 0.25, 6), pos: [0.6, 0.35, 0.3], scl: [1, 0.8, 1], color: 0x547a38, grad: [0, 1] }]); }
 function rockGeo(seed) { return mergeParts([{ geo: jitterGeo(new THREE.IcosahedronGeometry(1, 1), 0.5, seed), pos: [0, 0.35, 0], scl: [1, 0.7, 1], color: 0x8a8883, grad: [-0.5, 1.2] }]); }
 
@@ -371,8 +433,11 @@ export class Scatter {
     const mats = {
       grass: makeFoliageMaterial(U, 0.55, { double: true }), tree: makeFoliageMaterial(U, 0.018, { flat: true }), rock: makeFoliageMaterial(U, 0, { flat: true }), bush: makeFoliageMaterial(U, 0.2, {}),
     };
-    this.geo = { grass: grassGeo(), pine: pineGeo(), palm: palmGeo(), bush: bushGeo(), rock1: rockGeo(1), rock2: rockGeo(2), rock3: rockGeo(3) };
-    this.matFor = { grass: mats.grass, pine: mats.tree, palm: mats.tree, bush: mats.bush, rock1: mats.rock, rock2: mats.rock, rock3: mats.rock };
+    const bm = map.biome || 'temperate', bi = biomeOf(map);
+    this.geo = { grass: grassGeo(), pine: pineGeo(), palm: palmGeo(), bush: bushGeo(), rock1: rockGeo(1), rock2: rockGeo(2), rock3: rockGeo(3),
+      oak: oakGeo(), birch: birchGeo(), dead: deadTreeGeo(), cactus: cactusGeo(), agave: agaveGeo(), snowpine: snowPineGeo(), ice: iceGeo(), lava1: lavaRockGeo(41), lava2: lavaRockGeo(42), mesa1: mesaRockGeo(51), mesa2: mesaRockGeo(52), jtree: jungleTreeGeo(), fern: fernGeo(), log: logGeo() };
+    this.matFor = { grass: mats.grass, pine: mats.tree, palm: mats.tree, bush: mats.bush, rock1: mats.rock, rock2: mats.rock, rock3: mats.rock,
+      oak: mats.tree, birch: mats.tree, dead: mats.tree, cactus: mats.tree, agave: mats.bush, snowpine: mats.tree, ice: mats.rock, lava1: mats.rock, lava2: mats.rock, mesa1: mats.rock, mesa2: mats.rock, jtree: mats.tree, fern: mats.bush, log: mats.rock };
     const CH = 96, nc = Math.ceil(map.size / CH), buckets = new Map();
     const push = (type, x, z, y, sc, yaw, col, tilt) => {
       const key = type + ':' + Math.floor(x / CH) + ':' + Math.floor(z / CH);
@@ -393,7 +458,7 @@ export class Scatter {
       const px = x + (r() - 0.5) * sp, pz = z + (r() - 0.5) * sp, h = hv(px, pz);
       if (h < 1.7 || h > 13) continue;
       const s = slopeAt(px, pz); if (s > 0.5) continue;
-      const dens = clamp(0.35 + 0.65 * sstep(1.7, 3.2, h) * (1 - sstep(8, 13, h)), 0, 1) * (1 - sstep(0.3, 0.5, s));
+      const dens = clamp(0.35 + 0.65 * sstep(1.7, 3.2, h) * (1 - sstep(8, 13, h)), 0, 1) * (1 - sstep(0.3, 0.5, s)) * bi.grassMul;
       if (r() > dens * 0.9) continue; if (!free(px, pz) || nearOil(px, pz, 6)) continue;
       baseColAt(px, pz, col); const k = 0.95 + r() * 0.5;
       push('grass', px, pz, h, 0.7 + r() * 0.9, r() * 6.283, [col.r * k * 1.25, col.g * k * 1.3, col.b * k * 1.05]);
@@ -403,17 +468,30 @@ export class Scatter {
       const px = x + (r() - 0.5) * tsp * 0.9, pz = z + (r() - 0.5) * tsp * 0.9, h = hv(px, pz); const s = slopeAt(px, pz);
       if (h < 0.9 || s > 0.42 || !free(px, pz) || nearOil(px, pz, 10)) continue;
       const c = map.cellOf(px, pz); if (map.bld && map.bld[c] && h > 1.6 && h < 5.5 && r() < 0.8) continue;
-      const f = forest(px, pz);
-      if (h < 2.7) { if (h > 1.1 && r() < 0.16) push('palm', px, pz, h - 0.1, 0.9 + r() * 0.5, r() * 6.283, [1, 1, 1], (r() - 0.5) * 0.15); }
-      else if (h < 18 && f > 0.55 && r() < 0.85) push('pine', px, pz, h - 0.15, 0.8 + r() * 0.7, r() * 6.283, [0.9 + r() * 0.2, 0.9 + r() * 0.2, 0.9 + r() * 0.2]);
-      else if (h < 14 && r() < 0.07) push('bush', px, pz, h, 0.8 + r() * 0.9, r() * 6.283, [0.8 + r() * 0.4, 0.9 + r() * 0.3, 0.8 + r() * 0.3]);
+      const f = forest(px, pz) * bi.treeMul, T = (type, sc, tint, tilt) => push(type, px, pz, h - 0.12, sc, r() * 6.283, tint || [0.9 + r() * 0.2, 0.9 + r() * 0.2, 0.9 + r() * 0.2], tilt || 0);
+      if (bm === 'desert') {
+        if (h < 1.3) continue;
+        if (f > 0.55 && r() < 0.5) T('cactus', 0.7 + r() * 0.7); else if (r() < 0.05) T('dead', 0.8 + r() * 0.6); else if (r() < 0.14) T('agave', 0.7 + r() * 0.6);
+      } else if (bm === 'arctic') {
+        if (h < 1.0) continue;
+        if (h < 20 && f > 0.4 && r() < 0.85) T('snowpine', 0.8 + r() * 0.7); else if (r() < 0.04) T('dead', 0.8 + r() * 0.5, [1.1, 1.1, 1.15]); else if (r() < 0.05) T('ice', 0.5 + r() * 0.9, [1, 1, 1]);
+      } else if (bm === 'jungle') {
+        if (h < 2.7) { if (h > 1.1 && r() < 0.4) T('palm', 0.9 + r() * 0.6, [1, 1, 1], (r() - 0.5) * 0.2); }
+        else if (h < 20 && f > 0.5 && r() < 0.9) T('jtree', 0.9 + r() * 0.7); else if (h < 16 && r() < 0.4) T('fern', 0.8 + r() * 0.8); else if (r() < 0.05) T('log', 0.8 + r() * 0.6, [1, 1, 1]);
+      } else if (bm === 'volcanic') {
+        if (h < 1.2) continue;
+        if (h < 12 && f > 0.5 && r() < 0.35) T('dead', 0.8 + r() * 0.6, [0.55, 0.5, 0.5]); else if (r() < 0.02) T('log', 0.8 + r() * 0.6, [0.5, 0.5, 0.5]);
+      } else if (h < 2.7) { if (h > 1.1 && r() < 0.16) T('palm', 0.9 + r() * 0.5, [1, 1, 1], (r() - 0.5) * 0.15); }
+      else if (h < 18 && f > 0.55 && r() < 0.85) { const q = r(); T(q < 0.28 ? 'oak' : q < 0.4 ? 'birch' : 'pine', 0.8 + r() * 0.7); }
+      else if (h < 14 && r() < 0.07) { const q = r(); if (q < 0.15) T('log', 0.8 + r() * 0.6, [1, 1, 1]); else T('bush', 0.8 + r() * 0.9, [0.8 + r() * 0.4, 0.9 + r() * 0.3, 0.8 + r() * 0.3]); }
     }
-    // rocks: dense on steep ground, sparse elsewhere
+    // rocks: dense on steep ground, sparse elsewhere (biomes swap in mesa stacks, ice spikes, lava boulders)
+    const rockType = () => { const q = r(); if (bm === 'desert' && q < 0.45) return 'mesa' + (1 + Math.floor(r() * 2)); if (bm === 'arctic' && q < 0.3) return 'ice'; if (bm === 'volcanic' && q < 0.75) return 'lava' + (1 + Math.floor(r() * 2)); return 'rock' + (1 + Math.floor(r() * 3)); };
     for (let z = 3; z < map.size - 3; z += rsp * 0.6) for (let x = 3; x < map.size - 3; x += rsp * 0.6) {
       const px = x + (r() - 0.5) * rsp, pz = z + (r() - 0.5) * rsp, h = hv(px, pz); if (h < 0.5) continue;
       const s = slopeAt(px, pz); const p = 0.03 + sstep(0.25, 0.6, s) * 0.55 + sstep(12, 24, h) * 0.2;
       if (r() > p * 0.45 || !free(px, pz) || nearOil(px, pz, 7)) continue;
-      const g = 0.78 + r() * 0.4; push('rock' + (1 + Math.floor(r() * 3)), px, pz, h - 0.2, (0.5 + r() * r() * 2.3) * (s > 0.4 ? 1.2 : 1), r() * 6.283, [g, g * 0.98, g * 0.94], 0);
+      const g = 0.78 + r() * 0.4; push(rockType(), px, pz, h - 0.2, (0.5 + r() * r() * 2.3) * (s > 0.4 ? 1.2 : 1), r() * 6.283, [g, g * 0.98, g * 0.94], 0);
     }
     const dummy = new THREE.Object3D();
     for (const b of buckets.values()) {

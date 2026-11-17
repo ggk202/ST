@@ -11,6 +11,7 @@ const CANOPY_GEO = new THREE.SphereGeometry(3.4, 12, 6, 0, Math.PI * 2, 0, 1.25)
 import { AirfieldGfx } from './airfield-gfx.js';
 import { updateStores, CrewPool, warmTasks } from './aircraft-gfx.js';
 import { makeModel, modelMaterial } from './models.js';
+import { biomeOf } from './biomes.js';
 import { Fx, sfx } from './fx.js';
 import { makeDetailTexture, makeCloudTexture, makeUniforms, patchTerrain, patchWater, makeUnitMaterial, Sky, Clouds, Scatter, animateUnit } from './gfx.js';
 
@@ -77,9 +78,9 @@ export class Renderer {
     this.fogTex.minFilter = this.fogTex.magFilter = THREE.LinearFilter; this.fogTex.wrapS = this.fogTex.wrapT = THREE.ClampToEdgeWrapping; this.fogTex.needsUpdate = true;
     this.U = makeUniforms(this.sim.map.size, this.fogTex, R.detail, R.cloud);
     this.U.uSunDir.value.set(70, 130, 45).normalize();
-    this.skyObj = new Sky(this.U);
+    const bio = biomeOf(this.sim.map); this.skyObj = new Sky(this.U, bio.hor, bio.zen);
     this.scene.background = null; this.scene.add(this.skyObj.mesh);
-    this.scene.fog = new THREE.Fog(new THREE.Color().setRGB(0.50, 0.66, 0.84), 260, 1250);
+    this.scene.fog = new THREE.Fog(new THREE.Color().setRGB(bio.hor[0], bio.hor[1], bio.hor[2]), 260, 1250);
     this.skyObj.buildEnvironment(this.renderer, this.scene);
     modelMaterial.envMapIntensity = 0.55; modelMaterial.flatShading = false; modelMaterial.roughness = 0.62; modelMaterial.metalness = 0.28; modelMaterial.needsUpdate = true;
   }
@@ -95,7 +96,7 @@ export class Renderer {
     const pos = new Float32Array(w * w * 3), col = new Float32Array(w * w * 3), idx = [];
     this.baseCol = new Float32Array(w * w * 3);
     const C = (hex) => new THREE.Color(hex);
-    const sand = C(0xc4b685), grass = C(0x5b7d3b), grass2 = C(0x748a45), dirt = C(0x7d7a55), rock = C(0x77746d), rock2 = C(0x8b8a86), snow = C(0xbfc5cc), seabed = C(0x34596a), wet = C(0x8f8a63);
+    const P = biomeOf(map).pal, sand = C(P.sand), grass = C(P.grass), grass2 = C(P.grass2), dirt = C(P.dirt), rock = C(P.rock), rock2 = C(P.rock2), snow = C(P.snow), seabed = C(P.seabed), wet = C(P.wet), lava = C(0xe8561a), ember = C(0x7a2a12);
     const tmp = new THREE.Color();
     for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) {
       const k = j * w + i, h = map.h[k];
@@ -112,6 +113,7 @@ export class Renderer {
       else if (h < 24) tmp.copy(dirt).lerp(rock, clamp((h - 14) / 10, 0, 1));
       else tmp.copy(rock2).lerp(snow, clamp((h - 28) / 8, 0, 1));
       if (slope > 0.45 && h >= 0) tmp.lerp(rock, clamp((slope - 0.45) / 0.5, 0, 0.85));
+      if (map.volc && map.volc.length) for (const v of map.volc) { const d = Math.hypot(i - v.ci, j - v.cj) / v.r; if (d < 0.3) tmp.copy(lava).lerp(ember, clamp(d / 0.3 - 0.4, 0, 1)); else if (d < 0.42) tmp.lerp(ember, (0.42 - d) / 0.12 * 0.9); }
       const v = 1 + nz * 0.14;
       this.baseCol[k * 3] = tmp.r * v; this.baseCol[k * 3 + 1] = tmp.g * v; this.baseCol[k * 3 + 2] = tmp.b * v;
       col[k * 3] = tmp.r; col[k * 3 + 1] = tmp.g; col[k * 3 + 2] = tmp.b;
@@ -157,7 +159,7 @@ export class Renderer {
       this.skirtMat = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, roughness: 0.1, metalness: 0.05, envMapIntensity: 1.1 }); patchWater(this.skirtMat, this.U);
       const sk = new THREE.Mesh(sg, this.skirtMat); sk.position.set(map.size / 2, -0.35, map.size / 2); this.scene.add(sk);
     } else {
-      const sk = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.MeshBasicMaterial({ color: this.sim.map.type === 'island' ? 0x1b4f70 : 0x3a3f36 }));
+      const sk = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.MeshBasicMaterial({ color: this.sim.map.type === 'island' ? 0x1b4f70 : biomeOf(this.sim.map).pal.rock }));
       sk.rotation.x = -Math.PI / 2; sk.position.set(map.size / 2, -0.4, map.size / 2); this.scene.add(sk);
     }
     this.fogShade = new Float32Array(w * w);

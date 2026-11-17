@@ -3,7 +3,9 @@ import { CELL } from './defs.js';
 import { RNG, clamp, lerp, smoothstep, fbm, dist } from './util.js';
 
 export const MAP_SIZES = { small: 192, medium: 288, large: 400, xl: 560 };
-export const MAP_TYPES = ['island', 'highlands'];
+export const MAP_TYPES = ['island', 'highlands', 'desert', 'arctic', 'jungle', 'volcanic'];
+// map type -> [heightmap shape, biome]
+const TYPE_SHAPE = { island: ['island', 'temperate'], highlands: ['highlands', 'temperate'], desert: ['highlands', 'desert'], arctic: ['island', 'arctic'], jungle: ['island', 'jungle'], volcanic: ['island', 'volcanic'] };
 export const SEA_LEVEL = 0;
 
 export class GameMap {
@@ -114,8 +116,9 @@ export function generateMap({ size = 'medium', type = 'island', seed = 1, player
   const map = new GameMap(n);
   const rng = new RNG(seed * 2654435761);
   const s = seed | 0, w = map.vw, half = n / 2;
-  if (type === 'random') type = rng.next() < 0.5 ? 'island' : 'highlands';
-  map.type = type;
+  if (type === 'random') type = MAP_TYPES[Math.floor(rng.next() * MAP_TYPES.length)];
+  const [shape, biome] = TYPE_SHAPE[type] || TYPE_SHAPE.island;
+  type = shape; map.type = shape; map.biome = biome; map.volc = [];
   const f1 = 0.035 * 96 / n * 1.6, f2 = 0.09 * 96 / n * 1.6, f3 = 0.05 * 96 / n * 1.6;
   const hillAmp = 3.0;   // gentle rolling ground: big open plains rather than constant hills
 
@@ -147,6 +150,27 @@ export function generateMap({ size = 'medium', type = 'island', seed = 1, player
     map.h[j * w + i] = h;
   }
 
+  if (biome === 'desert') {
+    // wind-carved mesas: high ground is terraced into flat-topped steps with cliff faces, plus low dunes on the plains
+    for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) {
+      const k = j * w + i, h = map.h[k];
+      if (h > 12) { const st = 7, f = h / st, fl = Math.floor(f), fr = f - fl; map.h[k] = (fl + smoothstep(0.55, 0.9, fr)) * st; }
+      else if (h > 0.5) map.h[k] += (fbm(i * 0.11, j * 0.05, s + 31, 2) - 0.5) * 1.6;
+    }
+  } else if (biome === 'volcanic') {
+    // cinder cones with a crater lake of lava, kept clear of the bases
+    for (let v = 0, tries = 0; v < Math.max(2, Math.round(n / 110)) && tries < 200; tries++) {
+      const cx = 24 + rng.next() * (n - 48), cz = 24 + rng.next() * (n - 48), R = 15 + rng.next() * 10;
+      if (spawnPts.some((sp) => dist(sp[0], sp[1], cx, cz) < R + 46) || map.volc.some((o) => dist(o.ci, o.cj, cx, cz) < 60)) continue;
+      for (let j = Math.floor(cz - R * 1.6); j <= cz + R * 1.6; j++) for (let i = Math.floor(cx - R * 1.6); i <= cx + R * 1.6; i++) {
+        if (i < 0 || j < 0 || i > n || j > n) continue;
+        const d = dist(i, j, cx, cz) / R; if (d > 1.6) continue;
+        const cone = d < 1 ? (1 - d) * 34 : 0, rim = Math.max(0, 1 - Math.abs(d - 0.3) * 6) * 7, bowl = d < 0.3 ? (0.3 - d) * 60 : 0;
+        const k = j * w + i, val = 2 + cone + rim - bowl; map.h[k] = d < 0.3 ? val : Math.max(map.h[k], val);
+      }
+      map.volc.push({ ci: cx, cj: cz, r: R }); v++;
+    }
+  }
   const dirs = SPAWN_DIRS[Math.max(1, Math.min(4, players))];
   for (const d of dirs) {
     const x = half + d[0] * half * 0.62, z = half + d[1] * half * 0.62;
@@ -210,6 +234,22 @@ export function generateMap({ size = 'medium', type = 'island', seed = 1, player
   }
   for (const wp of routes) for (let i = 0; i + 1 < wp.length; i++) carve(map, wp[i][0], wp[i][1], wp[i + 1][0], wp[i + 1][1], rng, i > 0 && i + 2 < wp.length ? 0 : 0.35);
   map.computeCells();
+  // other pairs' roads can cross a wall on the straight line: plug any straight line that is still open with a ridge blob
+  for (let pass = 0; pass < 2; pass++) {
+    let plugged = false;
+    for (let a = 0; a < map.spawns.length; a++) for (let b = a + 1; b < map.spawns.length; b++) {
+      const A = map.spawns[a], B = map.spawns[b], L = dist(A.ci, A.cj, B.ci, B.cj);
+      let open = true; for (let t = 0.05; t < 0.95; t += 0.01) { const i = Math.floor(A.ci + (B.ci - A.ci) * t), j = Math.floor(A.cj + (B.cj - A.cj) * t); if (!map.pass[j * n + i]) { open = false; break; } }
+      if (!open) continue;
+      const wx = A.ci + (B.ci - A.ci) * 0.5, wz = A.cj + (B.cj - A.cj) * 0.5, px = -(B.cj - A.cj) / L, pz = (B.ci - A.ci) / L;
+      for (let o = -5; o <= 5; o += 0.5) for (let j = Math.round(wz + pz * o) - 4; j <= Math.round(wz + pz * o) + 4; j++) for (let i = Math.round(wx + px * o) - 4; i <= Math.round(wx + px * o) + 4; i++) {
+        if (i < 0 || j < 0 || i > n || j > n) continue;
+        const wt = 1 - smoothstep(1.2, 4, dist(i, j, wx + px * o, wz + pz * o)); if (wt > 0) { const kk = j * w + i; map.h[kk] = Math.max(map.h[kk], 46 * wt); }
+      }
+      plugged = true;
+    }
+    if (!plugged) break; map.computeCells();
+  }
   // fallback: if walls/carving still left a base cut off, carve a direct link to the nearest connected base
   for (let a = 1; a < map.spawns.length; a++) {
     const sd = map.reachable(Math.floor(map.spawns[0].ci), Math.floor(map.spawns[0].cj));

@@ -7,7 +7,7 @@ function bfs(map, s, t) {
     for (const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1]]) { const x2 = x + dx, z2 = z + dz; if (x2 < 0 || z2 < 0 || x2 >= n || z2 >= n) continue; const k = z2 * n + x2; if (map.pass[k] && d[k] < 0) { d[k] = d[c] + 1; q.push(k); } } }
   return d[t];
 }
-for (const type of ['island', 'highlands']) for (const size of ['small', 'medium']) for (const seed of [1, 2, 3, 7]) for (const players of [2, 4]) {
+for (const type of ['island', 'highlands', 'desert', 'arctic', 'jungle', 'volcanic']) for (const size of ['small', 'medium']) for (const seed of [1, 2, 3, 7]) for (const players of [2, 4]) {
   const map = generateMap({ size, type, seed, players }), n = map.n, tag = `${type}/${size}/${seed}/p${players}`;
   const sp = map.spawns.map((p) => Math.floor(p.cj) * n + Math.floor(p.ci));
   for (let a = 0; a < sp.length; a++) for (let b = a + 1; b < sp.length; b++) {
