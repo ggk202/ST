@@ -1,0 +1,408 @@
+// three.js renderer: terrain, entity views, effects, camera and screen-space picking.
+import * as THREE from 'three';
+import { CELL, DEFS, PLAYER_COLORS } from './sim/defs.js';
+import { makeModel, modelMaterial } from './models.js';
+import { Fx, sfx } from './fx.js';
+
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
+const hash = (x, y) => { let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+
+export class Renderer {
+  constructor(canvas, sim, local, opts = {}) {
+    this.canvas = canvas; this.sim = sim; this.local = local; this.opts = opts;
+    this.team = sim.players[local].team;
+    const r = this.renderer = Renderer.gl || (Renderer.gl = new THREE.WebGLRenderer({ canvas, antialias: !opts.touch, powerPreference: 'high-performance' }));
+    modelMaterial.needsUpdate = true;
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, opts.touch ? 2 : 2));
+    r.shadowMap.enabled = !!opts.shadows; r.shadowMap.type = THREE.PCFShadowMap;
+    this.scene = new THREE.Scene();
+    const sky = new THREE.Color(0x9bb6cc);
+    this.scene.background = sky; this.scene.fog = new THREE.Fog(sky, 300, 1100);
+    this.camera = new THREE.PerspectiveCamera(48, 1, 2, 3500);
+    this.cam = { x: 0, z: 0, yaw: 0.0, pitch: 0.92, dist: 110, vx: 0, vz: 0 };
+    this.shake = 0;
+    this.views = new Map(); this.projViews = new Map();
+    this.frame = 0; this.time = 0;
+    this.ghost = null; this.selection = new Set();
+    this.scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x4d4a3a, 0.95));
+    const sun = this.sun = new THREE.DirectionalLight(0xfff0d0, 1.5);
+    sun.castShadow = !!opts.shadows; sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.bias = -0.0006; sun.shadow.camera.near = 10; sun.shadow.camera.far = 600;
+    this.scene.add(sun); this.scene.add(sun.target);
+    this.buildTerrain();
+    this.buildOil();
+    this.fx = new Fx(this.scene);
+    this.buildSelection();
+    this.buildProjectiles();
+    this.buildGhost();
+    const s = sim.players[local].spawn; this.cam.x = s.x; this.cam.z = s.z;
+    this.fogTimer = 0; this.updateFog(true);
+    this.resize();
+    this._ray = new THREE.Raycaster(); this._v = new THREE.Vector3(); this._ndc = new THREE.Vector2();
+  }
+
+  // ---------------- terrain ----------------
+  buildTerrain() {
+    const map = this.sim.map, n = map.n, w = map.vw;
+    const pos = new Float32Array(w * w * 3), col = new Float32Array(w * w * 3), idx = [];
+    this.baseCol = new Float32Array(w * w * 3);
+    const C = (hex) => new THREE.Color(hex);
+    const sand = C(0xc4b685), grass = C(0x5b7d3b), grass2 = C(0x748a45), dirt = C(0x7d7a55), rock = C(0x77746d), rock2 = C(0x8b8a86), snow = C(0xe2e6ea), seabed = C(0x34596a), wet = C(0x8f8a63);
+    const tmp = new THREE.Color();
+    for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) {
+      const k = j * w + i, h = map.h[k];
+      pos[k * 3] = i * CELL; pos[k * 3 + 1] = h; pos[k * 3 + 2] = j * CELL;
+      const hx = map.h[j * w + Math.min(w - 1, i + 1)] - map.h[j * w + Math.max(0, i - 1)];
+      const hz = map.h[Math.min(w - 1, j + 1) * w + i] - map.h[Math.max(0, j - 1) * w + i];
+      const slope = Math.sqrt(hx * hx + hz * hz) / (2 * CELL);
+      const nz = hash(i, j) - 0.5;
+      if (h < 0) tmp.copy(seabed).lerp(sand, clamp((h + 3) / 3, 0, 1));
+      else if (h < 0.9) tmp.copy(wet).lerp(sand, clamp(h / 0.9, 0, 1));
+      else if (h < 1.8) tmp.copy(sand).lerp(grass, clamp((h - 0.9) / 0.9, 0, 1));
+      else if (h < 8) tmp.copy(grass).lerp(grass2, clamp((h - 2) / 6 + nz * 0.8, 0, 1));
+      else if (h < 14) tmp.copy(grass2).lerp(dirt, clamp((h - 8) / 6, 0, 1));
+      else if (h < 24) tmp.copy(dirt).lerp(rock, clamp((h - 14) / 10, 0, 1));
+      else tmp.copy(rock2).lerp(snow, clamp((h - 28) / 8, 0, 1));
+      if (slope > 0.45 && h >= 0) tmp.lerp(rock, clamp((slope - 0.45) / 0.5, 0, 0.85));
+      const v = 1 + nz * 0.14;
+      this.baseCol[k * 3] = tmp.r * v; this.baseCol[k * 3 + 1] = tmp.g * v; this.baseCol[k * 3 + 2] = tmp.b * v;
+      col[k * 3] = tmp.r; col[k * 3 + 1] = tmp.g; col[k * 3 + 2] = tmp.b;
+    }
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+      const a = j * w + i, b = a + 1, c = a + w, d = c + 1;
+      if ((i + j) & 1) idx.push(a, c, b, b, c, d); else idx.push(a, c, d, a, d, b);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    this.colAttr = new THREE.BufferAttribute(col, 3); this.colAttr.setUsage(THREE.DynamicDrawUsage);
+    g.setAttribute('color', this.colAttr);
+    g.setIndex(idx); g.computeVertexNormals();
+    this.terrain = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }));
+    this.terrain.receiveShadow = true;
+    this.scene.add(this.terrain);
+    // water (half-resolution grid with vertex colors for fog of war)
+    const ws = Math.floor(n / 2) + 1, wp = new Float32Array(ws * ws * 3), wc = new Float32Array(ws * ws * 3), wi = [];
+    for (let j = 0; j < ws; j++) for (let i = 0; i < ws; i++) { const k = j * ws + i; wp[k * 3] = i * CELL * 2; wp[k * 3 + 1] = 0; wp[k * 3 + 2] = j * CELL * 2; }
+    for (let j = 0; j < ws - 1; j++) for (let i = 0; i < ws - 1; i++) { const a = j * ws + i; wi.push(a, a + ws, a + 1, a + 1, a + ws, a + ws + 1); }
+    const wg = new THREE.BufferGeometry();
+    wg.setAttribute('position', new THREE.BufferAttribute(wp, 3));
+    this.waterCol = new THREE.BufferAttribute(wc, 3); this.waterCol.setUsage(THREE.DynamicDrawUsage);
+    wg.setAttribute('color', this.waterCol); wg.setIndex(wi); wg.computeVertexNormals();
+    this.waterGeo = wg; this.ws = ws;
+    this.water = new THREE.Mesh(wg, new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: 0.8, roughness: 0.25, metalness: 0.25 }));
+    this.scene.add(this.water);
+    // outer skirt so the void is never visible
+    const sk = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.MeshBasicMaterial({ color: this.sim.map.type === 'island' ? 0x1b4f70 : 0x3a3f36 }));
+    sk.rotation.x = -Math.PI / 2; sk.position.set(map.size / 2, -0.4, map.size / 2); this.scene.add(sk);
+    this.fogShade = new Float32Array(w * w);
+  }
+  buildOil() {
+    this.oilMeshes = [];
+    const geo = new THREE.CylinderGeometry(4.2, 4.6, 0.3, 18), mat = new THREE.MeshStandardMaterial({ color: 0x1a1816, roughness: 0.4, metalness: 0.4 });
+    for (const o of this.sim.map.oil) {
+      const m = new THREE.Mesh(geo, mat); m.position.set(o.x, this.sim.map.hAt(o.x, o.z) + 0.15, o.z); m.receiveShadow = true;
+      this.scene.add(m); this.oilMeshes.push(m);
+    }
+  }
+  updateFog(force) {
+    const sim = this.sim, n = sim.map.n, w = n + 1;
+    const vis = sim.vis[this.team], ex = sim.expl[this.team];
+    const cs = new Float32Array(n * n);
+    for (let c = 0; c < n * n; c++) cs[c] = vis[c] ? 1 : ex[c] ? 0.5 : 0.04;
+    const col = this.colAttr.array, base = this.baseCol;
+    for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) {
+      let s = 0, k = 0;
+      for (let dj = -1; dj <= 0; dj++) for (let di = -1; di <= 0; di++) {
+        const x = i + di, z = j + dj; if (x < 0 || z < 0 || x >= n || z >= n) continue; s += cs[z * n + x]; k++;
+      }
+      const sh = k ? s / k : 0.04, q = (j * w + i) * 3;
+      col[q] = base[q] * sh; col[q + 1] = base[q + 1] * sh; col[q + 2] = base[q + 2] * sh;
+      this.fogShade[j * w + i] = sh;
+    }
+    this.colAttr.needsUpdate = true;
+    const ws = this.ws, wc = this.waterCol.array;
+    for (let j = 0; j < ws; j++) for (let i = 0; i < ws; i++) {
+      const sh = this.fogShade[Math.min(n, j * 2) * w + Math.min(n, i * 2)], q = (j * ws + i) * 3;
+      wc[q] = 0.16 * sh; wc[q + 1] = 0.44 * sh; wc[q + 2] = 0.62 * sh;
+    }
+    this.waterCol.needsUpdate = true;
+    this.oilMeshes.forEach((m, idx) => { const o = this.sim.map.oil[idx]; const c = this.sim.map.cellOf(o.x, o.z); m.visible = !!ex[c]; });
+  }
+
+  // ---------------- helpers ----------------
+  buildSelection() {
+    const g = new THREE.RingGeometry(0.88, 1.0, 28); g.rotateX(-Math.PI / 2);
+    this.selMat = new THREE.MeshBasicMaterial({ color: 0x8dff5c, transparent: true, opacity: 0.9, depthTest: false, side: THREE.DoubleSide });
+    this.selMesh = new THREE.InstancedMesh(g, this.selMat, 600); this.selMesh.frustumCulled = false; this.selMesh.renderOrder = 4; this.selMesh.count = 0;
+    this.selMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.scene.add(this.selMesh);
+    // enemy highlight (target ring) and rally flag
+    this.tgtMesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xff4040, transparent: true, opacity: 0.9, depthTest: false, side: THREE.DoubleSide }));
+    this.tgtMesh.visible = false; this.tgtMesh.renderOrder = 4; this.scene.add(this.tgtMesh);
+    this.pingMesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthTest: false, side: THREE.DoubleSide }));
+    this.pingMesh.visible = false; this.pingMesh.renderOrder = 4; this.scene.add(this.pingMesh); this.pingT = 0; this.pingCol = 0xffffff;
+  }
+  ping(x, z, color = 0xffffff) { this.pingMesh.position.set(x, this.sim.map.hAt(x, z) + 0.4, z); this.pingMesh.material.color.setHex(color); this.pingT = 0.6; this.pingMesh.visible = true; }
+  buildProjectiles() {
+    const shell = new THREE.CylinderGeometry(0.22, 0.22, 1.2, 6); shell.rotateX(Math.PI / 2);
+    const miss = new THREE.CylinderGeometry(0.16, 0.16, 1.8, 6); miss.rotateX(Math.PI / 2);
+    this.projGeo = { shell, miss };
+    this.projMat = { shell: new THREE.MeshBasicMaterial({ color: 0x2b2b2b }), miss: new THREE.MeshBasicMaterial({ color: 0xf2f2f2 }), bomb: new THREE.MeshBasicMaterial({ color: 0x15171a }) };
+  }
+  buildGhost() {
+    this.ghostMat = new THREE.MeshBasicMaterial({ color: 0x40ff60, transparent: true, opacity: 0.4, depthWrite: false });
+    this.ghostMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), this.ghostMat);
+    this.ghostMesh.visible = false; this.ghostMesh.renderOrder = 3; this.scene.add(this.ghostMesh);
+    const rg = new THREE.RingGeometry(61.5, 62, 64); rg.rotateX(-Math.PI / 2);
+    this.radiusMesh = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: 0x9fe870, transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide }));
+    this.radiusMesh.visible = false; this.radiusMesh.renderOrder = 3; this.scene.add(this.radiusMesh);
+  }
+  setGhost(info) {
+    // info: {x,z,size,ok} or null
+    const m = this.ghostMesh;
+    if (!info) { m.visible = false; this.radiusMesh.visible = false; return; }
+    const s = info.size * CELL, y = this.sim.map.hAt(info.x, info.z);
+    m.visible = true; m.scale.set(s, 4, s); m.position.set(info.x, y + 2, info.z);
+    this.ghostMat.color.setHex(info.ok ? 0x40ff60 : 0xff4040);
+    this.radiusMesh.visible = true; this.radiusMesh.position.set(info.x, y + 0.5, info.z);
+  }
+
+  resize() {
+    const c = this.canvas, w = c.clientWidth || window.innerWidth, h = c.clientHeight || window.innerHeight;
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
+    this.W = w; this.H = h;
+  }
+
+  // ---------------- camera ----------------
+  clampCam() {
+    const s = this.sim.map.size, c = this.cam;
+    c.x = clamp(c.x, 0, s); c.z = clamp(c.z, 0, s);
+    c.dist = clamp(c.dist, 30, 320); c.pitch = clamp(c.pitch, 0.45, 1.3);
+  }
+  pan(right, forward) {
+    const c = this.cam, s = Math.sin(c.yaw), co = Math.cos(c.yaw);
+    c.x += right * co + forward * -s; c.z += right * -s + forward * -co;
+    this.clampCam();
+  }
+  centerOn(x, z) { this.cam.x = x; this.cam.z = z; this.clampCam(); }
+  updateCamera(dt) {
+    this.clampCam();
+    const c = this.cam, cam = this.camera, map = this.sim.map;
+    const fy = Math.max(0, map.hAt(c.x, c.z));
+    const cp = Math.cos(c.pitch), sp = Math.sin(c.pitch);
+    let sx = 0, sy = 0, sz = 0;
+    if (this.shake > 0.01) { sx = (Math.random() - 0.5) * this.shake; sy = (Math.random() - 0.5) * this.shake; sz = (Math.random() - 0.5) * this.shake; this.shake *= Math.pow(0.0005, dt); }
+    cam.position.set(c.x + Math.sin(c.yaw) * cp * c.dist + sx, fy + sp * c.dist + sy, c.z + Math.cos(c.yaw) * cp * c.dist + sz);
+    cam.lookAt(c.x, fy, c.z);
+    cam.updateMatrixWorld();
+    // sun follows the view
+    const S = Math.min(220, 60 + c.dist * 0.7);
+    this.sun.target.position.set(c.x, fy, c.z);
+    this.sun.position.set(c.x + 70, fy + 130, c.z + 45);
+    const sc = this.sun.shadow.camera;
+    if (Math.abs(sc.right - S) > 1) { sc.left = -S; sc.right = S; sc.top = S; sc.bottom = -S; sc.updateProjectionMatrix(); }
+  }
+  // screen (css px) -> ground point
+  groundAt(sx, sy) {
+    this._ndc.set((sx / this.W) * 2 - 1, -(sy / this.H) * 2 + 1);
+    this._ray.setFromCamera(this._ndc, this.camera);
+    const o = this._ray.ray.origin, d = this._ray.ray.direction, map = this.sim.map;
+    let t = 0, prevT = 0, step = 2;
+    for (let i = 0; i < 900; i++) {
+      t += step;
+      const x = o.x + d.x * t, y = o.y + d.y * t, z = o.z + d.z * t;
+      if (x < -50 || z < -50 || x > map.size + 50 || z > map.size + 50) { if (d.y >= 0) return null; step = 8; if (t > 4000) return null; continue; }
+      const h = Math.max(0, map.hAt(x, z));
+      if (y <= h) {
+        let a = prevT, b = t;
+        for (let k = 0; k < 10; k++) { const m = (a + b) / 2; const hy = Math.max(0, map.hAt(o.x + d.x * m, o.z + d.z * m)); if (o.y + d.y * m <= hy) b = m; else a = m; }
+        const tt = (a + b) / 2;
+        return { x: clamp(o.x + d.x * tt, 0, map.size), z: clamp(o.z + d.z * tt, 0, map.size) };
+      }
+      prevT = t; step = Math.min(6, 1.5 + t * 0.006);
+    }
+    return null;
+  }
+  project(x, y, z, out = {}) {
+    this._v.set(x, y, z).project(this.camera);
+    out.x = (this._v.x * 0.5 + 0.5) * this.W; out.y = (-this._v.y * 0.5 + 0.5) * this.H; out.behind = this._v.z > 1; out.z = this._v.z;
+    return out;
+  }
+  pxRadius(worldR, x, y, z) {
+    const d = this.camera.position.distanceTo(this._v.set(x, y, z));
+    return worldR / (d * Math.tan(this.camera.fov * Math.PI / 360)) * (this.H / 2);
+  }
+  visibleToLocal(e) {
+    if (e.team === this.team) return true;
+    const c = this.sim.map.cellOf(e.x, e.z);
+    return c >= 0 && this.sim.vis[this.team][c] === 1;
+  }
+  // pick the entity under a screen point; minPx widens hit area for touch
+  pickEntity(sx, sy, minPx = 10, filter) {
+    let best = null, bd = 1e9; const p = {};
+    for (const v of this.views.values()) {
+      const e = v.ent; if (!v.visible || e.dead) continue;
+      if (filter && !filter(e)) continue;
+      const d = DEFS[e.def], yy = v.obj.position.y + (e.kind === 'building' ? 2 : 1.2);
+      this.project(v.obj.position.x, yy, v.obj.position.z, p);
+      if (p.behind) continue;
+      const wr = e.kind === 'building' ? e.size * CELL * 0.5 : Math.max(e.radius, 1.4);
+      const r = Math.max(minPx, this.pxRadius(wr, v.obj.position.x, yy, v.obj.position.z));
+      const dx = p.x - sx, dy = p.y - sy, dd = Math.sqrt(dx * dx + dy * dy);
+      if (dd <= r) {
+        const score = dd / r + (e.kind === 'building' ? 0.4 : 0) + (e.air ? -0.3 : 0);
+        if (score < bd) { bd = score; best = e; }
+      }
+    }
+    return best;
+  }
+  entitiesInRect(x0, y0, x1, y1, filter) {
+    const res = [], p = {};
+    const ax = Math.min(x0, x1), bx = Math.max(x0, x1), ay = Math.min(y0, y1), by = Math.max(y0, y1);
+    for (const v of this.views.values()) {
+      const e = v.ent; if (!v.visible || e.dead) continue;
+      if (filter && !filter(e)) continue;
+      this.project(v.obj.position.x, v.obj.position.y + 1, v.obj.position.z, p);
+      if (p.behind) continue;
+      if (p.x >= ax && p.x <= bx && p.y >= ay && p.y <= by) res.push(e);
+    }
+    return res;
+  }
+
+  // ---------------- per-frame ----------------
+  createView(e) {
+    const m = makeModel(e.def, this.sim.players[e.owner].color);
+    this.scene.add(m.root);
+    const v = { ent: e, obj: m.root, turret: m.turret, rotor: m.rotor, rotor2: m.rotor2, yaw: Math.atan2(e.dirx, e.dirz), tyaw: 0, frame: 0, visible: true, built: false, flash: 0 };
+    m.root.rotation.order = 'YXZ';
+    this.views.set(e.id, v);
+    return v;
+  }
+  syncEntities(alpha, dt) {
+    const sim = this.sim, map = sim.map, f = ++this.frame;
+    for (const e of sim.ents) {
+      if (e.dead) continue;
+      let v = this.views.get(e.id); if (!v) v = this.createView(e);
+      v.frame = f; v.ent = e;
+      const vis = this.visibleToLocal(e);
+      v.visible = vis; v.obj.visible = vis;
+      if (!vis) continue;
+      const d = DEFS[e.def];
+      const x = e.px + (e.x - e.px) * alpha, z = e.pz + (e.z - e.pz) * alpha;
+      let y = map.hAt(x, z);
+      const o = v.obj;
+      if (e.air) { y = Math.max(0, y) + d.alt + Math.sin(this.time * 1.6 + e.id) * 0.5; }
+      o.position.set(x, y, z);
+      const want = Math.atan2(e.dirx, e.dirz);
+      if (e.kind === 'unit') {
+        v.yaw += angDiff(want, v.yaw) * Math.min(1, dt * 14); o.rotation.y = v.yaw;
+        if (!e.air && e.armor !== 'inf') {
+          const r = e.radius * 1.2, fx = x + Math.sin(v.yaw) * r, fz = z + Math.cos(v.yaw) * r, bx = x - Math.sin(v.yaw) * r, bz = z - Math.cos(v.yaw) * r;
+          o.rotation.x = -Math.atan2(map.hAt(fx, fz) - map.hAt(bx, bz), r * 2);
+        } else if (e.air) { o.rotation.x = e.moving ? 0.12 : 0; }
+        // turret aiming
+        if (v.turret) {
+          let aim = 0;
+          const tg = e.target ? sim.byId.get(e.target) : null;
+          if (tg && !tg.dead) aim = angDiff(Math.atan2(tg.x - e.x, tg.z - e.z), v.yaw);
+          else if (e.order && e.order.t === 'attackground') aim = angDiff(Math.atan2(e.order.x - e.x, e.order.z - e.z), v.yaw);
+          v.tyaw += angDiff(aim, v.tyaw) * Math.min(1, dt * 7); v.turret.rotation.y = v.tyaw;
+        }
+        if (d.id === 'heli' || d.id === 'uav') { if (v.rotor) { if (d.id === 'heli') v.rotor.rotation.y += dt * 40; else v.rotor.rotation.z += dt * 50; } if (v.rotor2) v.rotor2.rotation.x += dt * 40; }
+      } else {
+        o.rotation.y = 0;
+        if (e.progress < 1) o.scale.set(1, 0.12 + 0.88 * e.progress, 1); else if (o.scale.y !== 1) o.scale.set(1, 1, 1);
+        if (v.turret) {
+          let aim = 0;
+          const tg = e.target ? sim.byId.get(e.target) : null;
+          if (tg && !tg.dead) aim = Math.atan2(tg.x - e.x, tg.z - e.z);
+          v.tyaw += angDiff(aim, v.tyaw) * Math.min(1, dt * 6); v.turret.rotation.y = v.tyaw;
+        }
+        if (e.progress >= 1 && v.rotor) {
+          if (d.id === 'derrick') v.rotor.rotation.x = Math.sin(this.time * 1.6 + e.id) * 0.16;
+          else v.rotor.rotation.y += dt * (d.id === 'airfield' ? 2.5 : 1.3);
+        }
+      }
+    }
+    for (const [id, v] of this.views) if (v.frame !== f) { this.scene.remove(v.obj); this.views.delete(id); }
+    // projectiles
+    const pf = f;
+    for (const p of sim.projs) {
+      let m = this.projViews.get(p.id);
+      if (!m) {
+        const missile = p.k === 'missile';
+        m = new THREE.Mesh(missile ? this.projGeo.miss : this.projGeo.shell, missile ? this.projMat.miss : (p.dtype === 'he' && p.sy > 8 && p.arc === 0 ? this.projMat.bomb : this.projMat.shell));
+        if (p.big) m.scale.set(3.2, 3.2, 3.2); else if (p.dtype === 'he') m.scale.set(1.3, 1.3, 1.3);
+        m.userData.px = p.x; m.userData.py = p.y; m.userData.pz = p.z;
+        this.scene.add(m); this.projViews.set(p.id, m);
+      }
+      m.userData.frame = pf;
+      m.position.set(p.x, p.y, p.z);
+      const dx = p.x - m.userData.px, dy = p.y - m.userData.py, dz = p.z - m.userData.pz;
+      if (dx * dx + dy * dy + dz * dz > 1e-5) { m.lookAt(p.x + dx, p.y + dy, p.z + dz); }
+      m.userData.px = p.x; m.userData.py = p.y; m.userData.pz = p.z;
+      const c = map.cellOf(p.x, p.z);
+      m.visible = p.team === this.team || (c >= 0 && sim.vis[this.team][c] === 1);
+      if (m.visible && (p.k === 'missile' || p.big)) this.fx.trail(p.x, p.y, p.z, p.big);
+    }
+    for (const [id, m] of this.projViews) if (m.userData.frame !== pf) { this.scene.remove(m); this.projViews.delete(id); }
+  }
+  updateSelection() {
+    let k = 0; const m = new THREE.Matrix4(), s = new THREE.Vector3(), q = new THREE.Quaternion(), p = new THREE.Vector3();
+    for (const id of this.selection) {
+      const v = this.views.get(id); if (!v || !v.visible) continue;
+      const e = v.ent, r = e.kind === 'building' ? e.size * CELL * 0.62 : Math.max(1.5, e.radius * 1.35);
+      const y = Math.max(0, this.sim.map.hAt(v.obj.position.x, v.obj.position.z)) + 0.35;
+      p.set(v.obj.position.x, y, v.obj.position.z); s.set(r, 1, r); m.compose(p, q, s);
+      this.selMesh.setMatrixAt(k++, m); if (k >= 600) break;
+    }
+    this.selMesh.count = k; this.selMesh.instanceMatrix.needsUpdate = true;
+  }
+  setTargetHighlight(e) {
+    if (!e || e.dead) { this.tgtMesh.visible = false; return; }
+    const v = this.views.get(e.id); if (!v || !v.visible) { this.tgtMesh.visible = false; return; }
+    const r = e.kind === 'building' ? e.size * CELL * 0.62 : Math.max(1.6, e.radius * 1.4);
+    this.tgtMesh.visible = true; this.tgtMesh.scale.set(r, 1, r);
+    this.tgtMesh.position.set(v.obj.position.x, Math.max(0, this.sim.map.hAt(v.obj.position.x, v.obj.position.z)) + 0.4, v.obj.position.z);
+  }
+
+  processEvents(evs) {
+    const sim = this.sim; if (!evs || !evs.length) return;
+    const cam = this.cam, fx = this.fx;
+    const visAt = (x, z) => { const c = sim.map.cellOf(x, z); return c >= 0 && sim.vis[this.team][c] === 1; };
+    const vol = (x, z) => { const d = Math.sqrt((x - cam.x) * (x - cam.x) + (z - cam.z) * (z - cam.z)); return clamp(1.2 - d / 260, 0, 1); };
+    for (const e of evs) {
+      switch (e.e) {
+        case 'shot': if (visAt(e.x, e.z) || visAt(e.tx, e.tz)) { fx.tracer(e.x, e.y, e.z, e.tx, e.ty, e.tz); fx.muzzle(e.x, e.y, e.z, 0.5); fx.spark(e.tx, e.ty, e.tz); sfx('rifle', vol(e.x, e.z) * 0.6); } break;
+        case 'launch': if (visAt(e.x, e.z)) { fx.muzzle(e.x, e.y, e.z, e.big ? 4 : e.w === 'missile' ? 1.2 : 1.8); sfx(e.w === 'missile' ? 'missile' : 'cannon', vol(e.x, e.z) * (e.big ? 1.5 : 0.8)); } break;
+        case 'boom': if (visAt(e.x, e.z)) { fx.boom(e.x, e.y, e.z, e.r, e.big, e.air); sfx(e.big ? 'big' : 'boom', vol(e.x, e.z) * (e.big ? 1.6 : 0.7)); if (e.big) this.shake = Math.max(this.shake, 2.5 * vol(e.x, e.z)); } break;
+        case 'dead': if (!e.silent && visAt(e.x, e.z) || (!e.silent && e.owner === this.local)) {
+          const bld = e.kind === 'building', r = bld ? 6 : e.air ? 3 : 3.2;
+          fx.boom(e.x, e.y + (bld ? 2 : 1), e.z, r, bld, e.air);
+          if (bld) { for (let i = 0; i < 4; i++) fx.boom(e.x + (Math.random() - 0.5) * 10, e.y + 2 + Math.random() * 3, e.z + (Math.random() - 0.5) * 10, 4, false, false); this.shake = Math.max(this.shake, 3 * vol(e.x, e.z)); fx.burn(e.x, e.y, e.z, 7); }
+          else if (!(e.def === 'rifleman' || e.def === 'at' || e.def === 'manpads' || e.def === 'engineer')) fx.burn(e.x, e.y, e.z, e.air ? 2.5 : 4);
+          sfx('boom', vol(e.x, e.z));
+        } break;
+        default: break;
+      }
+    }
+  }
+
+  render(dt, alpha) {
+    this.time += dt;
+    this.updateCamera(dt);
+    this.syncEntities(alpha, dt);
+    this.updateSelection();
+    if (this.pingT > 0) { this.pingT -= dt; const t = Math.max(0, this.pingT / 0.6), s = 1 + (1 - t) * 4; this.pingMesh.scale.set(s, 1, s); this.pingMesh.material.opacity = t; if (this.pingT <= 0) this.pingMesh.visible = false; }
+    this.fogTimer += dt; if (this.fogTimer > 0.25) { this.fogTimer = 0; this.updateFog(); }
+    const scale = this.renderer.domElement.height * 0.5 * this.camera.projectionMatrix.elements[5];
+    this.fx.update(dt, scale);
+    this.renderer.render(this.scene, this.camera);
+  }
+  dispose() {
+    this.terrain.geometry.dispose(); this.water.geometry.dispose();
+    this.scene.clear();
+  }
+}

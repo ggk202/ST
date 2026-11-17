@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SPEARHEAD – Near-Future RTS</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d1217">
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<style>
+:root { --bg:#0d1217; --panel:rgba(14,19,25,.86); --line:#2b3745; --txt:#dfe7ee; --dim:#8a99a8; --acc:#8fd14f; --acc2:#f0b429; --bad:#ef5350; --blue:#4aa3ff; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin:0; height:100%; background:var(--bg); color:var(--txt); font: 14px/1.35 -apple-system, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif; overflow:hidden; overscroll-behavior:none; touch-action:none; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+#app { position:fixed; inset:0; }
+canvas#view, canvas#overlay { position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+canvas#overlay { pointer-events:none; }
+.hidden { display:none !important; }
+button { font:inherit; color:inherit; cursor:pointer; touch-action:manipulation; }
+input, select { font:inherit; color:inherit; user-select:text; -webkit-user-select:text; }
+
+/* ---------- HUD ---------- */
+#hud { position:absolute; inset:0; pointer-events:none; }
+#hud > * { pointer-events:auto; }
+#topbar { position:absolute; top:0; left:0; right:0; display:flex; gap:14px; align-items:center; padding:6px calc(10px + env(safe-area-inset-right)) 6px calc(10px + env(safe-area-inset-left)); padding-top:calc(6px + env(safe-area-inset-top)); background:linear-gradient(#0d1217ee,#0d121700); pointer-events:none; font-weight:600; text-shadow:0 1px 2px #000; }
+#topbar > * { pointer-events:auto; }
+#topbar .grow { flex:1; pointer-events:none; }
+.stat { display:flex; align-items:center; gap:6px; padding:4px 10px; background:var(--panel); border:1px solid var(--line); border-radius:8px; }
+.stat b { color:var(--acc2); } .stat small { color:var(--dim); font-weight:500; }
+#netinfo { font-size:12px; color:var(--dim); }
+.iconbtn { min-width:44px; height:40px; border-radius:8px; border:1px solid var(--line); background:var(--panel); font-size:18px; }
+.iconbtn:active, .btn:active { filter:brightness(1.4); }
+#toasts { position:absolute; left:50%; transform:translateX(-50%); top:calc(56px + env(safe-area-inset-top)); display:flex; flex-direction:column; align-items:center; gap:6px; pointer-events:none; }
+.toast { background:rgba(10,14,18,.88); border:1px solid var(--line); border-left:4px solid var(--acc); padding:6px 14px; border-radius:6px; font-weight:600; animation:fade 4.5s forwards; max-width:80vw; text-align:center; }
+.toast.warn { border-left-color:var(--bad); } .toast.info { border-left-color:var(--blue); }
+@keyframes fade { 0%{opacity:0; transform:translateY(-6px)} 6%{opacity:1; transform:none} 85%{opacity:1} 100%{opacity:0} }
+#modeBanner { position:absolute; left:50%; transform:translateX(-50%); top:calc(54px + env(safe-area-inset-top)); background:rgba(143,209,79,.92); color:#10200a; padding:5px 14px; border-radius:20px; font-weight:700; pointer-events:none !important; }
+
+#bottom { position:absolute; left:0; right:0; bottom:0; display:flex; gap:8px; align-items:flex-end; padding:8px calc(8px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left)); pointer-events:none; }
+#bottom > * { pointer-events:auto; background:var(--panel); border:1px solid var(--line); border-radius:10px; }
+#minimapWrap { width:180px; height:180px; flex:none; padding:4px; position:relative; }
+#minimap { width:100%; height:100%; display:block; border-radius:6px; touch-action:none; }
+#selPanel { flex:1; min-width:0; height:180px; padding:8px; display:flex; flex-direction:column; gap:6px; overflow:hidden; }
+#selInfo { flex:1; overflow-y:auto; min-height:0; touch-action:pan-y; }
+#selInfo h3 { margin:0 0 2px; font-size:15px; } #selInfo p { margin:2px 0; color:var(--dim); font-size:12.5px; }
+.bar { height:8px; background:#222b34; border-radius:4px; overflow:hidden; margin:3px 0 5px; max-width:260px; } .bar > i { display:block; height:100%; background:var(--acc); }
+.chips { display:flex; flex-wrap:wrap; gap:5px; }
+.chip { padding:4px 8px; border-radius:6px; background:#1b2430; border:1px solid var(--line); font-weight:700; font-size:12.5px; }
+.chip:active { filter:brightness(1.5); }
+#cmdBar { display:flex; gap:6px; flex-wrap:wrap; }
+.btn { padding:7px 12px; min-height:38px; border-radius:8px; border:1px solid var(--line); background:#1b2430; font-weight:700; }
+.btn.on { background:var(--acc); color:#10200a; border-color:var(--acc); }
+.btn.primary { background:var(--acc); color:#10200a; border-color:var(--acc); }
+.btn.danger { background:#4a1d1d; border-color:#7a2d2d; }
+.btn kbd { margin-left:6px; font-size:10px; opacity:.6; font-family:inherit; }
+#buildPanel { width:372px; height:180px; flex:none; display:flex; flex-direction:column; padding:6px; gap:4px; }
+#tabs { display:flex; gap:4px; } #tabs button { flex:1; padding:5px 2px; border-radius:6px; border:1px solid var(--line); background:#161e27; font-weight:700; font-size:12px; }
+#tabs button.on { background:var(--acc); color:#10200a; } #tabs button.locked { opacity:.45; }
+#queue { display:flex; gap:4px; min-height:22px; overflow:hidden; } #queue:empty { display:none; }
+.qchip { position:relative; padding:2px 7px; font-size:11px; border-radius:5px; background:#1b2430; border:1px solid var(--line); overflow:hidden; white-space:nowrap; font-weight:700; }
+.qchip i { position:absolute; left:0; bottom:0; height:3px; background:var(--acc2); }
+#items { flex:1; overflow-y:auto; display:grid; grid-template-columns:repeat(4,1fr); gap:5px; align-content:start; touch-action:pan-y; }
+.item { position:relative; min-height:62px; border-radius:8px; border:1px solid var(--line); background:#18212b; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:3px 2px; line-height:1.15; }
+.item .ab { font-weight:800; font-size:15px; letter-spacing:.5px; } .item .nm { font-size:10px; color:var(--dim); text-align:center; } .item .co { font-size:11.5px; color:var(--acc2); font-weight:700; }
+.item.poor .co { color:var(--bad); } .item.locked { opacity:.4; } .item .bd { position:absolute; top:2px; right:4px; background:var(--acc2); color:#000; border-radius:8px; padding:0 5px; font-size:11px; font-weight:800; }
+.item:active { filter:brightness(1.5); }
+.cls-inf .ab { color:#ffd479; } .cls-veh .ab { color:#9ee37d; } .cls-air .ab { color:#7fc8ff; } .cls-str .ab { color:#e3e3e3; }
+#tip { position:absolute; left:50%; transform:translateX(-50%); bottom:200px; max-width:min(90vw,520px); padding:6px 12px; background:rgba(8,11,14,.94); border:1px solid var(--line); border-radius:8px; pointer-events:none !important; font-size:12.5px; }
+#tip b { color:var(--acc2); }
+#sideBtns { position:absolute; right:calc(10px + env(safe-area-inset-right)); top:calc(64px + env(safe-area-inset-top)); display:flex; flex-direction:column; gap:8px; background:none !important; border:none !important; pointer-events:none; }
+#sideBtns button { pointer-events:auto; width:52px; height:52px; border-radius:26px; border:1px solid var(--line); background:var(--panel); font-size:11px; font-weight:800; line-height:1.05; }
+#sideBtns button.on { background:var(--acc); color:#10200a; }
+#placeBar { position:absolute; left:50%; transform:translateX(-50%); bottom:210px; display:flex; gap:10px; background:none !important; }
+#placeBar .btn { min-width:120px; min-height:48px; font-size:16px; }
+body:not(.touch) .touchonly { display:none; }
+
+/* ---------- menus ---------- */
+#menu, #pause, #endscreen { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:radial-gradient(ellipse at 30% 20%, #1c2a38 0%, #0b1015 70%); overflow:auto; padding:calc(14px + env(safe-area-inset-top)) 14px 14px; touch-action:pan-y; }
+#pause, #endscreen { background:rgba(5,8,11,.82); z-index:10; }
+.card { width:min(94vw,640px); background:rgba(17,23,30,.94); border:1px solid var(--line); border-radius:14px; padding:20px 22px; box-shadow:0 20px 60px #000a; margin:auto; }
+.card h1 { margin:0 0 2px; font-size:34px; letter-spacing:6px; color:var(--acc); } .card h2 { margin:0 0 12px; font-size:20px; } .card .sub { color:var(--dim); margin-bottom:18px; }
+.menu-col { display:flex; flex-direction:column; gap:10px; }
+.menu-col .btn { padding:14px; font-size:16px; text-align:center; }
+.row { display:flex; align-items:center; gap:10px; margin:8px 0; flex-wrap:wrap; } .row > label { width:110px; color:var(--dim); }
+.seg { display:flex; gap:4px; flex-wrap:wrap; } .seg button { padding:8px 14px; min-height:40px; border:1px solid var(--line); background:#161e27; border-radius:8px; font-weight:700; } .seg button.on { background:var(--acc); color:#10200a; border-color:var(--acc); }
+.slot { display:flex; gap:8px; align-items:center; padding:7px 9px; margin:5px 0; border:1px solid var(--line); border-radius:8px; background:#141b23; flex-wrap:wrap; }
+.slot .dot { width:14px; height:14px; border-radius:50%; flex:none; } .slot .nm { flex:1; min-width:90px; font-weight:700; }
+select, input[type=text] { background:#0f151c; border:1px solid var(--line); border-radius:8px; padding:8px 10px; min-height:40px; }
+input[type=text] { width:150px; text-transform:uppercase; letter-spacing:3px; font-weight:700; }
+.code { font-size:30px; font-weight:800; letter-spacing:8px; color:var(--acc2); padding:6px 12px; background:#0f151c; border:1px dashed var(--line); border-radius:8px; user-select:all; -webkit-user-select:all; }
+.help { font-size:13px; color:#c3ced8; } .help h3 { margin:14px 0 4px; color:var(--acc2); font-size:14px; } .help table { width:100%; border-collapse:collapse; } .help td { padding:3px 6px; border-bottom:1px solid #202a35; vertical-align:top; } .help td:first-child { white-space:nowrap; color:var(--acc); font-weight:700; width:42%; }
+.err { color:var(--bad); font-weight:600; min-height:20px; }
+.end-title { font-size:46px; letter-spacing:6px; margin:0; } .win { color:var(--acc); } .lose { color:var(--bad); }
+table.stats { width:100%; margin:12px 0; border-collapse:collapse; } table.stats td, table.stats th { padding:5px 8px; text-align:left; border-bottom:1px solid #202a35; }
+.footer { margin-top:14px; font-size:12px; color:var(--dim); text-align:center; }
+#loading { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#0b1015; font-size:18px; letter-spacing:3px; z-index:20; }
+
+@media (max-width: 860px) {
+  #bottom { flex-wrap:wrap; } #selPanel { order:3; flex-basis:100%; height:128px; } #buildPanel { flex:1; width:auto; min-width:260px; } #minimapWrap { width:150px; height:150px; } #buildPanel { height:196px; } #minimapWrap { height:196px; width:196px; }
+  #tip { bottom:380px; } #placeBar { bottom:380px; }
+}
+body.touch .item { min-height:66px; } body.touch .btn { min-height:44px; }
+</style>
+</head>
+<body>
+<div id="loading">LOADING…</div>
+<div id="app">
+  <canvas id="view"></canvas>
+  <canvas id="overlay"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="topbar">
+      <div class="stat">💰 <b id="credits">0</b> <small id="income"></small></div>
+      <div class="stat">⚙ <b id="unitcount">0</b> <small>units</small></div>
+      <div class="stat"><span id="clock">0:00</span></div>
+      <div class="grow"></div>
+      <span id="netinfo"></span>
+      <button class="iconbtn" id="btnMenu" title="Menu (Esc)">☰</button>
+    </div>
+    <div id="toasts"></div>
+    <div id="modeBanner" class="hidden"></div>
+    <div id="sideBtns">
+      <button id="btnBox" class="touchonly" title="Toggle box-select (drag to select)">BOX<br>SELECT</button>
+      <button id="btnArmy" title="Select all combat units (Ctrl/Cmd+A)">ARMY</button>
+      <button id="btnIdle" title="Select idle engineers / jump to alert">ALERT</button>
+      <button id="btnHome" title="Jump to Command Center (H)">HQ</button>
+      <button id="btnDesel" title="Deselect (Esc)">CLEAR</button>
+    </div>
+    <div id="tip" class="hidden"></div>
+    <div id="placeBar" class="hidden"><button class="btn primary" id="btnPlaceOk">✔ Build</button><button class="btn danger" id="btnPlaceNo">✖ Cancel</button></div>
+    <div id="bottom">
+      <div id="minimapWrap"><canvas id="minimap" width="360" height="360"></canvas></div>
+      <div id="selPanel"><div id="selInfo"></div><div id="cmdBar"></div></div>
+      <div id="buildPanel"><div id="tabs"></div><div id="queue"></div><div id="items"></div></div>
+    </div>
+  </div>
+
+  <div id="menu">
+    <div class="card" id="screen-main">
+      <h1>SPEARHEAD</h1><div class="sub">Near-future combined-arms real-time strategy · 1–4 players</div>
+      <div class="menu-col">
+        <button class="btn primary" id="mSkirmish">Skirmish (Single Player)</button>
+        <button class="btn" id="mHost">Multiplayer – Host Game</button>
+        <button class="btn" id="mJoin">Multiplayer – Join Game</button>
+        <button class="btn" id="mHelp">How to Play &amp; Controls</button>
+        <button class="btn" id="mSettings">Settings</button>
+      </div>
+      <div class="footer">Works on desktop browsers and iPad (touch + keyboard). Best in landscape.</div>
+    </div>
+
+    <div class="card hidden" id="screen-setup">
+      <h2 id="setupTitle">Skirmish Setup</h2>
+      <div class="row"><label>Map type</label><div class="seg" id="segType"></div></div>
+      <div class="row"><label>Map size</label><div class="seg" id="segSize"></div></div>
+      <div class="row"><label>Seed</label><input type="text" id="seedInput" maxlength="8" style="width:120px"><button class="btn" id="btnReseed">🎲 Random</button></div>
+      <div id="slots"></div>
+      <div id="lobbyCode" class="row hidden"><label>Room code</label><span class="code" id="codeText"></span><span class="sub" style="margin:0">Share this code – friends choose “Join Game”.</span></div>
+      <div class="err" id="setupErr"></div>
+      <div class="row"><button class="btn primary" id="btnStart">Start Game</button><button class="btn" id="btnSetupBack">Back</button></div>
+    </div>
+
+    <div class="card hidden" id="screen-join">
+      <h2>Join Game</h2>
+      <div class="row"><label>Room code</label><input type="text" id="joinCode" maxlength="6" autocapitalize="characters" autocomplete="off" spellcheck="false"></div>
+      <div class="row"><label>Your name</label><input type="text" id="joinName" maxlength="14" style="text-transform:none;letter-spacing:0"></div>
+      <div class="err" id="joinErr"></div>
+      <div class="row"><button class="btn primary" id="btnJoinGo">Connect</button><button class="btn" id="btnJoinBack">Back</button></div>
+    </div>
+
+    <div class="card hidden" id="screen-settings">
+      <h2>Settings</h2>
+      <div class="row"><label>Shadows</label><div class="seg" id="segShadows"></div></div>
+      <div class="row"><label>Edge scroll</label><div class="seg" id="segEdge"></div></div>
+      <div class="row"><label>Volume</label><input type="range" id="volume" min="0" max="100" style="width:200px"></div>
+      <div class="row"><label>Fullscreen</label><button class="btn" id="btnFull">Toggle fullscreen</button><span class="sub" style="margin:0">On iPad: Share ▸ Add to Home Screen for a full-screen app.</span></div>
+      <div class="row"><button class="btn primary" id="btnSettingsBack">Back</button></div>
+    </div>
+
+    <div class="card hidden help" id="screen-help">
+      <h2>How to Play</h2>
+      <p>Destroy every enemy Command Center and production building (Barracks, War Factory, Airfield). You earn credits from your Command Center and <b>Oil Derricks</b> (built on dark oil fields). Build a <b>Barracks → War Factory → Tech Lab / Airfield</b>, train an army and attack. Train an <b>Engineer</b> to build derricks on distant oil fields. Units beyond your vision are hidden by the fog of war – use scouts and the UAV.</p>
+      <h3>Touch (iPad)</h3>
+      <table>
+        <tr><td>Tap a unit/building</td><td>Select (double-tap: all of that type on screen)</td></tr>
+        <tr><td>Tap ground / enemy</td><td>Move / attack with selected units (buildings: set rally point)</td></tr>
+        <tr><td>Drag one finger</td><td>Pan the camera</td></tr>
+        <tr><td>Pinch / twist two fingers</td><td>Zoom / rotate camera</td></tr>
+        <tr><td>Long-press then drag, or BOX button</td><td>Box-select units</td></tr>
+        <tr><td>Command buttons</td><td>Move, Attack-Move, Stop, Fire at ground (artillery &amp; missiles)</td></tr>
+        <tr><td>Build structure</td><td>Tap in Structures tab, tap map to place, ✔ to confirm</td></tr>
+      </table>
+      <h3>Mouse &amp; keyboard (also iPad Magic Keyboard)</h3>
+      <table>
+        <tr><td>Left click / drag</td><td>Select / box-select (Shift adds)</td></tr>
+        <tr><td>Right click</td><td>Move / attack / set rally point</td></tr>
+        <tr><td>Right-drag, middle-drag, Q / E</td><td>Rotate camera</td></tr>
+        <tr><td>Arrow keys, W A S D*, screen edge</td><td>Pan camera (*when no units are selected, or hold Shift)</td></tr>
+        <tr><td>Wheel, + / −, Z / X</td><td>Zoom</td></tr>
+        <tr><td>A · M · S · F</td><td>Attack-move · Move · Stop · Force-fire at ground</td></tr>
+        <tr><td>B · I · V · Y &nbsp; / Tab</td><td>Structures · Infantry · Vehicles · Aircraft tab / cycle tabs</td></tr>
+        <tr><td>1–9, Shift+1–9 (or Ctrl/⌘)</td><td>Recall / assign control group</td></tr>
+        <tr><td>Ctrl/⌘ + A</td><td>Select all combat units</td></tr>
+        <tr><td>H · Space · Esc</td><td>Jump to HQ · jump to last alert · cancel / menu</td></tr>
+      </table>
+      <h3>Units</h3>
+      <p>Infantry → cheap, good vs infantry. AT teams, IFVs and tanks beat vehicles. Heavy armor shrugs off bullets but fears AT missiles and helicopters. Anti-air (MANPADS, Mobile AA, SAM) counters aircraft. Artillery, rocket launchers and ballistic missiles need spotters (vision) and are deadly against buildings.</p>
+      <div class="row"><button class="btn primary" id="btnHelpBack">Back</button></div>
+    </div>
+  </div>
+
+  <div id="pause" class="hidden">
+    <div class="card" style="width:min(90vw,380px)">
+      <h2>Paused</h2>
+      <div class="menu-col">
+        <button class="btn primary" id="pResume">Resume</button>
+        <button class="btn" id="pSettings">Settings</button>
+        <button class="btn" id="pHelp">Controls</button>
+        <button class="btn danger" id="pResign">Resign</button>
+        <button class="btn" id="pQuit">Quit to Menu</button>
+      </div>
+      <div class="footer" id="pauseNote"></div>
+    </div>
+  </div>
+  <div id="endscreen" class="hidden"><div class="card" id="endCard"></div></div>
+</div>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script type="module" src="js/main.js"></script>
+<script>
+setTimeout(function(){ if(!window.__loaded){ var l=document.getElementById("loading"); if(l) l.innerHTML="<div style='text-align:center;max-width:420px;padding:20px'>Could not load the game.<br><small style='letter-spacing:0;color:#8a99a8'>The 3D library is loaded from a CDN (jsdelivr). Check your internet connection and that the page is served over http(s) (GitHub Pages), not opened as a local file, then reload.</small></div>"; } }, 9000);
+</script>
+</body>
+</html>
