@@ -18,6 +18,7 @@ const PATHS_PER_TICK = 6;
 const GRID = 16;
 const DIRS16 = (() => { const a = 0.9239, b = 0.3827, c = 0.7071; return [[1, 0], [a, b], [c, c], [b, a], [0, 1], [-b, a], [-c, c], [-a, b], [-1, 0], [-a, -b], [-c, -c], [-b, -a], [0, -1], [b, -a], [c, -c], [a, -b]]; })();
 
+const QUEUE_MAX = 30;
 export class Sim {
   constructor(cfg) {
     this.cfg = cfg;
@@ -189,7 +190,15 @@ export class Sim {
     const p = this.players[c.p];
     if (!p || !p.alive) return;
     switch (c.t) {
-      case 'move': case 'attackmove': this.cmdMove(this.own(c.ids, c.p), c.x, c.z, c.t); break;
+      case 'move': case 'attackmove': {
+        const us = this.own(c.ids, c.p);
+        if (c.q) {   // shift-queued waypoint: idle units start at once, busy ones append to their route
+          const now = [];
+          for (const u of us) { if (u.kind !== 'unit') continue; if (u.order.t === 'idle') now.push(u); else if (!u.air || true) { u.oq = u.oq || []; if (u.oq.length < 12) u.oq.push({ t: c.t, x: clamp(c.x, 6, this.map.size - 6), z: clamp(c.z, 6, this.map.size - 6) }); } }
+          if (now.length) this.cmdMove(now, c.x, c.z, c.t);
+        } else this.cmdMove(us, c.x, c.z, c.t);
+        break;
+      }
       case 'attackground': this.cmdMove(this.own(c.ids, c.p), c.x, c.z, 'attackground'); break;
       case 'attack': {
         const tg = this.byId.get(c.tid);
@@ -202,7 +211,7 @@ export class Sim {
         }
         break;
       }
-      case 'stop': for (const u of this.own(c.ids, c.p)) if (u.kind === 'unit') this.finishOrder(u); break;
+      case 'stop': for (const u of this.own(c.ids, c.p)) if (u.kind === 'unit') { u.oq = null; this.finishOrder(u); } break;
       case 'build': {
         const r = this.canPlace(c.p, c.type, c.x, c.z, c.node);
         if (!r.ok) return;
@@ -210,7 +219,11 @@ export class Sim {
         p.stats.built++;
         break;
       }
-      case 'train': { const n = Math.max(1, Math.min(10, c.n | 0 || 1)); for (let i = 0; i < n; i++) if (!this.train(c.p, c.type)) break; break; }
+      case 'train': { const n = Math.max(1, Math.min(60, c.n | 0 || 1)); for (let i = 0; i < n; i++) if (!this.train(c.p, c.type)) break; break; }
+      case 'trainat': { const b = this.byId.get(c.bid), n = Math.max(1, Math.min(40, c.n | 0 || 1)); if (b && !b.dead && b.owner === c.p) for (let i = 0; i < n; i++) if (!this.trainAt(c.p, b, c.type)) break; break; }
+      case 'repeat': for (const b of this.own(c.ids, c.p)) if (b.kind === 'building' && BUILDINGS[b.def].produces) b.rep = !!c.v; break;
+      case 'dequeueat': { const b = this.byId.get(c.bid); if (b && !b.dead && b.owner === c.p && b.queue && b.queue[c.idx | 0]) { const it = b.queue.splice(c.idx | 0, 1)[0]; p.credits += it.sm; p.energy += it.se; } break; }
+      case 'clearq': for (const b of this.own(c.ids, c.p)) if (b.kind === 'building') { for (const q of b.queue) { p.credits += q.sm; p.energy += q.se; } b.queue = []; } break;
       case 'dequeue': this.dequeue(c.p, c.type); break;
       case 'rally': for (const b of this.own(c.ids, c.p)) if (b.kind === 'building') b.rally = { x: clamp(c.x, 4, this.map.size - 4), z: clamp(c.z, 4, this.map.size - 4) }; break;
       case 'sell': for (const b of this.own(c.ids, c.p)) if (b.kind === 'building' && b.def !== 'hq') { if (b.progress >= 1) { p.credits += BUILDINGS[b.def].cost * 0.5; p.energy += BUILDINGS[b.def].energy * 0.5; } else { p.credits += b.sm; p.energy += b.se; } this.kill(b, true, true); } break;
@@ -241,6 +254,7 @@ export class Sim {
   }
   cmdMove(units, x, z, type) {
     units = units.filter((u) => u.kind === 'unit');
+    for (const u of units) if (u.oq) u.oq = null;
     const k = units.length; if (!k) return;
     x = clamp(x, 6, this.map.size - 6); z = clamp(z, 6, this.map.size - 6);
     const cols = Math.ceil(Math.sqrt(k));
@@ -259,7 +273,12 @@ export class Sim {
       u.order = { t: type, x: tx, z: tz }; u.path = null; u.pt = null; u.pending = false; u.stuck = 0; u.repath = 0; u.target = 0;
     }
   }
-  finishOrder(u) { u.order = { t: 'idle' }; u.path = null; u.pt = null; u.pending = false; u.target = 0; u.moving = false; }
+  finishOrder(u) {
+    const nx = u.oq && u.oq.length ? u.oq.shift() : null, rest = u.oq;
+    this.finishOrderNow(u);
+    if (nx) { this.cmdMove([u], nx.x, nx.z, nx.t); u.oq = rest && rest.length ? rest : null; }
+  }
+  finishOrderNow(u) { u.order = { t: 'idle' }; u.path = null; u.pt = null; u.pending = false; u.target = 0; u.moving = false; }
 
   producerFor(owner, d) {
     let best = null;
@@ -292,9 +311,17 @@ export class Sim {
     for (const b of this.ents) if (b.owner === owner && b.kind === 'building' && !b.dead) for (const q of b.queue) if (!UNITS[q.type].missile && !UNITS[q.type].orbital) queued += UNITS[q.type].batch;
     if (p.units + queued + d.batch > UNIT_CAP) return false;
     const b = this.producerFor(owner, d);
-    if (b.queue.length >= 12) return false;
+    if (b.queue.length >= QUEUE_MAX) return false;
     b.queue.push({ type, left: d.timeTicks, sm: 0, se: 0 });
     return true;
+  }
+  // queue at one specific production building (mass-production overview)
+  trainAt(owner, b, type) {
+    const d = UNITS[type], p = this.players[owner];
+    if (!d || b.dead || b.kind !== 'building' || b.progress < 1 || BUILDINGS[b.def].produces !== d.from || p.tech < d.techLv) return false;
+    if (d.from === 'airfield' && (!b.afd || this.afRunLevel(b) < d.rwy)) return false;
+    if (b.queue.length >= QUEUE_MAX) return false;
+    b.queue.push({ type, left: d.timeTicks, sm: 0, se: 0 }); return true;
   }
   dequeue(owner, type) {
     const d = UNITS[type]; if (!d) return;
@@ -504,6 +531,7 @@ export class Sim {
       const si = ud.from === 'airfield' ? (b.afd ? this.afFreeStand(b) : -1) : 0;
       if (it.left <= 0 && ((ud.missile && (b.mis ? b.mis.length : 0) < 4) || ud.orbital || (!ud.missile && p.units + ud.batch <= UNIT_CAP && si >= 0))) {
         b.queue.shift();
+        if (b.rep && b.queue.length < 6) b.queue.push({ type: it.type, left: ud.timeTicks, sm: 0, se: 0 });
         if ((ud.missile || ud.orbital) && this.spaceItemDone(b, it)) { if (b.queue.length === 0) b.flash = 0; return this.updateBuildingTail(b, d, p); }
         const made = [];
         if (ud.from === 'airfield') made.push(this.spawnAircraft(b, it.type, si));

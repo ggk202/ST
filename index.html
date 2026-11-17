@@ -139,6 +139,32 @@ body.touch .item { min-height:66px; } body.touch .btn { min-height:44px; }
 #afPanel .mod .btn { width:100%; margin-top:5px; min-height:34px; font-size:12px; padding:4px 6px; } #afPanel .mod .btn small { opacity:.75; font-weight:600; } #afPanel .mod .btn:disabled { opacity:.4; } #afPanel .mod .ds { color:var(--dim); font-size:11px; margin-top:2px; }
 #afPanel .bar { max-width:none; margin:5px 0 2px; } #afPanel label { display:flex; gap:6px; align-items:center; color:var(--dim); margin-top:6px; }
 @media (max-width: 860px) { #afPanel { top:calc(100px + env(safe-area-inset-top)); width:230px; } #loadoutPanel { max-height:calc(100vh - 330px); } }
+
+#orbitUi { position:absolute; inset:0; z-index:6; pointer-events:none; }
+#orbBanner { position:absolute; top:calc(54px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%); pointer-events:auto; display:flex; gap:12px; align-items:center; background:rgba(6,12,20,.82); border:1px solid #2b4a66; border-radius:10px; padding:6px 12px; color:#cfe8ff; font-size:13px; white-space:nowrap; }
+#orbBanner small { color:#8fa8bd; } #orbBanner b { letter-spacing:.14em; color:#7fe3ff; }
+#orbPanel { position:absolute; left:calc(10px + env(safe-area-inset-left)); top:calc(100px + env(safe-area-inset-top)); width:290px; max-height:calc(100% - 130px); overflow:auto; pointer-events:auto; background:rgba(8,14,22,.88); border:1px solid #2b4a66; border-radius:10px; padding:10px 12px; color:#cfe0ee; font-size:12.5px; }
+#orbPanel h3 { margin:0 0 6px; font-size:14px; color:#7fe3ff; } #orbPanel .sub { color:#8fa8bd; margin:4px 0; line-height:1.35; }
+#orbPanel .orow { padding:5px 7px; border-radius:7px; cursor:pointer; margin-bottom:3px; border:1px solid transparent; display:grid; grid-template-columns:1fr 54px; gap:0 6px; } #orbPanel .orow small { grid-column:1/3; color:#8fa8bd; } #orbPanel .orow:hover { background:#14222f; } #orbPanel .orow.on { border-color:#7fe3ff; background:#10283a; }
+#orbPanel .hpb { align-self:center; height:5px; background:#0a1017; border-radius:3px; overflow:hidden; } #orbPanel .hpb i { display:block; height:100%; background:#5bd18a; }
+#orbPanel .osec { border-top:1px solid #203244; margin-top:8px; padding-top:7px; } #orbPanel .orow2 { margin:5px 0; display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+#orbPanel .mini { font-size:11.5px; padding:3px 8px; border-radius:6px; background:#162536; color:#cfe8ff; border:1px solid #2c4660; cursor:pointer; margin:2px 3px 2px 0; } #orbPanel .mini.on { background:#1d4a66; border-color:#7fe3ff; } #orbPanel .mini.locked { opacity:.45; } #orbPanel .qc { background:#162536; border:1px solid #2c4660; border-radius:6px; padding:1px 6px; cursor:pointer; }
+#orbMapWrap { position:absolute; right:calc(10px + env(safe-area-inset-right)); bottom:calc(10px + env(safe-area-inset-bottom)); pointer-events:auto; background:rgba(8,14,22,.88); border:1px solid #2b4a66; border-radius:10px; padding:8px; color:#8fa8bd; font-size:11px; text-align:center; }
+#orbMap { width:min(300px,40vw); height:min(300px,40vw); display:block; border-radius:6px; cursor:crosshair; }
+#hud.orbiting #bottom, #hud.orbiting #sideBtns, #hud.orbiting #logiPanel, #hud.orbiting #afPanel, #hud.orbiting #loadoutPanel { display:none !important; }
+#catSel, #qtySel { display:flex; gap:4px; } #catSel button, #qtySel button { flex:1; padding:3px 2px; border-radius:6px; border:1px solid var(--line); background:#131a22; font-size:11px; font-weight:800; } #catSel button.on { background:#3a6a3a; color:#fff; } #qtySel button.on { background:#8a5a2b; color:#fff; }
+#prodPanel { position:absolute; right:calc(86px + env(safe-area-inset-right)); top:calc(96px + env(safe-area-inset-top)); width:342px; max-height:68vh; overflow:auto; background:rgba(10,14,18,.95); border:1px solid var(--line); border-radius:10px; padding:8px 10px; font-size:12px; z-index:5; }
+#prodPanel h3 { margin:0 0 6px; font-size:15px; display:flex; justify-content:space-between; align-items:center; } #prodPanel .px { display:flex; gap:6px; align-items:center; } #prodPanel .x { background:none; border:0; color:var(--dim); font-size:18px; cursor:pointer; }
+#prodPanel .tsel button { padding:1px 6px; font-size:11px; border-radius:5px; border:1px solid #2c3d50; background:#131a22; color:#cfe3f7; cursor:pointer; margin-left:2px; } #prodPanel .tsel button.on { background:#2b5a8a; }
+#prodPanel .pgrp { border-top:1px solid #202a35; padding:6px 0 3px; } #prodPanel .phead { display:flex; gap:4px; align-items:center; margin-bottom:4px; } #prodPanel .phead b { flex:1; }
+#prodPanel .pbulk { display:flex; gap:3px; margin-bottom:5px; align-items:center; } #prodPanel .pbulk select { flex:1; min-width:0; font-size:11px; background:#101820; color:#dbe6f0; border:1px solid #2c3d50; border-radius:5px; padding:2px; }
+#prodPanel .mini { font-size:11px; padding:1px 6px; border-radius:6px; background:#1d2a38; color:#cfe3f7; border:1px solid #2c3d50; cursor:pointer; } #prodPanel .mini.on { background:#8a5a2b; border-color:#d9a05a; } #prodPanel .mini.go { background:#2f6a3a; border-color:#5bd18a; font-weight:700; }
+#prodPanel .prow { display:flex; align-items:center; gap:4px; padding:2px 3px; border-radius:6px; } #prodPanel .prow.on { background:#14222f; } #prodPanel .pn { width:70px; cursor:pointer; color:#9fc3e6; } #prodPanel .pq { flex:1; display:flex; flex-wrap:wrap; gap:2px; align-items:center; min-width:0; }
+#prodPanel .qc { background:#162536; border:1px solid #2c4660; border-radius:5px; padding:0 4px; cursor:pointer; font-size:10.5px; } #prodPanel .qc.act { background:#1d4a2a; border-color:#5bd18a; } #prodPanel .idle { color:#5d6b79; } #prodPanel .ok { color:#5bd18a; } #prodPanel .st { color:var(--dim); margin:4px 0; }
+#selMenu { position:absolute; right:calc(86px + env(safe-area-inset-right)); top:calc(96px + env(safe-area-inset-top)); display:flex; flex-direction:column; gap:3px; background:rgba(10,14,18,.95); border:1px solid var(--line); border-radius:10px; padding:6px; z-index:6; }
+#selMenu button { text-align:left; padding:6px 12px; border-radius:6px; border:1px solid #2c3d50; background:#131a22; color:#dbe6f0; font-size:12.5px; cursor:pointer; } #selMenu button:hover { background:#1f3042; }
+#grpBar { position:absolute; left:calc(10px + env(safe-area-inset-left)); top:calc(60px + env(safe-area-inset-top)); display:flex; gap:4px; z-index:3; } #grpBar .grp { background:rgba(10,14,18,.82); border:1px solid var(--line); color:#dbe6f0; border-radius:6px; padding:3px 8px; font-size:12px; cursor:pointer; } #grpBar .grp b { color:#8dff5c; margin-right:5px; } #grpBar .grp.on { background:#1d4a66; border-color:#7fe3ff; }
+#subRow { display:flex; gap:8px; } #subRow > div { flex:1; } #subRow > div.hidden { display:none; }
 </style>
 </head>
 <body>
@@ -163,25 +189,36 @@ body.touch .item { min-height:66px; } body.touch .btn { min-height:44px; }
     <div id="modeBanner" class="hidden"></div>
     <div id="sideBtns">
       <button id="btnBox" class="touchonly" title="Toggle box-select (drag to select)">BOX<br>SELECT</button>
+      <button id="btnSel" title="Quick-select presets: ground, air, idle, artillery…">SELECT</button>
       <button id="btnArmy" title="Select all combat units (Ctrl/Cmd+A)">ARMY</button>
       <button id="btnIdle" title="Select idle engineers / jump to alert">ALERT</button>
       <button id="btnSensor" title="Sensor overlay: radars, jammers, contacts (O)">SENSORS</button>
+      <button id="btnOrbit" class="hidden" title="Orbital view: satellites, launch pads, space warships (N)">ORBIT</button>
+      <button id="btnProd" title="Production overview: queues, repeat, rally, bulk orders (C)">PROD</button>
       <button id="btnLogi" title="Logistics: supplies, fuel, control points, weather (G)">LOGI</button>
       <button id="btnHome" title="Jump to Command Center (H)">HQ</button>
       <button id="btnDesel" title="Deselect (Esc)">CLEAR</button>
     </div>
+    <div id="selMenu" class="hidden"><button data-k="army">All combat units</button><button data-k="ground">Ground forces</button><button data-k="veh">Vehicles</button><button data-k="inf">Infantry</button><button data-k="air">Aircraft</button><button data-k="idle">Idle combat units</button><button data-k="arty">Artillery &amp; missiles</button><button data-k="aa">Air defense units</button><button data-k="eng">Engineers</button><button data-k="hurt">Damaged units</button><button data-k="prod">Production buildings</button><button data-k="sam">Defense structures</button></div>
+    <div id="grpBar"></div>
     <div id="tip" class="hidden"></div>
     <div id="loadoutPanel" class="hidden"></div>
     <div id="afPanel" class="hidden"></div>
     <div id="logiPanel" class="hidden"></div>
+    <div id="prodPanel" class="hidden"></div>
     <div id="placeBar" class="hidden"><button class="btn primary" id="btnPlaceOk">✔ Build</button><button class="btn danger" id="btnPlaceNo">✖ Cancel</button></div>
     <div id="bottom">
       <div id="minimapWrap"><canvas id="minimap" width="360" height="360"></canvas></div>
       <div id="selPanel"><div id="selInfo"></div><div id="cmdBar"></div></div>
-      <div id="buildPanel"><div id="tabs"></div><div id="tierSel" class="hidden"></div><div id="queue"></div><div id="items"></div></div>
+      <div id="buildPanel"><div id="tabs"></div><div id="subRow"><div id="catSel" class="hidden"></div><div id="tierSel" class="hidden"></div><div id="qtySel" class="hidden"></div></div><div id="queue"></div><div id="items"></div></div>
     </div>
   </div>
 
+  <div id="orbitUi" class="hidden">
+    <div id="orbBanner"><b>ORBITAL VIEW</b> <small>drag: rotate · wheel / pinch: zoom · click: select · right-click: change orbit position</small><button class="btn" id="orbClose">Return to surface (N)</button></div>
+    <div id="orbPanel"></div>
+    <div id="orbMapWrap"><canvas id="orbMap" width="320" height="320"></canvas><small>Ground track (click: set strike target)</small></div>
+  </div>
   <div id="menu">
     <div class="card" id="screen-main">
       <h1>SPEARHEAD</h1><div class="sub">Near-future combined-arms real-time strategy · 1–4 players</div>
@@ -217,6 +254,7 @@ body.touch .item { min-height:66px; } body.touch .btn { min-height:44px; }
       <h2 id="setupTitle">Skirmish Setup</h2>
       <div class="row"><label>Map type</label><div class="seg" id="segType"></div></div>
       <div class="row"><label>Map size</label><div class="seg" id="segSize"></div></div>
+      <div class="row"><label>Space layer</label><div class="seg" id="segSpace"></div><span class="sub" style="margin:0">Orbital view: satellites, launch pads, orbital shipyards and space warships</span></div>
       <div class="row"><label>Seed</label><input type="text" id="seedInput" maxlength="8" style="width:120px"><button class="btn" id="btnReseed">🎲 Random</button></div>
       <div id="slots"></div>
       <div id="lobbyCode" class="row hidden"><label>Room code</label><span class="code" id="codeText"></span><span class="sub" style="margin:0">Share this code – friends choose “Join Game”.</span></div>

@@ -63,13 +63,18 @@ export class Controls {
   // ---------- orders ----------
   ids(list) { return list.map((e) => e.id); }
   hitEntity(sx, sy, minPx) { return this.r.pickEntity(sx, sy, minPx, (e) => !e.dead); }
-  orderMove(x, z) { const u = this.selUnits(); if (!u.length) return; this.cmd({ t: 'move', ids: this.ids(u), x, z }); this.r.ping(x, z, 0x8dff5c); sfx('ui', 0.6); }
-  orderAttackMove(x, z) { const u = this.selUnits(); if (!u.length) return; this.cmd({ t: 'attackmove', ids: this.ids(u), x, z }); this.r.ping(x, z, 0xffb040); sfx('ui', 0.6); }
+  orderMove(x, z) { const u = this.selUnits(); if (!u.length) return; this.cmd({ t: 'move', ids: this.ids(u), x, z, q: this.q ? 1 : 0 }); this.r.ping(x, z, this.q ? 0x5cd2ff : 0x8dff5c); sfx('ui', 0.6); }
+  orderAttackMove(x, z) { const u = this.selUnits(); if (!u.length) return; this.cmd({ t: 'attackmove', ids: this.ids(u), x, z, q: this.q ? 1 : 0 }); this.r.ping(x, z, this.q ? 0x5cd2ff : 0xffb040); sfx('ui', 0.6); }
   orderForceFire(x, z) { const u = this.selUnits(); if (!u.length) return; this.cmd({ t: 'attackground', ids: this.ids(u), x, z }); this.r.ping(x, z, 0xff5050); sfx('ui', 0.6); }
   orderAttack(e) { const u = this.selUnits(); if (!u.length) return; this.cmd({ t: 'attack', ids: this.ids(u), tid: e.id }); this.r.ping(e.x, e.z, 0xff4040); sfx('ui', 0.6); }
   orderRally(x, z) { const b = this.selBlds(); if (!b.length) return; this.cmd({ t: 'rally', ids: this.ids(b), x, z }); this.r.ping(x, z, 0x6cb8ff); }
   orderBoard(tr) { const u = this.selUnits().filter((e) => !e.air && !e.cargo); if (!u.length) return false; this.cmd({ t: 'board', ids: this.ids(u), tid: tr.id }); this.r.ping(tr.x, tr.z, 0x6cb8ff); sfx('ui', 0.6); return true; }
   orderEscort(tg) { const u = this.selUnits().filter((e) => e.id !== tg.id); if (!u.length || tg.kind !== 'unit') return false; this.cmd({ t: 'escort', ids: this.ids(u), tid: tg.id }); this.r.ping(tg.x, tg.z, 0x6cb8ff); return true; }
+  orderFire(x, z) {
+    const silos = this.selBlds().filter((b) => b.def === 'silo' && b.mis && b.mis.length); if (!silos.length) { this.g.toast('No loaded silo selected', 'warn'); return; }
+    let n = 0; for (const b of silos) { const k = this.q ? b.mis.length : 1; for (let i = 0; i < k; i++) { this.cmd({ t: 'fire', bid: b.id, x: x + (i ? (i * 7) % 11 - 5 : 0), z: z + (i ? (i * 5) % 9 - 4 : 0) }); n++; } }
+    this.r.ping(x, z, 0xff5030); sfx('ui', 0.9); this.g.toast(n + ' missile' + (n > 1 ? 's' : '') + ' launched', 'info');
+  }
   orderSupplyDrop(x, z) { const u = this.selUnits().filter((e) => e.pal > 0 && e.ap === 'fly'); if (!u.length) { this.g.toast('No aircraft with supply pallets selected', 'warn'); return; } this.cmd({ t: 'supplydrop', ids: this.ids(u), x, z }); this.r.ping(x, z, 0xffd24a); }
   orderLift(af) { const u = this.selUnits().filter((e) => e.cargo); if (!u.length) return false; this.cmd({ t: 'lift', ids: this.ids(u), bid: af.id }); this.r.ping(af.x, af.z, 0x6cb8ff); sfx('ui', 0.6); return true; }
   orderDrop(x, z) { const u = this.selUnits().filter((e) => e.cargo); if (!u.length) return; this.cmd({ t: 'drop', ids: this.ids(u), x, z }); this.r.ping(x, z, 0xffd24a); sfx('ui', 0.6); }
@@ -78,7 +83,8 @@ export class Controls {
   sell() { const b = this.selBlds().filter((e) => e.def !== 'hq'); if (b.length) this.cmd({ t: 'sell', ids: this.ids(b) }); }
 
   // right click / touch tap on world with a selection
-  contextOrder(sx, sy, touch) {
+  contextOrder(sx, sy, touch, q) {
+    this.q = !!q;
     const gp = this.r.groundAt(sx, sy);
     const hit = this.hitEntity(sx, sy, touch ? 28 : 10);
     const units = this.selUnits(), blds = this.selBlds();
@@ -91,6 +97,7 @@ export class Controls {
     return false;
   }
   modeAction(sx, sy, shift, touch) {
+    this.q = !!shift;
     const gp = this.r.groundAt(sx, sy), m = this.mode.t;
     const hit = this.hitEntity(sx, sy, touch ? 28 : 10);
     if (m === 'attackmove') { if (hit && hit.team !== this.team) this.orderAttack(hit); else if (gp) this.orderAttackMove(gp.x, gp.z); }
@@ -101,6 +108,7 @@ export class Controls {
     else if (m === 'drop') { if (gp) this.orderDrop(gp.x, gp.z); }
     else if (m === 'escort') { if (hit && hit.owner === this.local && hit.kind === 'unit') this.orderEscort(hit); else this.g.toast('Click one of your units to escort', 'warn'); }
     else if (m === 'sdrop') { if (gp) this.orderSupplyDrop(gp.x, gp.z); }
+    else if (m === 'fire') { if (gp) this.orderFire(gp.x, gp.z); }
     if (!shift) this.setMode({ t: 'normal' });
   }
 
@@ -138,6 +146,26 @@ export class Controls {
     if (u.length) { this.g.setSel(u.map((e) => e.id)); this.r.centerOn(u[0].x, u[0].z); return true; }
     return false;
   }
+  // quick-select presets (SELECT menu)
+  selectPreset(kind) {
+    const mine = this.sim.ents.filter((e) => !e.dead && e.owner === this.local && e.kind === 'unit' && !e.boarded);
+    const armed = (e) => UNITS[e.def].weapons.length > 0 && !UNITS[e.def].strike;
+    let list = [];
+    if (kind === 'army') list = mine.filter(armed);
+    else if (kind === 'ground') list = mine.filter((e) => !e.air && armed(e));
+    else if (kind === 'air') list = mine.filter((e) => e.air);
+    else if (kind === 'idle') list = mine.filter((e) => armed(e) && e.order.t === 'idle' && (!e.ap || e.ap === 'fly'));
+    else if (kind === 'arty') list = mine.filter((e) => ['sph', 'mlrs', 'tel'].includes(UNITS[e.def].base));
+    else if (kind === 'eng') list = mine.filter((e) => UNITS[e.def].builder);
+    else if (kind === 'aa') list = mine.filter((e) => UNITS[e.def].hitsAir && !UNITS[e.def].hitsGround);
+    else if (kind === 'inf') list = mine.filter((e) => UNITS[e.def].armor === 'inf' && !UNITS[e.def].drone);
+    else if (kind === 'veh') list = mine.filter((e) => !e.air && UNITS[e.def].armor !== 'inf' && armed(e));
+    else if (kind === 'hurt') list = mine.filter((e) => e.hp < e.maxhp * 0.6);
+    else if (kind === 'prod') list = this.sim.ents.filter((e) => !e.dead && e.owner === this.local && e.kind === 'building' && BUILDINGS[e.def].produces);
+    else if (kind === 'sam') list = this.sim.ents.filter((e) => !e.dead && e.owner === this.local && e.kind === 'building' && DEFS[e.def].weapons.length);
+    if (!list.length) { this.g.toast('Nothing to select', 'info'); return; }
+    this.g.setSel(list.map((e) => e.id)); sfx('ui', 0.5);
+  }
   recallGroup(n, center) {
     const ids = (this.g.groups[n] || []).filter((id) => { const e = this.sim.byId.get(id); return e && !e.dead; });
     this.g.groups[n] = ids;
@@ -151,8 +179,8 @@ export class Controls {
     const c = this.canvas;
     const opt = { passive: false };
     this.h = {
-      down: (e) => this.onDown(e), move: (e) => this.onMove(e), up: (e) => this.onUp(e), cancel: (e) => this.onCancel(e),
-      wheel: (e) => this.onWheel(e), ctx: (e) => e.preventDefault(),
+      down: (e) => { if (!this.g.orbital.on) this.onDown(e); }, move: (e) => { if (!this.g.orbital.on) this.onMove(e); }, up: (e) => { if (!this.g.orbital.on) this.onUp(e); }, cancel: (e) => this.onCancel(e),
+      wheel: (e) => { if (!this.g.orbital.on) this.onWheel(e); }, ctx: (e) => e.preventDefault(),
       kd: (e) => this.onKey(e, true), ku: (e) => this.onKey(e, false), blur: () => this.keys.clear(),
       leave: () => { this.mouse.over = false; }, enter: () => { this.mouse.over = true; },
       gest: (e) => e.preventDefault(), tm: (e) => { if (e.target === c) e.preventDefault(); },
@@ -220,7 +248,7 @@ export class Controls {
       const mr = this.mr; this.mr = null;
       if (!mr.moved && e.button === 2) {
         if (this.mode.t !== 'normal') this.cancelMode();
-        else this.contextOrder(p.x, p.y, false);
+        else this.contextOrder(p.x, p.y, false, e.shiftKey);
       }
     }
   }
@@ -321,6 +349,8 @@ export class Controls {
     if (this.g.paused && !(e.code === 'Escape' && down)) return;
     const code = e.code;
     if (!down) { this.keys.delete(code); return; }
+    if (this.g.orbital.on) { if (code === 'Escape' || code === 'KeyN') { e.preventDefault(); this.g.orbital.toggle(false); } return; }
+    if (code === 'KeyN' && !(e.ctrlKey || e.metaKey)) { e.preventDefault(); this.g.orbital.toggle(); return; }
     const mod = e.ctrlKey || e.metaKey;
     const hasUnits = this.selUnits().length > 0;
     this.keys.add(code);
@@ -354,8 +384,9 @@ export class Controls {
     if (!mod && code === 'KeyO') { stop(); this.g.sensor.toggle(); return; }
     if (!mod && code === 'KeyK' && this.selUnits().length) { stop(); this.setMode({ t: 'escort' }); return; }
     if (!mod && code === 'KeyG') { stop(); this.g.logi.toggle(); return; }
+    if (!mod && code === 'KeyC') { stop(); this.g.prod.toggle(); return; }
     if (!mod) {
-      if (code === 'KeyB') this.g.hud.setTab('str'); else if (code === 'KeyI') this.g.hud.setTab('inf'); else if (code === 'KeyV') this.g.hud.setTab('veh'); else if (code === 'KeyY') this.g.hud.setTab('air'); else if (code === 'KeyD' && !e.ctrlKey && !e.metaKey) this.g.hud.setTab('drn'); else if (code === 'KeyT' && this.g.hud.tab !== 'str') this.g.hud.setTier(this.g.hud.tier % 3 + 1);
+      if (code === 'KeyB') this.g.hud.setTab('str'); else if (code === 'KeyI') this.g.hud.setTab('inf'); else if (code === 'KeyV') this.g.hud.setTab('veh'); else if (code === 'KeyY') this.g.hud.setTab('air'); else if (code === 'KeyR') this.g.hud.setTab('stg'); else if (code === 'KeyD' && !e.ctrlKey && !e.metaKey) this.g.hud.setTab('drn'); else if (code === 'KeyT' && this.g.hud.tab !== 'str') this.g.hud.setTier(this.g.hud.tier % 3 + 1);
     }
     if (code.startsWith('Arrow') || code === 'Space') stop();
   }

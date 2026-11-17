@@ -1,14 +1,15 @@
 // HUD: top bar, minimap, selection panel, build/production panel, toasts.
-import { UNITS, BUILDINGS, BUILD_ORDER, BASE_ORDER, BASE_UNITS, DEFS, UNIT_CAP, PLAYER_COLORS, unitId, ROMAN, AF, AF_MODULES, AF_KEYS, TICK_RATE, BTIER } from './sim/defs.js';
+import { UNITS, BUILDINGS, BUILD_ORDER, BUILD_CATS, BASE_ORDER, BASE_UNITS, DEFS, UNIT_CAP, PLAYER_COLORS, unitId, ROMAN, AF, AF_MODULES, AF_KEYS, TICK_RATE, BTIER } from './sim/defs.js';
 import { sfx } from './fx.js';
 
-const ABBR = { rifleman: 'RIF', at: 'AT', manpads: 'MAN', engineer: 'ENG', scout: 'SCT', ifv: 'IFV', mbt: 'MBT', aa: 'FLK', sph: 'SPH', heavy: 'HVY', mlrs: 'MRL', tel: 'BMS', uav: 'UAV', heli: 'HEL', vtol: 'VTL', ewtruck: 'EWT', ewplane: 'EWA', robot: 'BOT', ewdog: 'EWD', sapper: 'CRW', repair: 'RPR', walker: 'WLK', fpv: 'FPV', fighter: 'FTR', bomber: 'BMB', strategic: 'SBM', airlifter: 'AIR', awacs: 'AWX', spydrone: 'SPY', radar: 'RAD', wingman: 'WNG', carrier: 'DSD', empcarrier: 'EMP', powerplant: 'PWR', dronebay: 'DRN', advtech: 'LB2', ewtower: 'EWS', derrick: 'OIL', barracks: 'BAR', factory: 'FAC', airfield: 'AIR', techlab: 'LAB', turret: 'GUN', sam: 'SAM', hq: 'HQ', supplytruck: 'SUP', tanker: 'TKR', decoy: 'DCY', supplydepot: 'DEP' };
+const ABBR = { rifleman: 'RIF', at: 'AT', manpads: 'MAN', engineer: 'ENG', scout: 'SCT', ifv: 'IFV', mbt: 'MBT', aa: 'FLK', sph: 'SPH', heavy: 'HVY', mlrs: 'MRL', tel: 'BMS', uav: 'UAV', heli: 'HEL', vtol: 'VTL', ewtruck: 'EWT', ewplane: 'EWA', robot: 'BOT', ewdog: 'EWD', sapper: 'CRW', repair: 'RPR', walker: 'WLK', fpv: 'FPV', fighter: 'FTR', bomber: 'BMB', strategic: 'SBM', airlifter: 'AIR', awacs: 'AWX', spydrone: 'SPY', radar: 'RAD', wingman: 'WNG', carrier: 'DSD', empcarrier: 'EMP', powerplant: 'PWR', dronebay: 'DRN', advtech: 'LB2', ewtower: 'EWS', derrick: 'OIL', barracks: 'BAR', factory: 'FAC', airfield: 'AIR', techlab: 'LAB', turret: 'GUN', sam: 'SAM', hq: 'HQ', supplytruck: 'SUP', tanker: 'TKR', decoy: 'DCY', supplydepot: 'DEP', solar: 'SOL', fusion: 'FUS', synth: 'SYN', reserve: 'RSV', wall: 'WAL', bunker: 'BNK', lasertower: 'LSR', railgun: 'RLG', heavyart: 'ART', abm: 'ABM', silo: 'SIL', launchpad: 'PAD', icbm: 'ICBM', satrecon: 'REC', satsurvey: 'SUR', satstrike: 'KIN', satkill: 'HKS', orbyard: 'YRD', orbfighter: 'OFT', orbcruiser: 'OCR', orbbattleship: 'OBS' };
 const TABS = [
   { id: 'str', label: 'Build', key: 'B', cls: 'str' },
   { id: 'inf', label: 'Infantry', key: 'I', cls: 'inf', from: ['barracks', 'hq'] },
   { id: 'veh', label: 'Vehicles', key: 'V', cls: 'veh', from: ['factory'] },
   { id: 'air', label: 'Aircraft', key: 'Y', cls: 'air', from: ['airfield'] },
   { id: 'drn', label: 'Drones', key: 'D', cls: 'drn', from: ['dronebay'] },
+  { id: 'stg', label: 'Strategic', key: 'R', cls: 'air', from: ['silo', 'launchpad'] },
 ];
 const $ = (id) => document.getElementById(id);
 const abbr = (def) => { const d = DEFS[def]; return (ABBR[d.base] || d.base) + (d.tier > 1 ? ROMAN[d.tier] : ''); };
@@ -20,12 +21,12 @@ const fmtTime = (s) => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).pad
 
 export class HUD {
   constructor(game) {
-    this.g = game; this.sim = game.sim; this.tab = 'str'; this.tier = 1; this.items = {}; this.lastSig = ''; this.acc = 1; this.mmAcc = 1;
+    this.g = game; this.sim = game.sim; this.tab = 'str'; this.cat = 'all'; this.qty = 1; this.tier = 1; this.items = {}; this.lastSig = ''; this.acc = 1; this.mmAcc = 1;
     this.el = { credits: $('credits'), income: $('income'), energy: $('energy'), eincome: $('eincome'), eff: $('eff'), tierSel: $('tierSel'), credBox: $('statM'), enBox: $('statE'), units: $('unitcount'), clock: $('clock'), net: $('netinfo'), toasts: $('toasts'), banner: $('modeBanner'), tip: $('tip'), placeBar: $('placeBar'), selInfo: $('selInfo'), cmdBar: $('cmdBar'), tabs: $('tabs'), queue: $('queue'), items: $('items'), mm: $('minimap') };
     this.mmCtx = this.el.mm.getContext('2d');
     this.loTarget = 0; this.loHide = new Set(); this.toldSel = new Set(); this.loSig = ''; this.afSig = ''; this.lastToast = 0; this.lastAlertToast = -99; this.lastReady = 0; this.pings = [];
     this.loEl = $('loadoutPanel'); this.afEl = $('afPanel');
-    this.buildTabs(); this.buildTierSel(); this.buildItems(); this.bindStatic(); this.buildMinimapTerrain();
+    this.el.catSel = $('catSel'); this.el.qtySel = $('qtySel'); this.buildTabs(); this.buildTierSel(); this.buildCatSel(); this.buildQtySel(); this.buildItems(); this.bindStatic(); this.buildMinimapTerrain();
     this.fogCanvas = document.createElement('canvas'); this.fogCanvas.width = this.fogCanvas.height = this.sim.map.n;
     this.fogCtx = this.fogCanvas.getContext('2d'); this.fogImg = this.fogCtx.createImageData(this.sim.map.n, this.sim.map.n);
     this.renderSel(true);
@@ -37,9 +38,13 @@ export class HUD {
     this.on('btnMenu', () => this.g.openPause());
     this.on('btnBox', () => { const c = this.c; c.touchBox = !c.touchBox; $('btnBox').classList.toggle('on', c.touchBox); this.toast(c.touchBox ? 'Box select ON: drag to select' : 'Box select OFF: drag pans', 'info'); });
     this.on('btnArmy', () => this.c.selectArmy());
+    this.on('btnSel', () => { const m = $('selMenu'); m.classList.toggle('hidden'); });
+    for (const b of document.querySelectorAll('#selMenu button')) b.addEventListener('click', () => { this.c.selectPreset(b.dataset.k); $('selMenu').classList.add('hidden'); });
     this.on('btnIdle', () => { if (!this.c.selectIdleEngineers()) this.g.jumpAlert(); });
     this.on('btnSensor', () => this.g.sensor.toggle());
     this.on('btnLogi', () => this.g.logi.toggle());
+    this.on('btnProd', () => this.g.prod.toggle());
+    this.on('btnOrbit', () => this.g.orbital.toggle());
     this.on('btnHome', () => this.g.jumpHome());
     this.on('btnDesel', () => { this.c.cancelMode(); this.g.setSel([]); });
     this.on('btnPlaceOk', () => this.c.confirmPlace(false));
@@ -119,21 +124,40 @@ export class HUD {
   }
   setTier(t) { this.tier = t; this.buildItems(); sfx('ui', 0.3); }
   typesForTab() {
-    if (this.tab === 'str') return BUILD_ORDER;
+    const space = this.sim.space;
+    if (this.tab === 'str') {
+      let list = BUILD_ORDER.filter((k) => !(BUILDINGS[k].space && !space));
+      if (this.cat !== 'all') { const c = BUILD_CATS.find((x) => x[0] === this.cat); if (c) list = list.filter((k) => c[2].includes(k)); }
+      return list;
+    }
     const t = TABS.find((x) => x.id === this.tab);
-    return BASE_ORDER.filter((k) => t.from.includes(BASE_UNITS[k].from)).map((k) => unitId(k, this.tier));
+    return BASE_ORDER.filter((k) => t.from.includes(BASE_UNITS[k].from) && !(BASE_UNITS[k].from === 'launchpad' && !space)).map((k) => unitId(k, this.tier));
+  }
+  buildCatSel() {
+    const box = this.el.catSel; if (!box) return; box.innerHTML = '';
+    for (const [id, label] of [['all', 'All']].concat(BUILD_CATS.map((c) => [c[0], c[1]]))) {
+      const b = document.createElement('button'); b.textContent = label; b.dataset.c = id; b.addEventListener('click', () => { this.cat = id; this.buildItems(); sfx('ui', 0.3); }); box.appendChild(b);
+    }
+  }
+  buildQtySel() {
+    const box = this.el.qtySel; if (!box) return; box.innerHTML = '';
+    for (const n of [1, 5, 10, 25]) {
+      const b = document.createElement('button'); b.textContent = '×' + n; b.dataset.q = n; b.title = 'Units queued per click (Shift: ×5 more)'; b.addEventListener('click', () => { this.qty = n; this.buildItems(); sfx('ui', 0.3); }); box.appendChild(b);
+    }
   }
   buildItems() {
     const box = this.el.items; box.innerHTML = ''; this.items = {}; this.built = true;
     for (const b of this.el.tabs.children) b.classList.toggle('on', b.dataset.id === this.tab);
     const cls = TABS.find((x) => x.id === this.tab).cls;
     if (this.el.tierSel) { this.el.tierSel.classList.toggle('hidden', this.tab === 'str'); for (const b of this.el.tierSel.children) b.classList.toggle('on', +b.dataset.t === this.tier); }
+    if (this.el.qtySel) { this.el.qtySel.classList.toggle('hidden', this.tab === 'str'); for (const b of this.el.qtySel.children) b.classList.toggle('on', +b.dataset.q === this.qty); }
+    if (this.el.catSel) { this.el.catSel.classList.toggle('hidden', this.tab !== 'str'); for (const b of this.el.catSel.children) b.classList.toggle('on', b.dataset.c === this.cat); }
     for (const type of this.typesForTab()) {
       const d = DEFS[type];
       const it = document.createElement('div'); it.className = 'item cls-' + cls;
       it.innerHTML = '<span class="ab">' + (d.kind === 'unit' ? abbr(type) : (ABBR[type] || type)) + '</span><span class="nm">' + (d.baseName || d.name) + (d.batch > 1 ? ' ×' + d.batch : '') + '</span><span class="co">' + d.cost + '<em>' + (d.energy ? ' · ' + d.energy : '') + '</em></span><span class="bd hidden"></span>';
       it.addEventListener('click', (e) => this.itemClick(type, e));
-      it.addEventListener('contextmenu', (e) => { e.preventDefault(); if (UNITS[type]) this.g.cmd({ t: 'dequeue', type }); });
+      it.addEventListener('contextmenu', (e) => { e.preventDefault(); if (UNITS[type]) for (let i = 0; i < (e.shiftKey ? 5 : 1); i++) this.g.cmd({ t: 'dequeue', type }); });
       const tip = () => this.showItemTip(type);
       it.addEventListener('pointerenter', tip); it.addEventListener('pointerdown', tip);
       it.addEventListener('pointerleave', () => this.hideTip());
@@ -143,6 +167,7 @@ export class HUD {
   }
   lockReason(type) {
     const L = this.g.local, sim = this.sim, d = DEFS[type];
+    if (d.kind === 'building' && d.space && !sim.space) return 'The space layer is disabled in this game';
     if (d.kind === 'building') { for (const r of d.requires) if (!sim.ownerHas(L, r)) return 'Requires ' + BUILDINGS[r].name; return ''; }
     if (!sim.ownerHas(L, d.from)) return 'Requires ' + BUILDINGS[d.from].name;
     const tech = sim.players[L].tech;
@@ -155,12 +180,12 @@ export class HUD {
     const why = this.lockReason(type), d = DEFS[type], p = this.sim.players[this.g.local];
     if (why) { this.toast(why, 'warn'); sfx('ui', 0.5); return; }
     if (d.kind === 'building') { this.c.startPlace(type); return; }
-    this.g.cmd({ t: 'train', type, n: e.shiftKey ? 5 : 1 }); sfx('ui', 0.6);
+    this.g.cmd({ t: 'train', type, n: Math.min(60, this.qty * (e.shiftKey ? 5 : 1)) }); sfx('ui', 0.6);
   }
   showItemTip(type) {
     const d = DEFS[type], why = this.lockReason(type);
     const t = this.el.tip; t.classList.remove('hidden');
-    t.innerHTML = '<b>' + d.name + '</b> · ⛏' + d.cost + (d.energy ? ' ⚡' + d.energy : '') + ' · ' + d.time + 's<br>' + d.desc + this.statLine(d) + (why ? '<br><span style="color:#ef5350">' + why + '</span>' : '') + (d.kind === 'unit' ? '<br><small style="color:#8a99a8">Shift+click: ×5 · right-click: cancel</small>' : '');
+    t.innerHTML = '<b>' + d.name + '</b> · ⛏' + d.cost + (d.energy ? ' ⚡' + d.energy : '') + ' · ' + d.time + 's<br>' + d.desc + this.statLine(d) + (why ? '<br><span style="color:#ef5350">' + why + '</span>' : '') + (d.kind === 'unit' ? '<br><small style="color:#8a99a8">Shift+click: ×5 · right-click: cancel · quantity buttons set the batch size</small>' : '');
     clearTimeout(this.tipT); this.tipT = setTimeout(() => this.hideTip(), 4000);
   }
   statLine(d) {
@@ -299,6 +324,14 @@ export class HUD {
       if (units.some((u) => UNITS[u.def].weapons.some((w) => w.ground && w.kind !== 'hit'))) add('Fire at ground', 'F', 'forcefire', () => c.setMode(c.mode.t === 'forcefire' ? { t: 'normal' } : { t: 'forcefire' }));
     } else if (blds.length) {
       if (blds.some((b) => BUILDINGS[b.def].produces)) add('Set rally point', 'F', 'rally', () => c.setMode(c.mode.t === 'rally' ? { t: 'normal' } : { t: 'rally' }));
+      const prd = blds.filter((b) => BUILDINGS[b.def].produces && b.progress >= 1);
+      if (prd.length) {
+        const rep = prd.every((b) => b.rep); add(rep ? 'Repeat: ON' : 'Repeat: OFF', '', null, () => { this.g.cmd({ t: 'repeat', ids: prd.map((b) => b.id), v: rep ? 0 : 1 }); setTimeout(() => { this.selSig = null; }, 160); }, rep ? 'on' : '');
+        if (prd.some((b) => b.queue.length)) add('Clear queue', '', null, () => this.g.cmd({ t: 'clearq', ids: prd.map((b) => b.id) }));
+      }
+      const sil = blds.filter((b) => b.def === 'silo' && b.progress >= 1);
+      if (sil.length) { const n = sil.reduce((a, b) => a + (b.mis ? b.mis.length : 0), 0); add('Launch missile… (' + n + ')', 'F', 'fire', () => { if (!n) { this.toast('No missiles stored: queue some in the Strategic tab', 'warn'); return; } c.setMode(c.mode.t === 'fire' ? { t: 'normal' } : { t: 'fire' }); }); }
+      if (blds.some((b) => b.def === 'launchpad') && this.sim.space) add('Open orbital view', 'N', null, () => this.g.orbital.toggle(true));
       const upg = blds.filter((b) => BTIER.steps[b.def] && b.progress >= 1);
       if (upg.some((b) => b.tu)) add('Cancel upgrade', '', null, () => this.g.cmd({ t: 'cancelbupg', ids: upg.filter((b) => b.tu).map((b) => b.id) }));
       const nxt = upg.filter((b) => !this.sim.bldUpBlock(b));
@@ -312,7 +345,7 @@ export class HUD {
   modeChanged() {
     const m = this.c ? this.c.mode : { t: 'normal' }; this.mode = m.t;
     for (const k in this.cmdBtns || {}) this.cmdBtns[k].classList.toggle('on', m.t === k);
-    const txt = { escort: 'Escort: click a friendly unit to follow and protect (Esc cancels)', sdrop: 'Supply drop: pick the point to release the pallets over (Esc cancels)', attackmove: 'Attack-move: pick a destination or target (Esc cancels)', move: 'Move: pick a destination (Esc cancels)', forcefire: 'Fire at ground: pick a point (Esc cancels)', rally: 'Rally point: pick a location (Esc cancels)', lift: 'Airlift: click a friendly airfield to fly the loaded cargo there (Esc cancels)', drop: 'Airdrop: click the drop zone; infantry, drones and light vehicles are paradropped (Esc cancels)', place: '' }[m.t];
+    const txt = { fire: 'Launch: click the target anywhere on the map (hold Shift to empty the silo). Esc cancels', escort: 'Escort: click a friendly unit to follow and protect (Esc cancels)', sdrop: 'Supply drop: pick the point to release the pallets over (Esc cancels)', attackmove: 'Attack-move: pick a destination or target (Esc cancels)', move: 'Move: pick a destination (Esc cancels)', forcefire: 'Fire at ground: pick a point (Esc cancels)', rally: 'Rally point: pick a location (Esc cancels)', lift: 'Airlift: click a friendly airfield to fly the loaded cargo there (Esc cancels)', drop: 'Airdrop: click the drop zone; infantry, drones and light vehicles are paradropped (Esc cancels)', place: '' }[m.t];
     this.el.banner.textContent = txt || ''; this.el.banner.classList.toggle('hidden', !txt);
     const placing = m.t === 'place';
     this.el.placeBar.classList.toggle('hidden', !(placing && this.g.touch));
@@ -400,6 +433,13 @@ export class HUD {
     this.refreshItems();
     this.renderSel(false);
     this.updateAir();
+    this.updateGroups();
+  }
+  updateGroups() {
+    const g = this.g, box = $('grpBar'); if (!box) return; const parts = []; let sig = '';
+    for (let n = 1; n <= 9; n++) { const ids = (g.groups[n] || []).filter((id) => { const e = this.sim.byId.get(id); return e && !e.dead; }); if (!ids.length) continue; sig += n + ':' + ids.length + (ids.every((id) => g.sel.includes(id)) ? 's' : '') + ';'; parts.push([n, ids.length, ids.every((id) => g.sel.includes(id))]); }
+    if (sig === this.grpSig) return; this.grpSig = sig; box.innerHTML = '';
+    for (const [n, k, on] of parts) { const b = document.createElement('button'); b.className = 'grp' + (on ? ' on' : ''); b.innerHTML = '<b>' + n + '</b>' + k; b.title = 'Group ' + n + ' (double-click: jump). Ctrl/Shift+' + n + ' to assign'; let last = 0; b.addEventListener('click', () => { const now = performance.now(); this.c.recallGroup(n, now - last < 400); last = now; }); box.appendChild(b); }
   }
 
   // ---------- airfield: loadout picker + module panel ----------

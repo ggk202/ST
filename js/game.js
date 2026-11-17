@@ -10,6 +10,9 @@ import { DT } from './sim/defs.js';
 import { restore, snapshot } from './sim/save.js';
 import { initAudio, setVolume } from './fx.js';
 
+import { OrbitalView } from './orbital.js';
+import { ProdPanel } from './prod-ui.js';
+const $ = (id) => document.getElementById(id);
 export class Game {
   constructor(app, cfg, local, ls, settings, touch, snap) {
     this.app = app; this.cfg = cfg; this.local = local; this.ls = ls; this.settings = settings; this.touch = touch;
@@ -24,6 +27,8 @@ export class Game {
     this.hud = new HUD(this);
     this.sensor = new SensorOverlay(this);
     this.logi = new LogiPanel(this);
+    this.orbital = new OrbitalView(this); this.prod = new ProdPanel(this);
+    if (this.sim.space) $('btnOrbit').classList.remove('hidden'); else $('btnOrbit').classList.add('hidden');
     ls.onDesync = () => { this.desync = true; this.toast('Desync detected – game states differ!', 'warn'); };
     this.onResize = () => this.resize();
     window.addEventListener('resize', this.onResize); window.addEventListener('orientationchange', this.onResize);
@@ -31,7 +36,7 @@ export class Game {
     setVolume(settings.volume);
   }
   resize() {
-    this.renderer.resize();
+    this.renderer.resize(); if (this.orbital) this.orbital.resize();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.overlay.width = Math.floor(this.renderer.W * dpr); this.overlay.height = Math.floor(this.renderer.H * dpr);
     this.dpr = dpr;
@@ -57,7 +62,7 @@ export class Game {
     // on selecting own production buildings, show the matching tab
     const e = ids.length === 1 ? this.sim.byId.get(ids[0]) : null;
     if (e && e.owner === this.local && e.kind === 'building') {
-      const p = { barracks: 'inf', hq: 'inf', factory: 'veh', airfield: 'air', dronebay: 'drn' }[e.def]; if (p) this.hud.setTab(p);
+      const p = { barracks: 'inf', hq: 'inf', factory: 'veh', airfield: 'air', dronebay: 'drn', silo: 'stg', launchpad: 'stg' }[e.def]; if (p) this.hud.setTab(p);
     }
   }
   jumpHome() { const h = this.sim.hq(this.local); if (h) this.renderer.centerOn(h.x, h.z); }
@@ -100,17 +105,20 @@ export class Game {
     this.controls.update(dt);
     this.advance(dt);
     const evs = this.sim.events; this.sim.events = [];
-    if (evs.length) { this.renderer.processEvents(evs); this.hud.handleEvents(evs); }
+    if (evs.length) { this.renderer.processEvents(evs); this.hud.handleEvents(evs); this.orbital.handleEvents(evs); }
     // drop dead entities from the selection
     if (this.sel.length && (this.sim.tick % 5 === 0)) {
       const alive = this.sel.filter((id) => { const e = this.sim.byId.get(id); return e && !e.dead; });
       if (alive.length !== this.sel.length) this.setSel(alive);
     }
-    this.renderer.render(dt, this.paused ? 1 : this.alpha);
     const o = this.octx; o.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    this.controls.draw(o, this.renderer.W, this.renderer.H);
-    if (this.sensor.on) this.sensor.draw(o, this.renderer.W, this.renderer.H, this.renderer.time);
-    this.hud.update(dt); this.logi.update(dt);
+    if (this.orbital.on) { this.orbital.render(dt); this.orbital.draw(o, this.renderer.W, this.renderer.H); this.orbital.update(dt); this.renderer.timeOnly && 0; }
+    else {
+      this.renderer.render(dt, this.paused ? 1 : this.alpha);
+      this.controls.draw(o, this.renderer.W, this.renderer.H);
+      if (this.sensor.on) this.sensor.draw(o, this.renderer.W, this.renderer.H, this.renderer.time);
+    }
+    this.hud.update(dt); this.logi.update(dt); this.prod.update(dt);
     if ((this.sim.over || !this.sim.players[this.local].alive) && !this.ended) { this.ended = true; this.app.gameOver(this); }
   }
 }

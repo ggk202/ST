@@ -3,7 +3,7 @@ import { LogiGfx } from './logi-gfx.js';
 import { Craters } from './decals.js';
 import { buildProjModels, projKind } from './projectile-gfx.js';
 import * as THREE from 'three';
-import { CELL, DEFS, PLAYER_COLORS, UNITS } from './sim/defs.js';
+import { CELL, DEFS, DT, PLAYER_COLORS, UNITS } from './sim/defs.js';
 import { GROUND_PHASES } from './sim/airops.js';
 const VET_MAT = new THREE.MeshBasicMaterial({ color: 0xff5a3c });
 const PIP_GEO = new THREE.OctahedronGeometry(0.5), PIP_MAT = new THREE.MeshBasicMaterial({ color: 0xffd24a });
@@ -595,8 +595,25 @@ export class Renderer {
           else if (!(e.def === 'rifleman' || e.def === 'at' || e.def === 'manpads' || e.def === 'engineer')) fx.burn(e.x, e.y, e.z, e.air ? 2.5 : 4);
           sfx('boom', vol(e.x, e.z));
         } break;
+        case 'icbm': { this.icbms = this.icbms || []; this.icbms.push({ sx: e.sx, sz: e.sz, x: e.x, z: e.z, t: 0, dur: e.dur * DT }); if (visAt(e.sx, e.sz)) { fx.boom(e.sx, sim.map.hAt(e.sx, e.sz) + 2, e.sz, 5, true, false); sfx('missile', vol(e.sx, e.sz) * 1.5); } break; }
+        case 'rod': { this.rodFx = this.rodFx || []; this.rodFx.push({ x: e.x, z: e.z, t: 0 }); break; }
+        case 'orbhit': { const y = sim.map.hAt(e.x, e.z); if (visAt(e.x, e.z) || e.big) { fx.boom(e.x, y + 2, e.z, Math.max(5, e.r * 0.6), true, false); for (let i = 0; i < 6; i++) fx.boom(e.x + (Math.random() - 0.5) * e.r, y + 2, e.z + (Math.random() - 0.5) * e.r, e.r * 0.3, false, false); fx.flash(e.x, y + 8, e.z, e.big ? 6 : 3, 0.8); this.shake = Math.max(this.shake, (e.big ? 7 : 4) * vol(e.x, e.z)); sfx('boom', vol(e.x, e.z) * 1.5); this.craters.add(e.x, e.z, Math.min(14, e.r * 0.7), Math.random() * 6.283); } break; }
+        case 'abm': { const y = this.sim.map.hAt(e.x, e.z); fx.tracer(e.x, y + 4, e.z, e.tx, 180, e.tz); if (e.ok) fx.boom(e.tx, 170, e.tz, 8, true, true); sfx('missile', vol(e.x, e.z)); break; }
         default: break;
       }
+    }
+  }
+  // ballistic missiles and tungsten rods seen from the ground: climb to the edge of space, then plunge
+  updateStrategic(dt) {
+    const fx = this.fx, map = this.sim.map;
+    if (this.icbms) for (let i = this.icbms.length - 1; i >= 0; i--) {
+      const m = this.icbms[i]; m.t += dt; const k = m.t / m.dur; if (k >= 1) { this.icbms.splice(i, 1); continue; }
+      const x = m.sx + (m.x - m.sx) * k, z = m.sz + (m.z - m.sz) * k, y = map.hAt(m.sx, m.sz) + Math.sin(Math.PI * k) * 900;
+      fx.trail(x, y, z, true); if (k < 0.12 || k > 0.88) fx.trail(x, y + 3, z, true);
+    }
+    if (this.rodFx) for (let i = this.rodFx.length - 1; i >= 0; i--) {
+      const r = this.rodFx[i]; r.t += dt; if (r.t > 1.5) { this.rodFx.splice(i, 1); continue; }
+      const k = r.t / 1.5, y = map.hAt(r.x, r.z) + (1 - k) * 700; fx.trail(r.x, y, r.z, true); fx.trail(r.x, y + 20, r.z, true);
     }
   }
 
@@ -608,7 +625,7 @@ export class Renderer {
     this.camera.updateMatrixWorld(); this._pv.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse.copy(this.camera.matrixWorld).invert()); this.frustum.setFromProjectionMatrix(this._pv);
     if (!this._ground) { const map = this.sim.map; this._ground = (x, z) => map.hAt(x, z); }
     if (this.warm.length) { try { this.warm.shift()(); } catch (e) { /* ignore */ } }
-    this.syncEntities(alpha, dt);
+    this.syncEntities(alpha, dt); this.updateStrategic(dt);
     if (!this.logiGfx) this.logiGfx = new LogiGfx(this); this.logiGfx.update(dt);
     this.updateSelection();
     if (this.pingT > 0) { this.pingT -= dt; const t = Math.max(0, this.pingT / 0.6), s = 1 + (1 - t) * 4; this.pingMesh.scale.set(s, 1, s); this.pingMesh.material.opacity = t; if (this.pingT <= 0) this.pingMesh.visible = false; }

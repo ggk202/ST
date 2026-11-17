@@ -2,7 +2,7 @@
 import { CELL } from './defs.js';
 import { RNG, clamp, lerp, smoothstep, fbm, dist } from './util.js';
 
-export const MAP_SIZES = { small: 192, medium: 288, large: 400, xl: 560 };
+export const MAP_SIZES = { small: 192, medium: 288, large: 400, xl: 560, xxl: 800 };
 export const MAP_TYPES = ['island', 'highlands', 'desert', 'arctic', 'jungle', 'volcanic'];
 // map type -> [heightmap shape, biome]
 const TYPE_SHAPE = { island: ['island', 'temperate'], highlands: ['highlands', 'temperate'], desert: ['highlands', 'desert'], arctic: ['island', 'arctic'], jungle: ['island', 'jungle'], volcanic: ['island', 'volcanic'] };

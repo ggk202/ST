@@ -97,7 +97,7 @@ class App {
     const slots = [{ kind: 'human', name: localStorage.getItem('spearhead.name') || 'You', team: 0 }];
     if (mode === 'sp') slots.push({ kind: 'ai', diff: 'normal', team: 1 }, { kind: 'closed', team: 2 }, { kind: 'closed', team: 3 });
     else slots.push({ kind: 'open', team: 1 }, { kind: 'closed', team: 2 }, { kind: 'closed', team: 3 });
-    return { map: { type: 'island', size: 'medium', seed: randSeed() }, slots };
+    return { map: { type: 'island', size: 'medium', seed: randSeed(), space: false }, slots };
   }
   openSetup(mode) {
     this.setupMode = mode; this.lobby = this.defaultLobby(mode); this.myLobbySlot = 0;
@@ -110,7 +110,8 @@ class App {
     if (this.net && this.net.code) $('codeText').textContent = this.net.code;
     const lock = (id) => { for (const b of $(id).children) b.disabled = ro; };
     this.seg('segType', [{ v: 'island', label: 'Island' }, { v: 'highlands', label: 'Mountain valley' }, { v: 'desert', label: 'Desert mesas' }, { v: 'arctic', label: 'Arctic' }, { v: 'jungle', label: 'Jungle' }, { v: 'volcanic', label: 'Volcanic' }, { v: 'random', label: 'Random' }], L.map.type, (v) => { L.map.type = v; this.pushLobby(); }); lock('segType');
-    this.seg('segSize', [{ v: 'small', label: 'Small' }, { v: 'medium', label: 'Medium' }, { v: 'large', label: 'Large' }, { v: 'xl', label: 'Huge' }], L.map.size, (v) => { L.map.size = v; this.pushLobby(); }); lock('segSize');
+    this.seg('segSize', [{ v: 'small', label: 'Small' }, { v: 'medium', label: 'Medium' }, { v: 'large', label: 'Large' }, { v: 'xl', label: 'Huge' }, { v: 'xxl', label: 'Colossal' }], L.map.size, (v) => { L.map.size = v; this.pushLobby(); }); lock('segSize');
+    this.seg('segSpace', [{ v: false, label: 'Off' }, { v: true, label: 'On' }], !!L.map.space, (v) => { L.map.space = v; this.pushLobby(); }); lock('segSpace');
     $('seedInput').value = L.map.seed; $('seedInput').disabled = ro; $('btnReseed').disabled = ro;
     $('btnStart').classList.toggle('hidden', ro);
     const box = $('slots'); box.innerHTML = '';
@@ -193,7 +194,7 @@ class App {
     const net = new Net();
     try { await net.join(code); } catch (e) { $('joinErr').textContent = e.message; $('btnJoinGo').disabled = false; return; }
     $('btnJoinGo').disabled = false; $('joinErr').textContent = '';
-    this.net = net; this.setupMode = 'client'; this.lobby = { map: { type: 'island', size: 'medium', seed: '' }, slots: [] };
+    this.net = net; this.setupMode = 'client'; this.lobby = { map: { type: 'island', size: 'medium', seed: '', space: false }, slots: [] };
     net.sendHost({ k: 'hello', name });
     this.ls = null; this.pendingTurns = [];
     net.on('data', (conn, m) => {
@@ -222,7 +223,7 @@ class App {
   buildCfg() {
     const L = this.lobby, slots = [], map = {};
     L.slots.forEach((s, i) => { if (s.kind === 'human' || s.kind === 'ai') { map[i] = slots.length; slots.push({ name: s.kind === 'ai' ? 'AI ' + PLAYER_COLOR_NAMES[i] : (s.name || 'Player'), ai: s.kind === 'ai' ? s.diff : null, team: s.team }); } });
-    return { cfg: { seed: this.seedNum(L.map.seed), size: L.map.size, type: L.map.type, slots }, map };
+    return { cfg: { seed: this.seedNum(L.map.seed), size: L.map.size, type: L.map.type, space: !!L.map.space, slots }, map };
   }
   startFromSetup() {
     const { cfg, map } = this.buildCfg();

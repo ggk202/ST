@@ -40,7 +40,7 @@ export const SpaceOps = {
     }
   },
   orbStrike(owner, ids, x, z) {
-    for (const o of this.oOwn(ids, owner)) { const od = UNITS[o.def].orbital; if (od.g) o.gt = { x, z }; }
+    for (const o of this.oOwn(ids, owner)) { const od = UNITS[o.def].orbital; if (od.g) o.gt = x < -1e8 ? null : { x: clamp(x, 0, this.map.size), z: clamp(z, 0, this.map.size) }; }
   },
   orbTrain(owner, yardId, type) {
     const o = this.orb.find((q) => q.id === yardId && q.owner === owner && !q.dead); const d = UNITS[type];

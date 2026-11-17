@@ -46,13 +46,16 @@ export class Builder {
   // lod: 0 full detail, 1 drops small parts (bolts, lamps ...), 2 also simplifies primitives and drops fine detail.
   // lodScale scales the size thresholds (small models use a smaller value, big structures a larger one).
   constructor(teamColor, lod = 0, lodScale = 1) {
+    this.ox = this.oy = this.oz = 0;
     this.team = teamColor; this.groups = { hull: [] };
     this.cur = 'hull'; this.rp = {}; this.sc = 1; this.chains = {}; this.tint = null;
     this.lod = lod; this.thr = lod === 0 ? 0 : (lod === 1 ? 0.2 : 0.5) * lodScale;
   }
   // records a two-bone leg chain (hip, knee, ankle as [y, z]) used by the procedural IK animator
   chain(name, hip, knee, ankle) { const k = this.sc; this.chains[name] = { hip: [hip[0] * k, hip[1] * k], knee: [knee[0] * k, knee[1] * k], ankle: [ankle[0] * k, ankle[1] * k] }; return this; }
-  g(name) { this.cur = name; if (!this.groups[name]) this.groups[name] = []; if (!this.rp[name]) this.rp[name] = [0, 0, 0]; return this; }
+  // start a part group whose pivot is (x,y,z) and whose following primitives are given RELATIVE to that pivot
+  rel(name, x, y, z) { this.g(name); this.at(x, y, z); this.ox = x; this.oy = y; this.oz = z; return this; }
+  g(name) { this.ox = this.oy = this.oz = 0; this.cur = name; if (!this.groups[name]) this.groups[name] = []; if (!this.rp[name]) this.rp[name] = [0, 0, 0]; return this; }
   set pivot(v) { this.rp.turret = v.map((q) => q * this.sc); }
   get pivot() { return this.rp.turret || [0, 0, 0]; }
   set rotorPivot(v) { this.rp[this.cur] = v.map((q) => q * this.sc); }
@@ -67,7 +70,7 @@ export class Builder {
       if (this.lod >= 2 && typeof kind === 'string') kind = kind === 'cyl' ? 'cyl6' : kind === 'sph' ? 'sph6' : kind === 'cone' ? 'cone6' : kind;
     }
     const base = typeof kind === 'string' ? NI[kind] : kind;
-    let px = x * k, py = y * k, pz = z * k;
+    let px = (x + this.ox) * k, py = (y + this.oy) * k, pz = (z + this.oz) * k;
     if (this.cur !== 'hull') { const rp = this.rp[this.cur] || [0, 0, 0]; px -= rp[0]; py -= rp[1]; pz -= rp[2]; }
     _e.set(rot ? rot[0] : 0, rot ? rot[1] : 0, rot ? rot[2] : 0);
     _q.setFromEuler(_e); _v.set(px, py, pz); _s.set(sx * k, sy * k, sz * k);
