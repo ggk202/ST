@@ -8,6 +8,7 @@ import { generateMap } from './map.js';
 import { Pathfinder } from './path.js';
 import { AIController } from './ai.js';
 import { LogiOps } from './logistics.js';
+import { SpaceOps, orbGround } from './space.js';
 
 const START_CREDITS = 2500;
 const START_ENERGY = 1200;
@@ -55,6 +56,8 @@ export class Sim {
     }));
     this.ais = {};
     for (const p of this.players) if (p.ai) this.ais[p.id] = new AIController(p.id, p.ai);
+    this.space = !!cfg.space;
+    this.spaceInit();
     this.logiInit();
     for (const p of this.players) this.setupPlayer(p);
     this.updateVision();
@@ -142,6 +145,7 @@ export class Sim {
     if (!d || type === 'hq') return { ok: false, reason: 'invalid' };
     const p = this.players[owner];
     if (!p || !p.alive) return { ok: false, reason: 'eliminated' };
+    if (d.space && !this.space) return { ok: false, reason: 'The space layer is disabled in this game' };
     for (const r of d.requires) if (!this.ownerHas(owner, r)) return { ok: false, reason: 'Requires ' + BUILDINGS[r].name };
     let node = null;
     if (d.oil) {
@@ -225,6 +229,11 @@ export class Sim {
       case 'emcon': for (const e of this.own(c.ids, c.p)) { const d = e.ed || DEFS[e.def]; if (d.radar || d.ew) e.emcon = !!c.v; } break;
       case 'lauto': for (const u of this.own(c.ids, c.p)) if (u.kind === 'unit' && DEFS[u.def].supply) u.auto = !!c.v; break;
       case 'supplydrop': for (const u of this.own(c.ids, c.p)) if (u.kind === 'unit' && u.ap === 'fly' && u.pal > 0) { u.order = { t: 'sdrop', x: clamp(c.x, 10, this.map.size - 10), z: clamp(c.z, 10, this.map.size - 10) }; u.lcx = undefined; } break;
+      case 'orbmove': if (this.space) this.orbMove(c.p, c.ids, c.layer, c.ph); break;
+      case 'orbstrike': if (this.space) this.orbStrike(c.p, c.ids, c.x, c.z); break;
+      case 'orbtrain': if (this.space) for (let i = 0; i < Math.max(1, Math.min(5, c.n | 0 || 1)); i++) this.orbTrain(c.p, c.yard, c.type); break;
+      case 'orbdeq': this.orbDequeue(c.p, c.yard, c.idx | 0); break;
+      case 'fire': this.fireMissile(c.p, c.bid, c.x, c.z); break;
       case 'resign': this.eliminate(p); break;
       case 'takeover': if (!p.ai) { p.ai = c.diff || 'normal'; this.ais[p.id] = new AIController(p.id, p.ai); } break;
       default: break;
@@ -280,7 +289,7 @@ export class Sim {
     const d = UNITS[type], p = this.players[owner];
     if (!d || !this.canTrain(owner, type)) return false;
     let queued = 0;
-    for (const b of this.ents) if (b.owner === owner && b.kind === 'building' && !b.dead) for (const q of b.queue) queued += UNITS[q.type].batch;
+    for (const b of this.ents) if (b.owner === owner && b.kind === 'building' && !b.dead) for (const q of b.queue) if (!UNITS[q.type].missile && !UNITS[q.type].orbital) queued += UNITS[q.type].batch;
     if (p.units + queued + d.batch > UNIT_CAP) return false;
     const b = this.producerFor(owner, d);
     if (b.queue.length >= 12) return false;
@@ -321,6 +330,7 @@ export class Sim {
     }
     this.updateProjectiles();
     this.logiTick();
+    this.spaceTick();
     this.separate();
     this.economyApply();
     // cleanup
@@ -492,8 +502,9 @@ export class Sim {
         it.left -= adv; it.sm += ud.cost * fr; it.se += ud.energy * fr; p.spentM += ud.cost * fr; p.spentE += ud.energy * fr;
       }
       const si = ud.from === 'airfield' ? (b.afd ? this.afFreeStand(b) : -1) : 0;
-      if (it.left <= 0 && p.units + ud.batch <= UNIT_CAP && si >= 0) {
+      if (it.left <= 0 && ((ud.missile && (b.mis ? b.mis.length : 0) < 4) || ud.orbital || (!ud.missile && p.units + ud.batch <= UNIT_CAP && si >= 0))) {
         b.queue.shift();
+        if ((ud.missile || ud.orbital) && this.spaceItemDone(b, it)) { if (b.queue.length === 0) b.flash = 0; return this.updateBuildingTail(b, d, p); }
         const made = [];
         if (ud.from === 'airfield') made.push(this.spawnAircraft(b, it.type, si));
         else for (let k = 0; k < ud.batch; k++) {
@@ -505,7 +516,11 @@ export class Sim {
         if (b.rally && !ud.builder && ud.from !== 'airfield') this.cmdMove(made, b.rally.x, b.rally.z, 'move');
       }
     }
+    this.updateBuildingTail(b, d, p);
+  }
+  updateBuildingTail(b, d, p) {
     if (b.up && !b.stun) this.afUpgradeTick(b, p);
+    if (b.abmcd > 0) b.abmcd--;
     if (d.weapons.length && !b.stun) this.combat(b, d);
     if (b.flash > 0) b.flash--;
   }
@@ -1023,6 +1038,10 @@ export class Sim {
         }
       }
     }
+    if (this.orb && this.orb.length) this.spaceVision((team, x, z, rad) => {
+      const r = rad / CELL, cx = Math.floor(x / CELL), cz = Math.floor(z / CELL), ri = Math.ceil(r), v = this.vis[team], ex = this.expl[team];
+      for (let zz = Math.max(0, cz - ri); zz <= Math.min(n - 1, cz + ri); zz++) for (let xx = Math.max(0, cx - ri); xx <= Math.min(n - 1, cx + ri); xx++) if ((xx - cx) * (xx - cx) + (zz - cz) * (zz - cz) <= r * r) { v[zz * n + xx] = 1; ex[zz * n + xx] = 1; }
+    });
     for (const q of this.points) if (q.team >= 0) {   // owned control points give vision
       const r = 52 / CELL, cx = Math.floor(q.x / CELL), cz = Math.floor(q.z / CELL), ri = Math.ceil(r), v = this.vis[q.team], ex = this.expl[q.team];
       for (let z = Math.max(0, cz - ri); z <= Math.min(n - 1, cz + ri); z++) for (let x = Math.max(0, cx - ri); x <= Math.min(n - 1, cx + ri); x++) if ((x - cx) * (x - cx) + (z - cz) * (z - cz) <= r * r) { v[z * n + x] = 1; ex[z * n + x] = 1; }
@@ -1054,6 +1073,7 @@ export class Sim {
     mix(this.tick); mix(this.rng.s);
     for (const p of this.players) { mix(Math.round(p.credits * 10)); mix(Math.round(p.energy * 10)); mix(p.units); }
     for (const e of this.ents) { mix(e.id); mix(Math.round(e.x * 100)); mix(Math.round(e.z * 100)); mix(Math.round(e.hp)); if (e.h !== undefined) mix(Math.round(e.h * 100)); if (e.spd !== undefined) mix(Math.round(e.spd * 100)); if (e.apsN !== undefined) mix(e.apsN); if (e.tier > 1) mix(e.tier); }
+    if (this.orb) { for (const o of this.orb) { mix(o.id); mix(Math.round(o.ph * 1e6)); mix(Math.round(o.hp)); mix(o.layer); } for (const m of this.msl) { mix(m.id); mix(m.t); } mix(this.rods.length); }
     mix(this.projs.length); mix(this.wx.kind); mix(this.crates.length); mix(this.wrecks.length);
     for (const q of this.points) { mix(q.team + 2); mix(Math.round(q.stock)); mix(Math.round(q.p)); }
     for (const e of this.ents) { if (e.fuel !== undefined) mix(Math.round(e.fuel * 10)); if (e.sup !== undefined) mix(Math.round(e.sup * 10)); if (e.stock !== undefined) mix(Math.round(e.stock)); if (e.vet) mix(e.vet); }
@@ -1061,4 +1081,4 @@ export class Sim {
   }
 }
 
-Object.assign(Sim.prototype, AirOps, FlightOps, CargoOps, LogiOps);
+Object.assign(Sim.prototype, AirOps, FlightOps, CargoOps, LogiOps, SpaceOps);

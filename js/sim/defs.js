@@ -30,7 +30,7 @@ const TS = [null,
   { hp: 2.4, dmg: 2.0, cost: 3.0, time: 1.25, speed: 1.1, range: 1.15, vision: 1.2, reload: 0.88 },
 ];
 // energy cost as a share of metal cost, by producing building
-const ENERGY_SHARE = { hq: 0.4, barracks: 0.4, factory: 0.5, airfield: 0.6, dronebay: 0.8 };
+const ENERGY_SHARE = { hq: 0.4, barracks: 0.4, factory: 0.5, airfield: 0.6, dronebay: 0.8, silo: 0.9, launchpad: 0.8, orbyard: 0.9 };
 
 // ---------------------------------------------------------------------------------
 // Base (Mk I) unit definitions. techLv = tech level required (1 = Tech Lab, 2 = Advanced Tech Lab).
@@ -165,6 +165,25 @@ const BASE = {
   tanker: { name: 'Aerial Tanker', rcs: 2.2, desc: 'Refuels friendly aircraft in flight. Park it in a loiter over your front and aircraft low on fuel will rendezvous with it. Needs the Long Runway.', from: 'airfield', rwy: 2, techLv: 1, cost: 2000, time: 38, hp: 650, speed: 17, armor: 'air', radius: 5.2, vision: 56, air: true, fw: true, turn: 0.3, accel: 3, alt: 26, tank: { cap: 2600, range: 46, rate: 38 }, weapons: [],
     stdName: 'Fuel Tanker', stdDesc: 'Full fuel load, boom and drogue.', stdPrep: 6, stdVis: [], lo: [] },
   decoy: { name: 'Radar Decoy', rcs: 1.5, desc: 'Cheap jet drone with a radar enhancer. Radar and SAM operators cannot tell it from a fighter; fly it ahead of a strike to soak up missiles.', from: 'dronebay', techLv: 1, cost: 160, time: 6, hp: 40, speed: 32, armor: 'air', radius: 1.8, vision: 30, air: true, fw: true, turn: 1.2, accel: 12, alt: 26, drone: true, decoy: true, weapons: [] },
+  // ---- strategic: missiles (Missile Silo), satellites (Launch Pad) and orbital ships (Orbital Shipyard). Not field units: finished items are stocked / launched into orbit.
+  icbm: { name: 'Strategic Missile', desc: 'Ballistic missile that arcs through the edge of space and strikes anywhere on the map. Stored in the silo; fire it from the silo panel. Mk II/III carry bigger warheads.', from: 'silo', techLv: 1, cost: 1400, time: 40, hp: 1, speed: 0, armor: 'light', radius: 1, vision: 0, weapons: [],
+    missile: { dmg: 2600, splash: 22, flight: 16 } },
+  satrecon: { name: 'Recon Satellite', desc: 'Low-orbit imaging satellite. Sweeps a wide ground track and reveals everything below it. Fast, but it only passes over a given spot every couple of minutes.', from: 'launchpad', cost: 900, time: 26, hp: 220, speed: 0, armor: 'light', radius: 1, vision: 0, weapons: [],
+    orbital: { kind: 'recon', layer: 0, vision: 70, hp: 220, fp: 1 } },
+  satsurvey: { name: 'Survey Satellite', desc: 'High-orbit wide-area sensor with an enormous footprint. Slow to cross the map; hard to reach for anything but dedicated hunters.', from: 'launchpad', cost: 1400, time: 34, hp: 300, speed: 0, armor: 'light', radius: 1, vision: 0, weapons: [],
+    orbital: { kind: 'survey', layer: 2, vision: 125, hp: 300, fp: 1 } },
+  satstrike: { name: 'Kinetic Strike Satellite', desc: 'Drops tungsten rods on ground targets. Pick a target and it fires on the next pass that brings it within reach. Three rods per load; reloads slowly.', from: 'launchpad', techLv: 1, cost: 2200, time: 40, hp: 260, speed: 0, armor: 'light', radius: 1, vision: 0, weapons: [],
+    orbital: { kind: 'strike', layer: 1, vision: 30, hp: 260, g: { dmg: 1900, splash: 14, reach: 170, cd: 500, ammo: 3 } } },
+  satkill: { name: 'Hunter-Killer Satellite', desc: 'Co-orbital interceptor. Destroys enemy satellites and ships that drift into its orbit.', from: 'launchpad', techLv: 1, cost: 1500, time: 30, hp: 320, speed: 0, armor: 'light', radius: 1, vision: 0, weapons: [],
+    orbital: { kind: 'hk', layer: 0, vision: 20, hp: 320, thr: 0.00045, o: { dmg: 140, rng: 0.035, cd: 50 } } },
+  orbyard: { name: 'Orbital Shipyard', desc: 'Orbital construction platform. Builds orbital warships using your metal and energy. Orbits slowly in high orbit; protect it.', from: 'launchpad', techLv: 2, cost: 3600, time: 70, hp: 4000, speed: 0, armor: 'heavy', radius: 1, vision: 0, weapons: [],
+    orbital: { kind: 'yard', layer: 1, vision: 40, hp: 4000, thr: 0.0001 } },
+  orbfighter: { name: 'Orbital Interceptor', desc: 'Agile combat craft. Fast to reposition; shreds satellites and ships at close range.', from: 'orbyard', cost: 1200, time: 20, hp: 450, speed: 0, armor: 'light', radius: 1, vision: 0, weapons: [],
+    orbital: { kind: 'ship', layer: 0, vision: 40, hp: 450, thr: 0.0012, o: { dmg: 120, rng: 0.045, cd: 24 } } },
+  orbcruiser: { name: 'Orbital Cruiser', desc: 'Medium warship with a lance cannon: engages orbital targets and bombards the ground below its track.', from: 'orbyard', techLv: 1, cost: 2800, time: 36, hp: 2200, speed: 0, armor: 'medium', radius: 1, vision: 0, weapons: [],
+    orbital: { kind: 'ship', layer: 1, vision: 50, hp: 2200, thr: 0.0006, o: { dmg: 260, rng: 0.06, cd: 40 }, g: { dmg: 700, splash: 8, reach: 120, cd: 240, ammo: 99 } } },
+  orbbattleship: { name: 'Space Battleship', desc: 'Capital ship. Heavy armour, long-range orbital guns and a devastating ground bombardment lance.', from: 'orbyard', techLv: 2, cost: 6500, time: 60, hp: 7000, speed: 0, armor: 'heavy', radius: 1, vision: 0, weapons: [],
+    orbital: { kind: 'ship', layer: 1, vision: 60, hp: 7000, thr: 0.0004, o: { dmg: 520, rng: 0.09, cd: 40 }, g: { dmg: 1700, splash: 12, reach: 200, cd: 300, ammo: 99 } } },
 };
 
 const FUEL = { fighter: 200, vtol: 170, heli: 170, uav: 420, bomber: 360, strategic: 700, airlifter: 420, awacs: 650, spydrone: 1400, ewplane: 320, tanker: 520, decoy: 100 };
@@ -188,7 +207,7 @@ for (const [key, b] of Object.entries(BASE)) {
   for (let tier = 1; tier <= 3; tier++) {
     const t = TS[tier];
     const d = Object.assign({}, b);
-    d.base = key; d.tier = tier; d.id = unitId(key, tier); d.kind = 'unit';
+    d.base = key; d.tier = tier; d.tm = t.dmg; d.id = unitId(key, tier); d.kind = 'unit';
     d.name = tier === 1 ? b.name : b.name + ' Mk ' + ROMAN[tier];
     d.baseName = b.name;
     d.air = !!b.air; d.fw = !!b.fw; d.drone = !!b.drone; d.batch = b.batch || 1;
@@ -267,6 +286,24 @@ export const BUILDINGS = {
   radar: { name: 'Ground Radar', desc: 'Long-range air-search radar. Detects aircraft far beyond visual range for your whole team; low flyers are harder to see. Drains energy.', cost: 500, energy: 300, time: 20, size: 2, hp: 600, armor: 'struct', vision: 44, requires: ['factory'], radar: { range: 170 }, upkeep: 5, weapons: [] },
   supplydepot: { name: 'Supply Depot', desc: 'Forward supply base. Rearms ground units in range, tops up Supply Trucks and refuels helicopters. Build one beside an Engineer far from home; stock it by truck or air-dropped pallets.', cost: 400, energy: 100, time: 18, size: 2, hp: 700, armor: 'struct', vision: 44, requires: ['barracks'], depot: { cap: 3000, radius: 30, rate: 44, regen: 1.5 }, weapons: [] },
   ewtower: { name: 'EW Tower', desc: 'Static jammer: degrades enemy drones, aircraft radar and missile locks in a wide area. Drains energy.', cost: 450, energy: 350, time: 18, size: 2, hp: 500, armor: 'struct', vision: 40, requires: ['techlab'], ew: { radius: 62, power: 2 }, upkeep: 6, weapons: [] },
+  // ---- late game
+  solar: { name: 'Solar Array', desc: 'Large photovoltaic field. Modest energy output but cheap and needs no fuel.', cost: 400, energy: 0, time: 18, size: 3, hp: 450, armor: 'struct', vision: 28, incomeE: 100, capE: 600, requires: ['techlab'], weapons: [] },
+  fusion: { name: 'Fusion Reactor', desc: 'Huge energy output and storage. Powers energy-hungry late-game structures.', cost: 1600, energy: 0, time: 40, size: 4, hp: 1600, armor: 'struct', vision: 32, incomeE: 300, capE: 3500, requires: ['advtech'], weapons: [] },
+  synth: { name: 'Matter Synthesizer', desc: 'Converts energy into metal. Can be placed anywhere inside your build range, no oil field needed. Drains energy.', cost: 1100, energy: 700, time: 30, size: 3, hp: 900, armor: 'struct', vision: 30, income: 40, upkeep: 24, requires: ['advtech'], weapons: [] },
+  reserve: { name: 'Strategic Reserve', desc: 'Hardened vaults: large metal and energy storage.', cost: 800, energy: 300, time: 24, size: 3, hp: 1800, armor: 'struct', vision: 28, capM: 6000, capE: 5000, requires: ['techlab'], weapons: [] },
+  wall: { name: 'Heavy Wall', desc: 'Armoured barrier segment. Blocks ground movement; cheap and very tough.', cost: 60, energy: 0, time: 4, size: 1, hp: 2600, armor: 'struct', vision: 8, requires: ['barracks'], weapons: [] },
+  bunker: { name: 'Hardened Bunker', desc: 'Heavily armoured fighting position with machine guns and an anti-tank cannon.', cost: 650, energy: 150, time: 20, size: 2, hp: 3400, armor: 'struct', vision: 50, requires: ['barracks'],
+    weapons: [W({ type: 'bullet', range: 44, dmg: 16, reload: 0.2, air: true, sec: true }), W({ type: 'ap', range: 44, dmg: 240, reload: 3, kind: 'shell', speed: 90 })] },
+  lasertower: { name: 'Laser Battery', desc: 'Directed-energy turret. Burns aircraft, drones and ground targets with a rapid beam; drains energy.', cost: 1300, energy: 800, time: 26, size: 2, hp: 900, armor: 'struct', vision: 60, requires: ['advtech'], upkeep: 4,
+    weapons: [W({ type: 'blast', range: 60, dmg: 34, reload: 0.15, air: true, fx: 'laser' })] },
+  railgun: { name: 'Railgun Emplacement', desc: 'Hypervelocity cannon. Punches through the heaviest armour at long range.', cost: 1500, energy: 900, time: 28, size: 2, hp: 1100, armor: 'struct', vision: 70, requires: ['advtech'],
+    weapons: [W({ type: 'ap', range: 90, dmg: 1800, reload: 6, kind: 'shell', speed: 260, splash: 2 })] },
+  heavyart: { name: 'Heavy Artillery Battery', desc: 'Stationary siege guns with enormous range. Needs spotters (vision) to hit anything.', cost: 2000, energy: 1100, time: 36, size: 4, hp: 1600, armor: 'struct', vision: 44, requires: ['advtech'],
+    weapons: [W({ type: 'he', range: 290, min: 60, dmg: 900, reload: 9, kind: 'shell', speed: 85, splash: 14, arc: 0.6, spread: 0.03 })] },
+  abm: { name: 'Anti-Ballistic Battery', desc: 'Long-range interceptor battery. Shoots down incoming strategic missiles near it and engages aircraft. Has its own radar.', radar: { range: 150 }, cost: 1600, energy: 900, time: 30, size: 3, hp: 1000, armor: 'struct', vision: 70, requires: ['advtech'], abm: { range: 140, pk: 0.75, cd: 120 },
+    weapons: [W({ type: 'aa', range: 120, dmg: 600, reload: 5, kind: 'missile', speed: 100, ground: false, air: true, radar: true })] },
+  silo: { name: 'Missile Silo', desc: 'Stores and launches strategic ballistic missiles that arc through space and hit anywhere on the map. Queue missiles here.', cost: 2500, energy: 1500, time: 45, size: 3, hp: 2200, armor: 'struct', vision: 36, requires: ['advtech'], produces: 'silo', weapons: [] },
+  launchpad: { name: 'Satellite Launch Pad', desc: 'Launches satellites and orbital ships into space. Requires the space layer. Open the orbital view (O / ORBIT) to command your space assets.', cost: 2800, energy: 1800, time: 50, size: 5, hp: 1800, armor: 'struct', vision: 40, requires: ['advtech'], produces: 'launchpad', space: true, weapons: [] },
 };
 
 // ---- Airfield layout & modules. Local frame: u along the runway (away from the terminal), v toward the apron side.
@@ -294,10 +331,12 @@ export const AF_MODULES = {
 };
 export const AF_KEYS = Object.keys(AF_MODULES);
 
-export const BUILD_ORDER = ['derrick', 'powerplant', 'barracks', 'factory', 'dronebay', 'airfield', 'techlab', 'advtech', 'turret', 'sam', 'radar', 'ewtower', 'supplydepot'];
+export const BUILD_ORDER = ['derrick', 'powerplant', 'barracks', 'factory', 'dronebay', 'airfield', 'techlab', 'advtech', 'turret', 'sam', 'radar', 'ewtower', 'supplydepot', 'solar', 'fusion', 'synth', 'reserve', 'wall', 'bunker', 'lasertower', 'railgun', 'heavyart', 'abm', 'silo', 'launchpad'];
 // building tiers (derricks and power plants): output / storage multiplier by tier and the upgrade steps
 export const BTIER = { mult: [1, 1.9, 3.0], max: 3, steps: { derrick: [{ cost: 300, energy: 0, time: 16 }, { cost: 650, energy: 150, time: 24 }], powerplant: [{ cost: 300, energy: 0, time: 16 }, { cost: 650, energy: 0, time: 24 }] }, roman: ['', 'I', 'II', 'III'] };
-export const PRODUCER_KINDS = ['hq', 'barracks', 'factory', 'airfield', 'dronebay'];
+export const PRODUCER_KINDS = ['hq', 'barracks', 'factory', 'airfield', 'dronebay', 'silo', 'launchpad'];
+// building categories for the build panel
+export const BUILD_CATS = [['eco', 'Economy', ['derrick', 'powerplant', 'solar', 'fusion', 'synth', 'reserve', 'supplydepot']], ['prod', 'Production', ['barracks', 'factory', 'dronebay', 'airfield', 'techlab', 'advtech', 'silo', 'launchpad']], ['def', 'Defense', ['turret', 'bunker', 'wall', 'sam', 'lasertower', 'railgun', 'heavyart', 'abm']], ['sense', 'Sensors', ['radar', 'ewtower']]];
 export const STORAGE_BASE = { m: 0, e: 0 };
 
 for (const [k, d] of Object.entries(BUILDINGS)) {

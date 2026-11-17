@@ -14,7 +14,7 @@ export function snapshot(sim) {
     ents: JSON.stringify(sim.ents, (k, v) => (k === 'ed' ? (v ? 1 : undefined) : v)), projs: sim.projs, pathQ: sim.pathQ, players: sim.players,
     ais: Object.fromEntries(Object.entries(sim.ais).map(([k, a]) => [k, JSON.stringify(a, (kk, v) => (kk === 'target' && v && typeof v === 'object' ? { x: v.x, z: v.z, id: v.id } : v))])),
     occ: b64(sim.map.occ), rsv: b64(sim.rsv), oil: sim.map.oil.map((o) => ({ building: o.building, res: o.res })),
-    expl: sim.expl.map(b64), points: sim.points, crates: sim.crates, wrecks: sim.wrecks, wx: sim.wx, hold: sim.hold,
+    expl: sim.expl.map(b64), points: sim.points, crates: sim.crates, wrecks: sim.wrecks, wx: sim.wx, hold: sim.hold, orb: sim.orb, msl: sim.msl, rods: sim.rods, nextOid: sim.nextOid,
   });
 }
 export function restore(text) {
@@ -29,7 +29,7 @@ export function restore(text) {
   sim.map.occ.set(unb64(d.occ, sim.map.occ.constructor)); sim.rsv.set(unb64(d.rsv, Int32Array));
   d.oil.forEach((o, i) => { sim.map.oil[i].building = o.building; if (o.res !== undefined) sim.map.oil[i].res = o.res; else delete sim.map.oil[i].res; });
   d.expl.forEach((s, i) => sim.expl[i].set(unb64(s, Uint8Array)));
-  sim.points = d.points; sim.crates = d.crates; sim.wrecks = d.wrecks; sim.wx = d.wx; sim.hold = d.hold;
+  sim.points = d.points; sim.crates = d.crates; sim.wrecks = d.wrecks; sim.wx = d.wx; sim.hold = d.hold; sim.orb = d.orb || []; sim.msl = d.msl || []; sim.rods = d.rods || []; sim.nextOid = d.nextOid || 1;
   sim.events = [];
   sim.buildGrid(); sim.buildEW(); sim.updateRadar(); sim.updateEsm(); sim.updateVision();
   return sim;
