@@ -14,6 +14,8 @@ import { LOGI } from './model-logi.js';
 
 const MODELS = { ...GROUND, ...AIR, ...AIR2, ...DRONES, ...BUILDINGS, ...PROPS_MODELS, ...LOGI };
 
+// per-generation paint: Mk II is a dark steel-grey low-visibility scheme, Mk III a pale ceramic composite finish (rgb gain on luminance, blend amount)
+const TINT = { 2: [0.88, 0.98, 1.12, 0.8], 3: [1.55, 1.7, 1.9, 0.82] };
 const cache = new Map();
 const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0.12, flatShading: true });
 
@@ -28,6 +30,7 @@ function geoms(def, team, lod = 0) {
     const base = DEFS[def] ? DEFS[def].base : def;
     const b = new Builder(PLAYER_COLORS[team % PLAYER_COLORS.length], lod, lodScaleOf(base));
     const dd = DEFS[def];
+    if (dd && dd.kind === 'unit' && dd.tier > 1 && !dd.air) b.tint = TINT[dd.tier];
     (MODELS[base] || MODELS.rifleman)(b, dd && dd.tier || 1); if (dd && dd.kind === 'unit' && dd.tier > 1) tierKit(b, base, dd.tier);
     g = b.finish(); cache.set(key, g);
   }

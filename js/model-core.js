@@ -12,7 +12,7 @@ export const C = {
   GOLD: 0xc9a24a, CYAN: 0x5ec8ff, YEL: 0xf2d230, PANEL: 0xaab2bb, BOLT: 0x24272b,
 };
 
-const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color(), _t = new THREE.Color();
 
 function wedgeGeo() {
   // triangular prism: vertical back face at z=-0.5, slope falling to the front edge (z=+0.5, y=-0.5). x spans +-0.5
@@ -47,7 +47,7 @@ export class Builder {
   // lodScale scales the size thresholds (small models use a smaller value, big structures a larger one).
   constructor(teamColor, lod = 0, lodScale = 1) {
     this.team = teamColor; this.groups = { hull: [] };
-    this.cur = 'hull'; this.rp = {}; this.sc = 1; this.chains = {};
+    this.cur = 'hull'; this.rp = {}; this.sc = 1; this.chains = {}; this.tint = null;
     this.lod = lod; this.thr = lod === 0 ? 0 : (lod === 1 ? 0.2 : 0.5) * lodScale;
   }
   // records a two-bone leg chain (hip, knee, ankle as [y, z]) used by the procedural IK animator
@@ -76,6 +76,7 @@ export class Builder {
     if (!g.getAttribute('normal')) g.computeVertexNormals();
     const pos = g.getAttribute('position').array, nor = g.getAttribute('normal').array;
     _c.set(color === T ? this.team : color);
+    if (this.tint && color !== T) { const l = 0.2126 * _c.r + 0.7152 * _c.g + 0.0722 * _c.b, k = this.tint; _c.lerp(_t.setRGB(l * k[0], l * k[1], l * k[2]), k[3]); }
     const cols = new Float32Array(pos.length), aw = new Float32Array(pos.length);
     for (let i = 0; i < pos.length; i += 3) {
       cols[i] = _c.r; cols[i + 1] = _c.g; cols[i + 2] = _c.b;
@@ -97,7 +98,9 @@ export class Builder {
     const cols = new Float32Array(P.length), aw = new Float32Array(P.length);
     const rp = this.cur !== 'hull' ? (this.rp[this.cur] || [0, 0, 0]) : [0, 0, 0];
     for (let i = 0; i < P.length; i += 3) {
-      colFn(P[i], P[i + 1], P[i + 2], _c); cols[i] = _c.r; cols[i + 1] = _c.g; cols[i + 2] = _c.b;
+      colFn(P[i], P[i + 1], P[i + 2], _c);
+      if (this.tint && !this._noTint) { const l = 0.2126 * _c.r + 0.7152 * _c.g + 0.0722 * _c.b, k = this.tint; _c.lerp(_t.setRGB(l * k[0], l * k[1], l * k[2]), k[3]); }
+      cols[i] = _c.r; cols[i + 1] = _c.g; cols[i + 2] = _c.b;
       P[i] = P[i] * k - rp[0]; P[i + 1] = P[i + 1] * k - rp[1]; P[i + 2] = P[i + 2] * k - rp[2];
     }
     this.groups[this.cur].push({ pos: P, nor: N, cols, aw });
@@ -118,6 +121,7 @@ export class Builder {
       for (let j = 0; j < m; j++) idx.push(base + j, base + (j + 1) % m, base + m);
     }
     let y0 = 1e9, y1 = -1e9; for (let i = 1; i < pos.length; i += 3) { if (pos[i] < y0) y0 = pos[i]; if (pos[i] > y1) y1 = pos[i]; }
+    this._noTint = color === T;
     const top = new THREE.Color(Array.isArray(color) ? color[0] : (color === T ? this.team : color)), bot = new THREE.Color(Array.isArray(color) ? color[1] : (color === T ? this.team : color));
     return this.raw(pos, idx, (x, y, z, out) => { const t = y1 > y0 ? (y - y0) / (y1 - y0) : 0.5; out.copy(bot).lerp(top, Math.min(1, Math.max(0, t * 1.15 - 0.05))); }, false);
   }

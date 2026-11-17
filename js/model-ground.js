@@ -2,6 +2,9 @@
 import { C, T, PI, H } from './model-core.js';
 const { OD, OD2, OD3, DARK, DARK2, GREY, METAL, STEEL, BLACK, WHITE, ORANGE, GLASS, RED, LAMP, SKIN, RUB, YEL, CYAN, BOLT } = C;
 
+// smooth cast turret shell: centre z, half length, half width, centre y, half height
+const shell = (b, z, hl, w, y, h, col) => b.fuse([{ z: z + hl, w: w * 0.5, t: h * 0.7, bt: h * 0.8, y, p: 3 }, { z: z + hl * 0.4, w, t: h, bt: h * 0.9, y, p: 3.4 }, { z: z - hl * 0.5, w: w * 1.05, t: h, bt: h * 0.9, y, p: 3.4 }, { z: z - hl, w: w * 0.9, t: h * 0.8, bt: h * 0.8, y, p: 3 }], col, 14);
+
 // ------------------------------------------------------------------ infantry
 function soldier(b, o = {}) {
   const vest = o.vest ?? OD2, helm = o.helm ?? OD, skin = SKIN;
@@ -65,9 +68,8 @@ const SOLDIER = {
 function tank(b, heavy) {
   H.tracks(b, -1.65, 6.7, 0.95, 1.0, 6, 0.42); H.tracks(b, 1.65, 6.7, 0.95, 1.0, 6, 0.42);
   b.box(2.4, 0.8, 5.9, 0, 0.95, 0, OD2);                                                                      // lower hull
-  b.box(3.5, 0.45, 5.7, 0, 1.78, -0.3, OD);                                                                    // upper hull deck
+  b.fuse([{ z: 4.05, w: 1.3, t: 0.04, bt: 0.2, y: 1.15, p: 4 }, { z: 3.5, w: 1.74, t: 0.1, bt: 0.2, y: 1.5, p: 4.5 }, { z: 2.5, w: 1.76, t: 0.22, bt: 0.22, y: 1.78, p: 5 }, { z: -2.9, w: 1.76, t: 0.22, bt: 0.22, y: 1.78, p: 5 }, { z: -3.15, w: 1.62, t: 0.2, bt: 0.2, y: 1.74, p: 4 }], OD, 16);   // smooth sloped upper hull + glacis
   b.box(3.7, 0.1, 5.5, 0, 1.55, -0.3, T);                                                                      // team stripe under deck edge
-  b.wedge(3.5, 0.72, 1.5, 0, 1.6, 3.15, OD); b.wedge(3.3, 0.5, 0.8, 0, 1.02, 3.55, OD2);                    // glacis + lower nose
   for (let i = 0; i < 3; i++) for (let j = 0; j < 4; j++) b.box(0.74, 0.07, 0.34, (j - 1.5) * 0.82, 1.98 - i * 0.2 - 0.01 + 0.04, 2.65 + i * 0.4, OD2, [0.46, 0, 0]);   // ERA on glacis
   H.boltLine(b, -1.5, 2.04, 2.45, 1.5, 2.04, 2.45, 7);
   for (const s of [-1, 1]) { H.skirt(b, s * 2.26, 1.05, 0.15, 5.4, 0.8, 5); H.lamp(b, s * 1.55, 1.78, 3.95, LAMP, 0.18); H.lamp(b, s * 1.25, 1.62, 3.95, 0xff7a3a, 0.1); b.box(0.12, 0.15, 0.3, s * 0.7, 1.15, 4.0, STEEL); }  // skirts, headlamps, tow eyes
@@ -81,7 +83,7 @@ function tank(b, heavy) {
   // ---- turret
   b.g('turret'); b.pivot = [0, 2.0, -0.2];
   b.cyl(1.4, 0.2, 0, 2.05, -0.2, DARK2); b.cyl6(1.55, 0.06, 0, 2.18, -0.2, METAL);
-  b.box(2.7, 0.62, 3.2, 0, 2.5, -0.2, OD2); b.trap(2.7, 0.45, 3.0, 0.78, 0.86, 0, 2.97, -0.25, OD);
+  b.fuse([{ z: 1.85, w: 0.55, t: 0.3, bt: 0.34, y: 2.6, p: 3 }, { z: 0.9, w: 1.28, t: 0.42, bt: 0.34, y: 2.66, p: 3.4 }, { z: -0.4, w: 1.42, t: 0.44, bt: 0.34, y: 2.66, p: 3.4 }, { z: -1.7, w: 1.28, t: 0.4, bt: 0.32, y: 2.64, p: 3.2 }, { z: -1.9, w: 1.1, t: 0.3, bt: 0.26, y: 2.6, p: 3 }], OD2, 16);   // cast turret shell
   for (const s of [-1, 1]) {
     b.box(1.1, 0.8, 1.7, s * 1.05, 2.55, 0.85, OD, [0, -s * 0.42, 0]); H.eraWall(b, s * 1.5, 2.55, 1.5, 1.0, 0.65, 3, 2, -s * 0.42);
     b.box(0.05, 0.5, 1.4, s * 1.38, 2.5, -0.5, T); H.smoke(b, s * 1.3, 2.88, 0.45, s, 4); b.sph6(0.07, s * 1.2, 3.12, 0.7, BLACK);
@@ -144,7 +146,7 @@ function ifv(b) {
   H.cable(b, 0, 1.2, -3.05, 2.2); b.box(0.5, 0.22, 0.05, 1.2, 2.1, -2.7, 0x30343a);
   b.box(0.1, 0.5, 4.0, 1.65, 1.6, -0.2, T);
   b.g('turret'); b.pivot = [0, 2.1, -0.2];
-  b.cyl(1.0, 0.2, 0, 2.1, -0.2, DARK2); b.trap(2.0, 0.7, 2.0, 0.8, 0.8, 0, 2.5, -0.3, OD2); b.box(1.7, 0.4, 0.5, 0, 2.55, 0.9, OD3);
+  b.cyl(1.0, 0.2, 0, 2.1, -0.2, DARK2); shell(b, -0.3, 1.1, 1.05, 2.5, 0.4, OD2); b.box(1.7, 0.4, 0.5, 0, 2.55, 0.9, OD3);
   b.barrel(0.09, 2.3, 0.22, 2.5, 0.8, BLACK); b.cyl(0.14, 1.0, 0.22, 2.5, 1.2, METAL, [PI / 2, 0, 0]); b.cyl(0.11, 0.2, 0.22, 2.5, 3.1, BLACK, [PI / 2, 0, 0]);
   b.barrel(0.04, 0.9, -0.12, 2.42, 0.9, BLACK); H.eraWall(b, 0, 2.5, 1.05, 1.5, 0.5, 4, 2);
   b.box(0.6, 0.65, 1.05, -1.2, 2.55, 0.1, OD); H.pod(b, -1.2, 2.58, 0.1, 1, 2, 0.12, 0.7); b.box(0.64, 0.7, 0.06, -1.2, 2.55, -0.45, DARK2);          // ATGM launcher
@@ -163,7 +165,7 @@ function aaTank(b) {
   H.hatch(b, -0.9, 1.95, 1.5, 0.3); H.vent(b, 0.7, 1.95, -2.0, 1.6, 1.2, 6); H.exhaust(b, 1.1, 1.5, -2.9, 0.16, 0.4); b.box(2.6, 0.5, 0.5, 0, 1.55, -2.85, OD2); H.cable(b, 0, 1.1, -2.85, 2.2);
   b.box(1.0, 0.5, 0.9, -0.8, 2.1, -1.5, DARK); H.boltLine(b, -1.2, 2.36, -1.9, -0.4, 2.36, -1.9, 4);
   b.g('turret'); b.pivot = [0, 1.9, -0.3];
-  b.cyl(1.1, 0.2, 0, 1.95, -0.3, DARK2); b.box(2.4, 0.8, 2.2, 0, 2.4, -0.3, OD2); b.trap(2.4, 0.4, 2.2, 0.8, 0.85, 0, 2.95, -0.3, OD);
+  b.cyl(1.1, 0.2, 0, 1.95, -0.3, DARK2); shell(b, -0.3, 1.2, 1.25, 2.55, 0.55, OD2);
   for (const s of [-1, 1]) {
     b.box(0.55, 0.7, 1.3, s * 1.35, 2.5, 0.2, OD3); b.box(0.5, 0.5, 0.6, s * 0.9, 2.5, 0.9, DARK2);                                  // gun cradles
     b.barrel(0.1, 3.0, s * 0.62, 2.7, 0.5, METAL, 0.85); b.barrel(0.15, 1.2, s * 0.62, 2.7, 0.9, OD3, 0.85); b.barrel(0.13, 0.3, s * 0.62, 2.7 + Math.sin(0.85) * 3.0, 0.5 + Math.cos(0.85) * 3.0, BLACK, 0.85);
@@ -186,7 +188,7 @@ function sph(b) {
   b.box(3.0, 0.9, 0.22, 0, 1.2, -3.1, OD3); b.box(2.6, 0.3, 0.5, 0, 0.35, -3.5, METAL, [0.5, 0, 0]); H.boltLine(b, -1.2, 1.5, -3.25, 1.2, 1.5, -3.25, 6);                   // spade
   b.cyl(0.18, 1.2, 0, 0.9, -3.5, STEEL, [0, 0, PI / 2]); b.box(0.2, 0.9, 0.2, -1.2, 1.1, -3.3, STEEL); b.box(0.2, 0.9, 0.2, 1.2, 1.1, -3.3, STEEL);
   b.g('turret'); b.pivot = [0, 2.0, -0.4];
-  b.cyl(1.5, 0.2, 0, 2.05, -0.4, DARK2); b.box(3.0, 1.1, 3.2, 0, 2.65, -0.5, OD2); b.trap(3.0, 0.5, 3.2, 0.82, 0.88, 0, 3.45, -0.5, OD); b.box(3.2, 0.6, 1.0, 0, 2.4, -2.4, OD2);
+  b.cyl(1.5, 0.2, 0, 2.05, -0.4, DARK2); shell(b, -0.5, 1.7, 1.55, 2.8, 0.7, OD2); b.box(3.2, 0.6, 1.0, 0, 2.4, -2.4, OD2);
   b.box(1.4, 0.8, 0.8, 0, 2.7, 1.45, OD3); b.cyl(0.38, 0.9, 0, 2.7, 2.0, DARK, [PI / 2, 0, 0]);
   b.barrel(0.2, 6.2, 0, 2.7, 2.2, METAL); b.cyl(0.26, 2.2, 0, 2.7, 3.4, OD3, [PI / 2, 0, 0]); b.cyl(0.3, 0.55, 0, 2.7, 5.4, DARK, [PI / 2, 0, 0]);
   b.box(0.5, 0.5, 0.6, 0, 2.7, 8.2, DARK2); for (let i = 0; i < 4; i++) b.box(0.56, 0.05, 0.09, 0, 2.7, 8.0 + i * 0.12, BLACK);                              // muzzle brake

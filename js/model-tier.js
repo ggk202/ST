@@ -2,7 +2,7 @@
 //   Mk II  : add-on armor, flare / chaff dispensers, thermal sights, gold markings
 //   Mk III : composite appliqué, EW antennas, directed-energy turret (aircraft), glowing cyan sensors and markings
 // The kit is generated from per-class anchor tables, so every model of a class (tanks, aircraft, infantry, drones) gets one.
-import { C, PI } from './model-core.js';
+import { C, PI, H } from './model-core.js';
 const { OD2, OD3, DARK, DARK2, METAL, STEEL, BLACK, GLASS, WHITE, GOLD, CYAN } = C;
 const ACC2 = 0xe0a020, ACC3 = 0x40e8ff, PLATE = 0x353b3f, PLATE3 = 0x24282c, GREYW = 0xcfd5db;
 
@@ -38,6 +38,19 @@ function vehicle(b, A, tier) {
   // turret kit
   b.g(A.tur ? 'turret' : 'hull');
   const ty = A.ty, tz = A.tz;
+  if (A.tur && !A.truck) {
+    if (t3) {
+      // faceted composite shroud around the whole turret with glowing seam lines
+      b.fuse([{ z: tz + A.tl * 1.05, w: A.tw * 0.5, t: 0.3, bt: 0.4, y: ty - 0.4, p: 1.4 }, { z: tz + A.tl * 0.5, w: A.tw * 1.12, t: 0.5, bt: 0.5, y: ty - 0.4, p: 1.5 }, { z: tz - A.tl * 0.5, w: A.tw * 1.16, t: 0.5, bt: 0.5, y: ty - 0.4, p: 1.6 }, { z: tz - A.tl * 1.0, w: A.tw * 0.9, t: 0.4, bt: 0.45, y: ty - 0.4, p: 1.8 }], PLATE3, 10);
+      for (const s of [-1, 1]) { b.box(0.05, 0.06, A.tl * 1.4, s * A.tw * 0.9, ty - 0.1, tz + A.tl * 0.1, ACC3); b.box(0.05, 0.3, A.tl * 0.8, s * (A.tw * 1.17), ty - 0.45, tz - A.tl * 0.2, ACC3, [0, 0, 0]); }
+      b.box(A.tw * 0.9, 0.05, 0.05, 0, ty + 0.1, tz + A.tl * 0.6, ACC3);
+    } else {
+      for (const s of [-1, 1]) H.eraWall(b, s * (A.tw + 0.16), ty - 0.35, tz + A.tl * 0.45, A.tl * 0.85, 0.7, 4, 2, s * PI / 2, 0x4a5a40);
+      H.era(b, 0, ty + 0.18, tz + A.tl * 0.55, A.tw * 1.1, A.tl * 0.5, 4, 2, 0, 0x4a5a40);
+      for (let i = 0; i < 9; i++) b.box(0.05, 0.62, 0.05, -A.tw + i * A.tw / 4, ty - 0.45, tz - A.tl * 1.12, 0x20252a);   // slat cage on the bustle
+      b.box(A.tw * 2.1, 0.05, 0.06, 0, ty - 0.15, tz - A.tl * 1.12, 0x20252a); b.box(A.tw * 2.1, 0.05, 0.06, 0, ty - 0.75, tz - A.tl * 1.12, 0x20252a);
+    }
+  }
   for (const s of [-1, 1]) {      // flare / smoke launchers: banks of tubes angled up and out
     for (let i = 0; i < 3; i++) b.cyl(0.09, 0.4, s * (A.tw + 0.18), ty - 0.45, tz + A.tl * 0.1 + i * 0.26, DARK2, [0, 0, -s * 0.7]);
     b.box(0.2, 0.22, 0.9, s * (A.tw + 0.1), ty - 0.62, tz + A.tl * 0.1 + 0.26, PLATE);
@@ -138,6 +151,7 @@ function drone(b, base, tier) {
 const AIRSET = new Set(Object.keys(AIRK)), INF = new Set(['rifleman', 'at', 'manpads', 'engineer']), GRDRONE = new Set(['robot', 'ewdog', 'sapper', 'repair', 'walker']), AIRDRONE = new Set(['wingman', 'decoy', 'carrier', 'empcarrier']);
 export function tierKit(b, base, tier) {
   if (tier < 2) return;
+  b.tint = null;   // kit colours (glow, accents) are not repainted
   if (VEH[base]) vehicle(b, VEH[base], tier);
   else if (AIRSET.has(base)) aircraft(b, AIRK[base], tier);
   else if (INF.has(base)) infantry(b, tier);
