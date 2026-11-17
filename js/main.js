@@ -11,7 +11,7 @@ document.body.classList.toggle('touch', !!touch);
 
 const SETTINGS_KEY = 'spearhead.settings.v1';
 function loadSettings() {
-  const d = { shadows: !touch, edge: !touch, volume: 0.5, gfx: touch ? 'low' : 'high', lod: 'auto', adaptive: !!touch };
+  const d = Object.assign({ shadows: !touch, edge: !touch, volume: 0.5, gfx: touch ? 'low' : 'high', lod: 'auto', adaptive: !!touch, preset: 'auto', fps: touch ? 45 : 0, showFps: false, aa: !touch, orbQ: touch ? 'low' : 'high' }, touch ? { res: 0.85, shadowQ: 1024, view: 0.85, density: 0.5, clouds: 0.6, fxq: 'low' } : { res: 1, shadowQ: 2048, view: 1, density: 1, clouds: 1, fxq: 'high' });
   try { const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); return Object.assign(d, s); } catch (e) { return d; }
 }
 function seedFromString(s) { let h = 7; for (const ch of String(s)) h = (Math.imul(h, 31) + ch.charCodeAt(0)) | 0; return (h >>> 0) % 1000000 + 1; }
@@ -81,8 +81,30 @@ class App {
     if (this.returnTo === 'pause') { $('menu').classList.add('hidden'); $('menu').style.zIndex = ''; $('pause').classList.remove('hidden'); this.returnTo = null; }
     else this.showScreen('main');
   }
+  applyPreset(k) {
+    const s = this.settings, P = {
+      low: { gfx: 'low', shadows: false, res: 0.65, shadowQ: 1024, view: 0.7, density: 0.3, clouds: 0, fxq: 'low', fps: 30, adaptive: true, orbQ: 'low' },
+      medium: { gfx: 'low', shadows: true, res: 0.85, shadowQ: 1024, view: 0.85, density: 0.6, clouds: 0.6, fxq: 'low', fps: 45, adaptive: true, orbQ: 'low' },
+      high: { gfx: 'high', shadows: true, res: 1, shadowQ: 2048, view: 1, density: 1, clouds: 1, fxq: 'high', fps: 0, adaptive: false, orbQ: 'high' },
+      ultra: { gfx: 'high', shadows: true, res: 1.25, shadowQ: 4096, view: 1.4, density: 1.6, clouds: 1.4, fxq: 'high', fps: 0, adaptive: false, lod: 'max', orbQ: 'high' },
+    };
+    if (k === 'auto') Object.assign(s, touch ? P.medium : P.high, { lod: 'auto' }); else Object.assign(s, P[k]);
+    s.preset = k; this.saveSettings(); this.openSettings();
+  }
   openSettings() {
     const s = this.settings;
+    this.seg('segPreset', [{ v: 'auto', label: 'Auto' }, { v: 'low', label: 'Low' }, { v: 'medium', label: 'Medium' }, { v: 'high', label: 'High' }, { v: 'ultra', label: 'Ultra' }], s.preset || 'auto', (v) => this.applyPreset(v));
+    const mk = (id, opts, key, post) => this.seg(id, opts, s[key], (v) => { s[key] = v; s.preset = 'custom'; this.saveSettings(); const n = $('presetNote'); if (n) n.textContent = 'Custom settings'; if (post) post(v); });
+    mk('segRes', [{ v: 0.5, label: '50%' }, { v: 0.65, label: '65%' }, { v: 0.85, label: '85%' }, { v: 1, label: '100%' }, { v: 1.25, label: '125%' }], 'res', (v) => { if (this.game) { this.game.renderer.pixelCap = (touch ? 1.5 : 2) * v; this.game.renderer.applyPixelRatio(); this.game.renderer.resize(); } });
+    mk('segShadowQ', [{ v: 1024, label: 'Low' }, { v: 2048, label: 'Medium' }, { v: 4096, label: 'High' }], 'shadowQ', (v) => { if (this.game) { const sh = this.game.renderer.sun.shadow; sh.mapSize.set(v, v); if (sh.map) { sh.map.dispose(); sh.map = null; } } });
+    mk('segView', [{ v: 0.7, label: 'Short' }, { v: 0.85, label: 'Medium' }, { v: 1, label: 'Normal' }, { v: 1.4, label: 'Long' }], 'view', (v) => { if (this.game && this.game.renderer.scene.fog) { const f = this.game.renderer.scene.fog; f.near = 260 * v; f.far = 1250 * v; } });
+    mk('segDensity', [{ v: 0.15, label: 'Sparse' }, { v: 0.3, label: 'Low' }, { v: 0.6, label: 'Medium' }, { v: 1, label: 'High' }, { v: 1.6, label: 'Dense' }], 'density');
+    mk('segClouds', [{ v: 0, label: 'Off' }, { v: 0.6, label: 'Few' }, { v: 1, label: 'Normal' }, { v: 1.4, label: 'Many' }], 'clouds');
+    mk('segFxq', [{ v: 'low', label: 'Reduced' }, { v: 'high', label: 'Full' }], 'fxq');
+    mk('segFps', [{ v: 30, label: '30' }, { v: 45, label: '45' }, { v: 60, label: '60' }, { v: 0, label: 'Unlimited' }], 'fps');
+    mk('segAA', [{ v: true, label: 'On' }, { v: false, label: 'Off' }], 'aa');
+    mk('segOrb', [{ v: 'low', label: 'Standard' }, { v: 'high', label: 'High' }], 'orbQ');
+    mk('segFpsBox', [{ v: false, label: 'Off' }, { v: true, label: 'On' }], 'showFps', (v) => { if (!v) { const e = document.getElementById('fpsBox'); if (e) e.remove(); } });
     this.seg('segShadows', [{ v: true, label: 'On' }, { v: false, label: 'Off' }], s.shadows, (v) => { s.shadows = v; this.saveSettings(); if (this.game) { this.game.renderer.renderer.shadowMap.enabled = v; this.game.renderer.sun.castShadow = v; } });
     this.seg('segGfx', [{ v: 'high', label: 'High' }, { v: 'low', label: 'Medium' }, { v: 'classic', label: 'Classic' }], s.gfx, (v) => { s.gfx = v; this.saveSettings(); const n = $('gfxNote'); if (n) n.textContent = this.game ? 'Applies to the next game.' : ''; });
     this.seg('segLod', [{ v: 'auto', label: 'Auto' }, { v: 'max', label: 'Max detail' }], s.lod || 'auto', (v) => { s.lod = v; this.saveSettings(); });

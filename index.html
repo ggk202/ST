@@ -165,6 +165,8 @@ body.touch .item { min-height:66px; } body.touch .btn { min-height:44px; }
 #selMenu button { text-align:left; padding:6px 12px; border-radius:6px; border:1px solid #2c3d50; background:#131a22; color:#dbe6f0; font-size:12.5px; cursor:pointer; } #selMenu button:hover { background:#1f3042; }
 #grpBar { position:absolute; left:calc(10px + env(safe-area-inset-left)); top:calc(60px + env(safe-area-inset-top)); display:flex; gap:4px; z-index:3; } #grpBar .grp { background:rgba(10,14,18,.82); border:1px solid var(--line); color:#dbe6f0; border-radius:6px; padding:3px 8px; font-size:12px; cursor:pointer; } #grpBar .grp b { color:#8dff5c; margin-right:5px; } #grpBar .grp.on { background:#1d4a66; border-color:#7fe3ff; }
 #subRow { display:flex; gap:8px; } #subRow > div { flex:1; } #subRow > div.hidden { display:none; }
+#fpsBox { position:absolute; left:calc(10px + env(safe-area-inset-left)); bottom:calc(205px + env(safe-area-inset-bottom)); background:rgba(0,0,0,.6); color:#9be37a; font:11px ui-monospace,monospace; padding:3px 7px; border-radius:6px; z-index:7; pointer-events:none; }
+#screen-settings { max-height:92vh; overflow-y:auto; }
 </style>
 </head>
 <body>
@@ -272,7 +274,18 @@ body.touch .item { min-height:66px; } body.touch .btn { min-height:44px; }
 
     <div class="card hidden" id="screen-settings">
       <h2>Settings</h2>
+      <div class="row"><label>Preset</label><div class="seg" id="segPreset"></div><span class="sub" style="margin:0" id="presetNote">Auto picks settings for your device</span></div>
+      <div class="row"><label>Render resolution</label><div class="seg" id="segRes"></div><span class="sub" style="margin:0">Biggest performance lever on iPad / laptops</span></div>
       <div class="row"><label>Shadows</label><div class="seg" id="segShadows"></div></div>
+      <div class="row"><label>Shadow quality</label><div class="seg" id="segShadowQ"></div></div>
+      <div class="row"><label>View distance</label><div class="seg" id="segView"></div></div>
+      <div class="row"><label>Terrain objects</label><div class="seg" id="segDensity"></div><span class="sub" style="margin:0">Grass, trees and rocks (next game)</span></div>
+      <div class="row"><label>Clouds</label><div class="seg" id="segClouds"></div><span class="sub" style="margin:0">Next game</span></div>
+      <div class="row"><label>Effects</label><div class="seg" id="segFxq"></div><span class="sub" style="margin:0">Particle budget (next game)</span></div>
+      <div class="row"><label>Frame limit</label><div class="seg" id="segFps"></div><span class="sub" style="margin:0">Lower saves battery and heat</span></div>
+      <div class="row"><label>Anti-aliasing</label><div class="seg" id="segAA"></div><span class="sub" style="margin:0">Reload the page to apply</span></div>
+      <div class="row"><label>Orbital view</label><div class="seg" id="segOrb"></div></div>
+      <div class="row"><label>Performance overlay</label><div class="seg" id="segFpsBox"></div></div>
       <div class="row"><label>Graphics</label><div class="seg" id="segGfx"></div><span class="sub" id="gfxNote" style="margin:0"></span></div>
       <div class="row"><label>Model detail</label><div class="seg" id="segLod"></div><span class="sub" style="margin:0">Auto swaps in simpler models at a distance</span></div>
       <div class="row"><label>Adaptive resolution</label><div class="seg" id="segAdapt"></div><span class="sub" style="margin:0">Lowers resolution if the frame rate drops (iPad default)</span></div>

@@ -12,6 +12,7 @@ import { AirfieldGfx } from './airfield-gfx.js';
 import { updateStores, CrewPool, warmTasks } from './aircraft-gfx.js';
 import { makeModel, modelMaterial } from './models.js';
 import { biomeOf } from './biomes.js';
+import { ChunkedSurface } from './terrain-chunks.js';
 import { Fx, sfx } from './fx.js';
 import { makeDetailTexture, makeCloudTexture, makeUniforms, patchTerrain, patchWater, makeUnitMaterial, Sky, Clouds, Scatter, animateUnit } from './gfx.js';
 
@@ -23,10 +24,11 @@ export class Renderer {
   constructor(canvas, sim, local, opts = {}) {
     this.canvas = canvas; this.sim = sim; this.local = local; this.opts = opts;
     this.team = sim.players[local].team;
-    const r = this.renderer = Renderer.gl || (Renderer.gl = new THREE.WebGLRenderer({ canvas, antialias: !opts.touch, powerPreference: 'high-performance' }));
+    const r = this.renderer = Renderer.gl || (Renderer.gl = new THREE.WebGLRenderer({ canvas, antialias: opts.aa !== undefined ? !!opts.aa : !opts.touch, powerPreference: 'high-performance' }));
     modelMaterial.needsUpdate = true;
     this.gfx = opts.gfx === 'classic' ? 0 : opts.gfx === 'low' ? 1 : 2;     // 0 classic, 1 medium (tablet), 2 high
-    this.pixelCap = opts.touch ? 1.5 : 2;                                   // iPad: cap the backing store (2x retina is very expensive)
+    this.pixelCap = (opts.touch ? 1.5 : 2) * (opts.res || 1);                // resolution scale option (iPad: capped backing store)
+    this.q = { view: opts.view || 1, density: opts.density || 1, clouds: opts.clouds === undefined ? 1 : opts.clouds, shQ: opts.shadowQ || (opts.touch ? 1024 : 2048), fxLow: !!(opts.touch || opts.fxq === 'low') };                                   // iPad: cap the backing store (2x retina is very expensive)
     this.resScale = 1; this.perfLvl = 0; this.ft = 1 / 60; this.perfCool = 3; this._lastT = 0;
     this.lodBase = opts.touch ? 0.65 : 1; this.lodMul = this.lodBase; this.lodForce = opts.lod === 'max' ? 0 : -1;
     this.frustum = new THREE.Frustum(); this._pv = new THREE.Matrix4(); this._sph = new THREE.Sphere();
@@ -35,7 +37,7 @@ export class Renderer {
     r.toneMapping = this.gfx ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping; r.toneMappingExposure = 1.0;
     this.scene = new THREE.Scene();
     const sky = new THREE.Color(0x9bb6cc);
-    this.scene.background = sky; this.scene.fog = new THREE.Fog(sky, 300, 1100);
+    this.scene.background = sky; this.scene.fog = new THREE.Fog(sky, 300 * (opts.view || 1), 1100 * (opts.view || 1));
     if (this.gfx) this.initGfx();
     this.camera = new THREE.PerspectiveCamera(48, 1, 2, 3500);
     this.cam = { x: 0, z: 0, yaw: 0.0, pitch: 0.92, dist: 110, vx: 0, vz: 0 };
@@ -49,13 +51,13 @@ export class Renderer {
     this.ghost = null; this.selection = new Set();
     this.hemi = new THREE.HemisphereLight(0xcfe0ff, 0x4d4a3a, this.gfx ? 0.75 : 0.95); this.scene.add(this.hemi);
     const sun = this.sun = new THREE.DirectionalLight(0xfff0d0, this.gfx ? 2.2 : 1.5);
-    sun.castShadow = !!opts.shadows; sun.shadow.mapSize.set(opts.touch ? 1024 : 2048, opts.touch ? 1024 : 2048);
+    sun.castShadow = !!opts.shadows; sun.shadow.mapSize.set(this.q.shQ, this.q.shQ);
     sun.shadow.bias = -0.0006; sun.shadow.camera.near = 10; sun.shadow.camera.far = 600;
     this.scene.add(sun); this.scene.add(sun.target);
     this.buildTerrain();
     this.buildOil();
     if (this.gfx) this.initWorldGfx();
-    this.fx = new Fx(this.scene, !!opts.touch);
+    this.fx = new Fx(this.scene, this.q.fxLow);
     this.craters = new Craters(this.scene, this.sim.map, opts.touch ? 120 : 260);
     // explosion lighting: a few real point lights, driven by the strongest active flashes
     this.fxLights = []; if (this.gfx) for (let i = 0; i < (opts.touch ? 2 : 4); i++) { const L = new THREE.PointLight(0xff9b4a, 0, 70, 2); L.position.set(0, -50, 0); this.scene.add(L); this.fxLights.push(L); }
@@ -80,14 +82,14 @@ export class Renderer {
     this.U.uSunDir.value.set(70, 130, 45).normalize();
     const bio = biomeOf(this.sim.map); this.skyObj = new Sky(this.U, bio.hor, bio.zen);
     this.scene.background = null; this.scene.add(this.skyObj.mesh);
-    this.scene.fog = new THREE.Fog(new THREE.Color().setRGB(bio.hor[0], bio.hor[1], bio.hor[2]), 260, 1250);
+    this.scene.fog = new THREE.Fog(new THREE.Color().setRGB(bio.hor[0], bio.hor[1], bio.hor[2]), 260 * this.q.view, 1250 * this.q.view);
     this.skyObj.buildEnvironment(this.renderer, this.scene);
     modelMaterial.envMapIntensity = 0.55; modelMaterial.flatShading = false; modelMaterial.roughness = 0.62; modelMaterial.metalness = 0.28; modelMaterial.needsUpdate = true;
   }
   initWorldGfx() {
     const map = this.sim.map, w = map.vw, bc = this.baseCol;
-    this.scatter = new Scatter(this.scene, this.sim, this.U, (x, z, out) => { const i = clamp(Math.round(x / CELL), 0, w - 1), j = clamp(Math.round(z / CELL), 0, w - 1), k = (j * w + i) * 3; out.setRGB(bc[k], bc[k + 1], bc[k + 2]); }, this.gfx === 2 ? 'high' : 'low');
-    this.clouds = new Clouds(this.scene, this.U, map.size, this.gfx === 2 ? 70 : 42);
+    this.scatter = new Scatter(this.scene, this.sim, this.U, (x, z, out) => { const i = clamp(Math.round(x / CELL), 0, w - 1), j = clamp(Math.round(z / CELL), 0, w - 1), k = (j * w + i) * 3; out.setRGB(bc[k], bc[k + 1], bc[k + 2]); }, this.gfx === 2 ? 'high' : 'low', this.q.density);
+    if (this.q.clouds > 0) this.clouds = new Clouds(this.scene, this.U, map.size, Math.round((this.gfx === 2 ? 70 : 42) * this.q.clouds));
   }
 
   // ---------------- terrain ----------------
@@ -129,28 +131,22 @@ export class Renderer {
     g.setIndex(idx); g.computeVertexNormals();
     const tmat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
     if (this.gfx) { tmat.envMapIntensity = 0.35; patchTerrain(tmat, this.U); }
-    this.terrain = new THREE.Mesh(g, tmat);
-    this.terrain.receiveShadow = true;
-    this.scene.add(this.terrain);
+    this.terrainSurf = new ChunkedSurface(this.scene, g, n, w, tmat, { receive: true }); this.terrain = this.terrainSurf.group;
+    g.setIndex(null);
     // water: full-resolution grid; vertex color = fog-of-war shade, `depth` = water depth for shading and shoreline foam
     {
-      const ws = w, wp = new Float32Array(ws * ws * 3), wc = new Float32Array(ws * ws * 3), wd = new Float32Array(ws * ws), wi = [];
-      for (let j = 0; j < ws; j++) for (let i = 0; i < ws; i++) { const k = j * ws + i; wp[k * 3] = i * CELL; wp[k * 3 + 1] = 0; wp[k * 3 + 2] = j * CELL; wd[k] = Math.max(0, -map.h[k]); }
-      for (let j = 0; j < ws - 1; j++) for (let i = 0; i < ws - 1; i++) {
-        const a = j * ws + i, hs = map.h[a] + map.h[a + 1] + map.h[a + ws] + map.h[a + ws + 1];
-        if (hs > 12) continue;   // skip tiles that are well above the waterline
-        wi.push(a, a + ws, a + 1, a + 1, a + ws, a + ws + 1);
-      }
+      const ws = w, wp = new Float32Array(ws * ws * 3), wc = new Float32Array(ws * ws * 3), wd = new Float32Array(ws * ws), wn = new Float32Array(ws * ws * 3);
+      for (let j = 0; j < ws; j++) for (let i = 0; i < ws; i++) { const k = j * ws + i; wp[k * 3] = i * CELL; wp[k * 3 + 1] = 0; wp[k * 3 + 2] = j * CELL; wd[k] = Math.max(0, -map.h[k]); wn[k * 3 + 1] = 1; }
       const wg = new THREE.BufferGeometry();
-      wg.setAttribute('position', new THREE.BufferAttribute(wp, 3));
+      wg.setAttribute('position', new THREE.BufferAttribute(wp, 3)); wg.setAttribute('normal', new THREE.BufferAttribute(wn, 3));
       this.waterCol = new THREE.BufferAttribute(wc, 3); this.waterCol.setUsage(THREE.DynamicDrawUsage);
-      wg.setAttribute('color', this.waterCol); wg.setAttribute('depth', new THREE.BufferAttribute(wd, 1)); wg.setIndex(wi); wg.computeVertexNormals();
+      wg.setAttribute('color', this.waterCol); wg.setAttribute('depth', new THREE.BufferAttribute(wd, 1));
       this.waterGeo = wg; this.ws = ws;
+      const skip = (i, j, s) => { for (let q = 0; q < s; q++) for (let r = 0; r < s; r++) { const a = (j + q) * ws + i + r; if (map.h[a] + map.h[a + 1] + map.h[a + ws] + map.h[a + ws + 1] <= 12) return false; } return true; };   // skip blocks well above the waterline
       let wm;
       if (this.gfx) { wm = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: 1, roughness: 0.1, metalness: 0.05, envMapIntensity: 1.1, depthWrite: false }); patchWater(wm, this.U); }
       else wm = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: 0.8, roughness: 0.25, metalness: 0.25 });
-      this.water = new THREE.Mesh(wg, wm); this.water.renderOrder = 1;
-      this.scene.add(this.water);
+      this.waterSurf = new ChunkedSurface(this.scene, wg, n, ws, wm, { skip, renderOrder: 1 }); this.water = this.waterSurf.group;
     }
     // outer ocean / ground so the void is never visible
     if (this.gfx && this.sim.map.type === 'island') {
@@ -625,6 +621,7 @@ export class Renderer {
     this.camera.updateMatrixWorld(); this._pv.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse.copy(this.camera.matrixWorld).invert()); this.frustum.setFromProjectionMatrix(this._pv);
     if (!this._ground) { const map = this.sim.map; this._ground = (x, z) => map.hAt(x, z); }
     if (this.warm.length) { try { this.warm.shift()(); } catch (e) { /* ignore */ } }
+    this.terrainSurf.update(this.camera.position, this.lodMul); this.waterSurf.update(this.camera.position, this.lodMul);
     this.syncEntities(alpha, dt); this.updateStrategic(dt);
     if (!this.logiGfx) this.logiGfx = new LogiGfx(this); this.logiGfx.update(dt);
     this.updateSelection();
@@ -639,7 +636,7 @@ export class Renderer {
     this.renderer.render(this.scene, this.camera);
   }
   dispose() {
-    this.terrain.geometry.dispose(); this.water.geometry.dispose();
+    this.terrainSurf.dispose(); this.waterSurf.dispose();
     if (this.scatter) this.scatter.dispose();
     for (const v of this.views.values()) if (v.mat) v.mat.dispose();
     if (this.scene.environment) { this.scene.environment.dispose(); }

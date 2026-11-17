@@ -428,7 +428,7 @@ function bushGeo() { return mergeParts([{ geo: jitterGeo(new THREE.IcosahedronGe
 function rockGeo(seed) { return mergeParts([{ geo: jitterGeo(new THREE.IcosahedronGeometry(1, 1), 0.5, seed), pos: [0, 0.35, 0], scl: [1, 0.7, 1], color: 0x8a8883, grad: [-0.5, 1.2] }]); }
 
 export class Scatter {
-  constructor(scene, sim, U, baseColAt, quality) {
+  constructor(scene, sim, U, baseColAt, quality, density = 1) {
     const map = sim.map; this.map = map; this.scene = scene; this.chunks = []; this.quality = quality;
     const mats = {
       grass: makeFoliageMaterial(U, 0.55, { double: true }), tree: makeFoliageMaterial(U, 0.018, { flat: true }), rock: makeFoliageMaterial(U, 0, { flat: true }), bush: makeFoliageMaterial(U, 0.2, {}),
@@ -450,7 +450,7 @@ export class Scatter {
     const nearOil = (x, z, rr) => { for (const o of map.oil) { const dx = o.x - x, dz = o.z - z; if (dx * dx + dz * dz < rr * rr) return true; } return false; };
     const forest = (x, z) => { const a = Math.sin(x * 0.021 + 1.3) * Math.cos(z * 0.017 - 0.4) + Math.sin(x * 0.047 + z * 0.039) * 0.5 + Math.sin(z * 0.061 - x * 0.03 + 2.0) * 0.3; return a; };
     const free = (x, z) => { const c = map.cellOf(x, z); if (c < 0) return false; if (map.occ[c]) return false; return true; };
-    const big = map.n > 250 ? 1.5 : map.n > 150 ? 1.2 : 1;   // keep instance counts sane on the larger maps
+    const big = (map.n > 650 ? 2.6 : map.n > 420 ? 1.9 : map.n > 250 ? 1.5 : map.n > 150 ? 1.2 : 1) / Math.sqrt(Math.max(0.15, density));   // keep instance counts sane on the larger maps
     const sp = (quality === 'high' ? 1.8 : 3.2) * big, tsp = (quality === 'high' ? 8 : 11) * big, rsp = 9 * big;
     const col = new THREE.Color();
     // grass

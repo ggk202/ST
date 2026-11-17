@@ -20,7 +20,8 @@ export class Game {
     this.team = this.sim.players[local].team;
     this.canvas = document.getElementById('view'); this.overlay = document.getElementById('overlay');
     this.octx = this.overlay.getContext('2d');
-    this.renderer = new Renderer(this.canvas, this.sim, local, { shadows: settings.shadows, touch, gfx: settings.gfx, lod: settings.lod, adaptive: settings.adaptive !== undefined ? settings.adaptive : !!touch });
+    const q = settings;
+    this.renderer = new Renderer(this.canvas, this.sim, local, { shadows: q.shadows && q.shadowQ !== 0, touch, gfx: q.gfx, lod: q.lod, adaptive: q.adaptive !== undefined ? q.adaptive : !!touch, res: q.res || 1, shadowQ: q.shadowQ || undefined, view: q.view || 1, density: q.density || 1, clouds: q.clouds === undefined ? 1 : q.clouds, fxq: q.fxq, aa: q.aa });
     this.sel = []; this.groups = {}; this.paused = false; this.waiting = false; this.desync = false; this.lastAlert = null;
     this.simAcc = 0; this.tickInTurn = 0; this.curTurn = null; this.alpha = 0; this.running = false; this.ended = false; this.leftEarly = false;
     this.controls = new Controls(this);
@@ -51,6 +52,14 @@ export class Game {
     this.controls.unbind(); window.removeEventListener('resize', this.onResize); window.removeEventListener('orientationchange', this.onResize);
     this.hud.show(false); this.octx.clearRect(0, 0, this.overlay.width, this.overlay.height);
     this.renderer.dispose();
+  }
+  // on-screen performance read-out (FPS, frame time, draw calls, triangles, sim cost)
+  fpsTick(dt) {
+    this._fa = (this._fa || 0) + dt; this._fn = (this._fn || 0) + 1; if (this._fa < 0.5) return;
+    let el = document.getElementById('fpsBox'); if (!el) { el = document.createElement('div'); el.id = 'fpsBox'; document.getElementById('hud').appendChild(el); }
+    const ri = this.renderer.renderer.info.render; const st = this.simMs !== undefined ? ' · sim ' + this.simMs.toFixed(1) + ' ms' : '';
+    el.textContent = Math.round(this._fn / this._fa) + ' fps · ' + (this._fa / this._fn * 1000).toFixed(1) + ' ms · ' + ri.calls + ' calls · ' + Math.round(ri.triangles / 1000) + 'k tris · res ' + (this.renderer.resScale * 100 | 0) + '%' + st;
+    this._fa = 0; this._fn = 0;
   }
   unlockAudio() { initAudio(); setVolume(this.settings.volume); }
   cmd(c) { this.ls.sendLocal(c); }
@@ -101,9 +110,12 @@ export class Game {
   frame(now) {
     if (!this.running) return;
     this.raf = requestAnimationFrame((t) => this.frame(t));
+    const cap = this.settings.fps || 0;
+    if (cap && now - this.last < 1000 / cap - 2) return;   // frame limiter
     const dt = Math.min(0.1, (now - this.last) / 1000); this.last = now;
+    if (this.settings.showFps) this.fpsTick(dt);
     this.controls.update(dt);
-    this.advance(dt);
+    const t0 = performance.now(); this.advance(dt); this.simMs = this.simMs === undefined ? performance.now() - t0 : this.simMs * 0.9 + (performance.now() - t0) * 0.1;
     const evs = this.sim.events; this.sim.events = [];
     if (evs.length) { this.renderer.processEvents(evs); this.hud.handleEvents(evs); this.orbital.handleEvents(evs); }
     // drop dead entities from the selection

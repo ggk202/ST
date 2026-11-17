@@ -134,9 +134,10 @@ export class OrbitalView {
     this.camera = new THREE.PerspectiveCamera(40, 1, 1, 4000);
     const sun = this.sunDir = new THREE.Vector3(0.7, 0.35, 0.8).normalize();
     this.U = { uSun: { value: sun }, uTime: { value: 0 } };
-    const earthGeo = new THREE.SphereGeometry(R_EARTH, 160, 112);
-    this.earth = new THREE.Mesh(earthGeo, new THREE.ShaderMaterial({ vertexShader: EARTH_VS, fragmentShader: EARTH_FS, uniforms: this.U })); sc.add(this.earth);
-    this.cloud = new THREE.Mesh(new THREE.SphereGeometry(R_EARTH * 1.012, 128, 96), new THREE.ShaderMaterial({ vertexShader: EARTH_VS, fragmentShader: CLOUD_FS, uniforms: this.U, transparent: true, depthWrite: false })); sc.add(this.cloud);
+    const lowQ = this.g.settings.orbQ === 'low', oct = lowQ ? 4 : 6, fix = (s) => s.replace(/#define OCT \d/, '#define OCT ' + oct);
+    const earthGeo = new THREE.SphereGeometry(R_EARTH, lowQ ? 96 : 160, lowQ ? 64 : 112);
+    this.earth = new THREE.Mesh(earthGeo, new THREE.ShaderMaterial({ vertexShader: EARTH_VS, fragmentShader: fix(EARTH_FS), uniforms: this.U })); sc.add(this.earth);
+    this.cloud = new THREE.Mesh(new THREE.SphereGeometry(R_EARTH * 1.012, lowQ ? 80 : 128, lowQ ? 56 : 96), new THREE.ShaderMaterial({ vertexShader: EARTH_VS, fragmentShader: fix(CLOUD_FS), uniforms: this.U, transparent: true, depthWrite: false })); sc.add(this.cloud);
     this.atm = new THREE.Mesh(new THREE.SphereGeometry(R_EARTH * 1.085, 96, 72), new THREE.ShaderMaterial({ vertexShader: ATM_VS, fragmentShader: ATM_FS, uniforms: this.U, side: THREE.BackSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); sc.add(this.atm);
     // stars + a faint galactic band
     const N = 3600, pos = new Float32Array(N * 3), col = new Float32Array(N * 3); let s = 12345; const rnd = () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296;
