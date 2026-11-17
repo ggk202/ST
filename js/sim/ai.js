@@ -6,9 +6,9 @@ const DIFF = {
   normal: { interval: 20, base: 2400, step: 800, grace: 150, reserve: 1.0 },
   hard:   { interval: 12, base: 1800, step: 650, grace: 100, reserve: 1.0 },
 };
-const PLAN = [['barracks', 1], ['powerplant', 8], ['factory', 1], ['techlab', 1], ['turret', 1], ['dronebay', 1], ['airfield', 1], ['sam', 1], ['radar', 1], ['ewtower', 1], ['advtech', 1], ['turret', 2], ['factory', 2], ['sam', 2], ['barracks', 2], ['dronebay', 2], ['turret', 4], ['airfield', 2]];
+const PLAN = [['barracks', 1], ['powerplant', 8], ['factory', 1], ['techlab', 1], ['turret', 1], ['supplydepot', 1], ['dronebay', 1], ['airfield', 1], ['sam', 1], ['radar', 1], ['ewtower', 1], ['advtech', 1], ['turret', 2], ['factory', 2], ['sam', 2], ['barracks', 2], ['dronebay', 2], ['turret', 4], ['airfield', 2]];
 const WEIGHTS = { rifleman: 2, at: 1.6, manpads: 0.8, scout: 0.5, ifv: 2.5, mbt: 3.5, aa: 0.8, sph: 1.2, heavy: 2.5, mlrs: 1.4, tel: 0.25, uav: 0.15, heli: 2, vtol: 1.4, fighter: 1.3, bomber: 0.9, strategic: 0.6, awacs: 0.3, spydrone: 0.15, engineer: 0,
-  ewtruck: 0.35, ewplane: 0.3, robot: 2.5, ewdog: 0.9, sapper: 0.8, repair: 0.5, walker: 2, fpv: 1.2, wingman: 1.3, carrier: 0.9, empcarrier: 0.3 };
+  ewtruck: 0.35, supplytruck: 0.45, tanker: 0.3, ewplane: 0.3, robot: 2.5, ewdog: 0.9, sapper: 0.8, repair: 0.5, walker: 2, fpv: 1.2, wingman: 1.3, carrier: 0.9, empcarrier: 0.3 };
 const hyp = (a, b) => Math.sqrt(a * a + b * b);
 const DIRS = [[1, 0], [0.7, 0.7], [0, 1], [-0.7, 0.7], [-1, 0], [-0.7, -0.7], [0, -1], [0.7, -0.7]];
 
@@ -115,6 +115,24 @@ export class AIController {
     // choose the highest unlocked tier of each unit type
     const types = [];
     for (const b of BASE_ORDER) { if (!(WEIGHTS[b] > 0)) continue; for (let t = 3; t >= 1; t--) { const uid = unitId(b, t); if (sim.canTrain(id, uid)) { types.push(uid); break; } } }
+    // logistics: a few supply trucks, a tanker once there is an air arm
+    const nTrucks = units.filter((u) => UNITS[u.def].supply).length + this.queued(blds, 'supplytruck') + this.queued(blds, 'supplytruck2') + this.queued(blds, 'supplytruck3');
+    const nAir = units.filter((u) => u.air && (u.ed || UNITS[u.def]).weapons.length).length, nTank = units.filter((u) => UNITS[u.def].tank).length;
+    for (let k = types.length - 1; k >= 0; k--) { const b = UNITS[types[k]].base; if ((b === 'supplytruck' && nTrucks >= 2 + Math.floor(secs / 400)) || (b === 'tanker' && (nTank >= 1 || nAir < 5))) types.splice(k, 1); }
+    for (const u of units) { if (UNITS[u.def].supply && !u.auto) sim.exec({ t: 'lauto', p: id, ids: [u.id], v: 1 }); if (UNITS[u.def].tank && u.ap === 'fly' && u.order.t === 'idle' && !u.moved) { u.moved = 1; sim.exec({ t: 'move', p: id, ids: [u.id], x: rally.x, z: rally.z }); } }
+    // capture control points with small infantry teams
+    if (sim.points.length && (sim.tick % 100) === 0) {
+      this.pclaims = this.pclaims || {};
+      for (const q of sim.points) {
+        if (q.team === p.team) continue;
+        const cl = (this.pclaims[q.id] || []).filter((i) => { const e = sim.byId.get(i); return e && !e.dead; });
+        if (cl.length >= 2 && hyp(sim.byId.get(cl[0]).x - q.x, sim.byId.get(cl[0]).z - q.z) < 200) { this.pclaims[q.id] = cl; continue; }
+        let pool = units.filter((u) => !u.air && !UNITS[u.def].builder && (u.ed || UNITS[u.def]).weapons.length && (u.order.t === 'idle') && !cl.includes(u.id) && !Object.values(this.pclaims).some((a) => a.includes(u.id)));
+        pool.sort((a, b) => hyp(a.x - q.x, a.z - q.z) - hyp(b.x - q.x, b.z - q.z));
+        const pick = pool.slice(0, 3 - cl.length);
+        if (pick.length && hyp(pick[0].x - q.x, pick[0].z - q.z) < sim.map.size * 0.6) { sim.exec({ t: 'move', p: id, ids: pick.map((u) => u.id), x: q.x, z: q.z }); this.pclaims[q.id] = cl.concat(pick.map((u) => u.id)); }
+      }
+    }
     const lowPower = p.pE - p.pU < 6;
     const engQueued = this.queued(blds, 'engineer');
     if (engineers.length + engQueued < (derricks < wantDerricks ? 1 : 0) && p.credits > 500) sim.train(id, 'engineer');

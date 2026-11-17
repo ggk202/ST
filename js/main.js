@@ -1,5 +1,6 @@
 // App shell: menus, lobby, match start/stop.
 import { Game } from './game.js';
+import { ModelViewer } from './viewer.js';
 import { Net, Lockstep } from './net.js';
 import { PLAYER_COLORS, PLAYER_COLOR_NAMES } from './sim/defs.js';
 import { MAP_SIZES } from './sim/map.js';
@@ -31,6 +32,7 @@ class App {
 
   // ---------------- screens ----------------
   showScreen(name) {
+    if (name !== 'viewer' && this.viewer) this.viewer.close();
     for (const el of document.querySelectorAll('#menu .card')) el.classList.add('hidden');
     $('screen-' + name).classList.remove('hidden');
     $('menu').classList.remove('hidden');
@@ -50,6 +52,8 @@ class App {
     on('mSkirmish', () => this.openSetup('sp'));
     on('mHost', () => this.hostGame());
     on('mJoin', () => { $('joinErr').textContent = ''; $('joinName').value = localStorage.getItem('spearhead.name') || ''; this.showScreen('join'); });
+    on('mViewer', () => { if (!this.viewer) this.viewer = new ModelViewer(); this.showScreen('viewer'); this.viewer.open(); });
+    on('vwBack', () => this.showScreen('main'));
     on('mHelp', () => { this.returnTo = 'main'; this.showScreen('help'); });
     on('mSettings', () => { this.returnTo = 'main'; this.openSettings(); });
     on('btnSetupBack', () => this.leaveSetup());
@@ -64,6 +68,9 @@ class App {
     $('volume').addEventListener('input', (e) => { this.settings.volume = e.target.value / 100; this.saveSettings(); });
     // pause menu
     on('pResume', () => this.closePause());
+    on('pSave', () => { if (this.game) this.game.saveGame(); });
+    on('mLoad', () => $('loadFile').click());
+    $('loadFile').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; const r = new FileReader(); r.onload = () => { try { const d = JSON.parse(r.result); this.startGame(d.cfg, 0, new Lockstep(null, 'local', 0), r.result); } catch (err) { console.error(err); alert('Could not load that save: ' + err.message); } }; r.readAsText(f); });
     on('pSettings', () => { this.returnTo = 'pause'; $('pause').classList.add('hidden'); $('menu').style.zIndex = 12; this.openSettings(); });
     on('pHelp', () => { this.returnTo = 'pause'; $('pause').classList.add('hidden'); $('menu').style.zIndex = 12; this.showScreen('help'); });
     on('pResign', () => { if (confirm('Resign this match?')) { this.game.cmd({ t: 'resign' }); this.closePause(); } });
@@ -229,10 +236,11 @@ class App {
     this.net.conns.forEach((conn, slot) => { if (map[slot] != null) { this.hostSimSlot.set(conn, map[slot]); this.net.sendConn(conn, { k: 'start', cfg, you: map[slot] }); } });
     this.startGame(cfg, map[0], ls);
   }
-  startGame(cfg, local, ls) {
+  startGame(cfg, local, ls, snap) {
     this.hideMenu(); $('pause').classList.add('hidden'); $('endscreen').classList.add('hidden');
+    $('pSave').style.display = ls.role === 'local' ? '' : 'none';
     $('pauseNote').textContent = ls.role === 'local' ? '' : 'Multiplayer: the game continues while this menu is open.';
-    try { this.game = new Game(this, cfg, local, ls, this.settings, !!touch); }
+    try { this.game = new Game(this, cfg, local, ls, this.settings, !!touch, snap); }
     catch (e) { console.error(e); alert('Failed to start the game: ' + e.message); this.showScreen('main'); return; }
     this.game.start();
   }

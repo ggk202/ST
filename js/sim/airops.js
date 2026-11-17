@@ -127,6 +127,7 @@ export const AirOps = {
     const lo = UNITS[u.def].loadouts[u.lo], r = u.maxhp > 0 ? u.hp / u.maxhp : 1;
     u.ed = lo.ed; u.cd = lo.weapons.map(() => 0); u.am = lo.weapons.map((w) => (w.ammo > 0 ? w.ammo : -1));
     u.maxhp = lo.ed.hp; u.hp = Math.max(1, r * u.maxhp); u.rdy = true;
+    if (lo.ed.fuel) { u.fuel = lo.ed.fuel; u.rf = 0; u.fwarn = 0; } if (lo.ed.tank) u.fstock = lo.ed.tank.cap; u.pal = lo.pallets || 0;
   },
   afAiPick(b, u) {
     const d = UNITS[u.def], ok = d.loadouts.filter((l) => this.afAllowed(b, l) && (l.cost === 0 || this.players[u.owner].credits > l.cost * 3));

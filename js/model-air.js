@@ -209,10 +209,10 @@ export const HARD = {
   ewplane: [[3.6, -0.35, -0.5], [4.2, -0.35, -0.9]],
   fighter: [[1.3, -0.5, -0.2], [2.0, -0.42, -0.4], [2.8, -0.38, -0.7], [3.6, -0.3, -1.0]],
   strategic: [[3.0, -0.6, 1.0], [3.0, -0.6, -1.6], [6.5, -0.5, -0.2], [6.5, -0.5, -2.4], [12.0, -0.4, -3.6], [12.0, -0.4, -5.6]],
-  airlifter: [], awacs: [], spydrone: [],
+  airlifter: [], awacs: [], spydrone: [], tanker: [],
   bomber: [[2.4, -0.55, 0.9], [2.4, -0.55, -1.4], [5.5, -0.5, 0.2], [5.5, -0.5, -2.0], [9.0, -0.4, -0.9], [9.0, -0.4, -2.9]],
 };
-export const HARD_CENTER = { uav: [0, -0.55, 0.5], ewplane: [0, -0.85, 1.4], fighter: [0, -0.95, 0.2], vtol: [0, -0.7, 0.6], heli: [0, -0.6, 1.2], bomber: [0, -1.7, 2.0], strategic: [0, -2.0, 2.0], airlifter: [0, 0, 0], awacs: [0, 0, 0], spydrone: [0, 0, 0] };
+export const HARD_CENTER = { uav: [0, -0.55, 0.5], ewplane: [0, -0.85, 1.4], fighter: [0, -0.95, 0.2], vtol: [0, -0.7, 0.6], heli: [0, -0.6, 1.2], bomber: [0, -1.7, 2.0], strategic: [0, -2.0, 2.0], airlifter: [0, 0, 0], tanker: [0, 0, 0], awacs: [0, 0, 0], spydrone: [0, 0, 0] };
 
 export const AIR = { uav, heli, vtol, ewplane, fighter, bomber, strategic, airlifter, awacs, spydrone };
 export const PROPS_MODELS = { crew, cart, afhangar, afbunker, afdepot };

@@ -85,6 +85,7 @@ const AIRK = {
   bomber: { sy: 1.6, sz: 0.5, zr: -9.0, wx: 12.0, wy: 0.4, wz: -0.6, bl: -1.9, nz: 8.0, fx: 0.9, fy: 4.2 },
   strategic: { sy: 2.0, sz: 2.0, zr: -14.5, wx: 23.0, wy: 0.3, wz: -1.5, bl: -2.2, nz: 12, fx: 1.0, fy: 4.8 },
   airlifter: { sy: 3.1, sz: 5.0, zr: -19.0, wx: 26.0, wy: 2.7, wz: -1.0, bl: -3.0, nz: 14, fx: 0.0, fy: 11 },
+  tanker: { sy: 3.1, sz: 5.0, zr: -19.0, wx: 26.0, wy: 2.7, wz: -1.0, bl: -3.0, nz: 14, fx: 0.0, fy: 11 },
   awacs: { sy: 2.2, sz: 5.0, zr: -14.5, wx: 17.0, wy: 0.9, wz: -0.8, bl: -2.3, nz: 11, fx: 1.0, fy: 5 },
   spydrone: { sy: 1.4, sz: 3.0, zr: -8.0, wx: 26.0, wy: 0.0, wz: -1.2, bl: -1.0, nz: 9, fx: 0.0, fy: 0 },
 };
@@ -122,7 +123,7 @@ function bbox(b) {
 function drone(b, base, tier) {
   const t3 = tier >= 3, acc = t3 ? ACC3 : ACC2, bb = bbox(b), cz = (bb.f + bb.r) / 2, L = bb.f - bb.r, w = Math.min(bb.w, L * 0.6);
   b.g('hull');
-  const air = base === 'wingman' || base === 'carrier' || base === 'empcarrier' || base === 'fpv';
+  const air = base === 'wingman' || base === 'decoy' || base === 'carrier' || base === 'empcarrier' || base === 'fpv';
   const hy = bb.bot + (bb.top - bb.bot) * (air ? 0.62 : 0.7);
   b.box(w * 0.9, 0.06, L * 0.18, 0, hy + 0.04, cz - L * 0.15, acc); b.box(w * 0.6, 0.05, L * 0.1, 0, hy + 0.04, cz - L * 0.05, acc);                    // marking chevrons
   for (const s of [-1, 1]) b.box(0.1, (bb.top - bb.bot) * 0.28, L * 0.34, s * w * 0.95, bb.bot + (bb.top - bb.bot) * 0.5, cz, t3 ? PLATE3 : PLATE);        // side armor plates
@@ -134,7 +135,7 @@ function drone(b, base, tier) {
   }
 }
 
-const AIRSET = new Set(Object.keys(AIRK)), INF = new Set(['rifleman', 'at', 'manpads', 'engineer']), GRDRONE = new Set(['robot', 'ewdog', 'sapper', 'repair', 'walker']), AIRDRONE = new Set(['wingman', 'carrier', 'empcarrier']);
+const AIRSET = new Set(Object.keys(AIRK)), INF = new Set(['rifleman', 'at', 'manpads', 'engineer']), GRDRONE = new Set(['robot', 'ewdog', 'sapper', 'repair', 'walker']), AIRDRONE = new Set(['wingman', 'decoy', 'carrier', 'empcarrier']);
 export function tierKit(b, base, tier) {
   if (tier < 2) return;
   if (VEH[base]) vehicle(b, VEH[base], tier);

@@ -96,6 +96,7 @@ const BASE = {
     lo: [
       { id: 'multi', name: 'Multirole', desc: 'Two missiles and four bombs: capable against air and ground.', cost: 160, prep: 6, vis: [['aam', 1], ['bomb', 2]], weapons: [W({ type: 'aa', range: 62, dmg: 380, reload: 2.8, kind: 'missile', speed: 75, ground: false, air: true, radar: true, ammo: 2 }), W({ type: 'he', range: 22, dmg: 300, reload: 2, kind: 'shell', speed: 50, splash: 5, spread: 0.08, ammo: 4 })] },
       { id: 'strike', name: 'Strike Fighter', desc: 'Six heavy bombs and a cannon for ground attack.', cost: 260, prep: 8, dp: 2, vis: [['bomb', 3]], weapons: [W({ type: 'he', range: 22, dmg: 400, reload: 1.5, kind: 'shell', speed: 50, splash: 6, spread: 0.08, ammo: 6 }), W({ type: 'bullet', range: 22, dmg: 10, reload: 0.12, air: true, ammo: 200 })] },
+      { id: 'sead', name: 'SEAD', desc: 'Four anti-radiation missiles that home on radars, SAM sites and jammers that are transmitting. Switch emitters off (EMCON) to blind them.', cost: 240, prep: 7, vis: [['aam', 2]], weapons: [W({ type: 'ap', range: 100, dmg: 520, reload: 3, kind: 'missile', speed: 85, ground: true, air: false, arm: true, ammo: 4 }), W({ type: 'bullet', range: 22, dmg: 10, reload: 0.12, air: true, ammo: 200 })] },
       { id: 'intercept', name: 'Fast Interceptor', desc: 'Four long-range missiles, no cannon, 15% faster.', cost: 200, prep: 5, mods: { speed: 1.15 }, vis: [['aam', 2]], weapons: [W({ type: 'aa', range: 70, dmg: 380, reload: 2, kind: 'missile', speed: 80, ground: false, air: true, radar: true, ammo: 4 })] },
     ] },
   bomber: { name: 'Heavy Bomber', rcs: 1.8, desc: 'Large aircraft that needs an extended runway. Carries the heaviest loads; heavy loadouts need a bigger depot.', from: 'airfield', rwy: 2, techLv: 1, cost: 2400, time: 44, hp: 700, speed: 22, armor: 'air', radius: 4.2, vision: 58, air: true, fw: true, turn: 0.32, accel: 3.5, alt: 30,
@@ -118,6 +119,7 @@ const BASE = {
     stdName: 'Mixed Cargo', stdDesc: 'Capacity 40: troops, light and heavy vehicles.', stdPrep: 4, stdVis: [], cap: 40,
     lo: [
       { id: 'troops', name: 'Troop Carrier', desc: 'Capacity 80, infantry, drones and light vehicles only (all airdrop-capable).', cost: 100, prep: 5, vis: [], weapons: [], cap: 80, only: 'para' },
+      { id: 'pallets', name: 'Supply Pallets', desc: 'Eight parachute supply pallets. Use SUPPLY DROP to release them on a point; any friendly unit or depot nearby draws from them.', cost: 80, prep: 5, vis: [], weapons: [], cap: 0, pallets: 8 },
       { id: 'hauler', name: 'Vehicle Hauler', desc: 'Capacity 60 for tanks and heavy vehicles. Needs the Heavy Runway.', cost: 200, prep: 8, rw: 3, mods: { speed: 0.9 }, vis: [], weapons: [], cap: 60 },
     ] },
   awacs: { name: 'AWACS', desc: 'Large airborne early-warning radar plane. Detects enemy aircraft far beyond visual range and shares the picture with all your air defenses. Drains energy. Needs the Long Runway.', from: 'airfield', rwy: 2, techLv: 1, cost: 2600, time: 40, hp: 650, speed: 15, armor: 'air', radius: 5.5, vision: 70, air: true, fw: true, turn: 0.3, accel: 3, alt: 30, rcs: 2.4, radar: { range: 200 }, upkeep: 10, weapons: [],
@@ -158,8 +160,14 @@ const BASE = {
     weapons: [W({ type: 'blast', range: 3.2, dmg: 420, reload: 0.2, kind: 'boom', splash: 11 })] },
   empcarrier: { name: 'EMP Carrier', desc: 'One-way drone. Its blast stuns vehicles, drones, aircraft and structures.', from: 'dronebay', techLv: 2, cost: 900, time: 22, hp: 130, speed: 28, armor: 'air', radius: 1.8, vision: 40, air: true, fw: true, turn: 1.1, accel: 10, alt: 30, drone: true, strike: true,
     weapons: [W({ type: 'emp', range: 3.2, dmg: 35, reload: 0.2, kind: 'boom', splash: 20, stun: 160 })] },
+  // ---- logistics ----
+  supplytruck: { name: 'Supply Truck', desc: 'Carries ammunition and supplies. Rearms nearby units, tops up depots and forward bases. Airliftable and airdrop-capable. Toggle AUTO for standing supply runs.', from: 'factory', cost: 450, time: 12, hp: 420, speed: 8.5, armor: 'light', radius: 1.9, vision: 40, supply: { cap: 900, radius: 16, rate: 34 }, weapons: [] },
+  tanker: { name: 'Aerial Tanker', rcs: 2.2, desc: 'Refuels friendly aircraft in flight. Park it in a loiter over your front and aircraft low on fuel will rendezvous with it. Needs the Long Runway.', from: 'airfield', rwy: 2, techLv: 1, cost: 2000, time: 38, hp: 650, speed: 17, armor: 'air', radius: 5.2, vision: 56, air: true, fw: true, turn: 0.3, accel: 3, alt: 26, tank: { cap: 2600, range: 46, rate: 38 }, weapons: [],
+    stdName: 'Fuel Tanker', stdDesc: 'Full fuel load, boom and drogue.', stdPrep: 6, stdVis: [], lo: [] },
+  decoy: { name: 'Radar Decoy', rcs: 1.5, desc: 'Cheap jet drone with a radar enhancer. Radar and SAM operators cannot tell it from a fighter; fly it ahead of a strike to soak up missiles.', from: 'dronebay', techLv: 1, cost: 160, time: 6, hp: 40, speed: 32, armor: 'air', radius: 1.8, vision: 30, air: true, fw: true, turn: 1.2, accel: 12, alt: 26, drone: true, decoy: true, weapons: [] },
 };
 
+const FUEL = { fighter: 200, vtol: 170, heli: 170, uav: 420, bomber: 360, strategic: 700, airlifter: 420, awacs: 650, spydrone: 1400, ewplane: 320, tanker: 520, decoy: 100 };
 const scaleW = (w, t, tier) => {
   const nw = Object.assign({}, w);
   nw.dmg = Math.round(w.dmg * t.dmg);
@@ -199,6 +207,14 @@ for (const [key, b] of Object.entries(BASE)) {
     d.hasSec = d.weapons.some((w) => w.sec); d.secRange = d.weapons.reduce((m, w) => (w.sec ? Math.max(m, w.range) : m), 0);
     if (b.aps) d.aps = { n: b.aps.n + tier - 1, range: b.aps.range };
     d.timeTicks = Math.round(d.time * TICK_RATE);
+    // ---- logistics: aircraft fuel (seconds of flight), ground ammunition supply, per-shot cost
+    if (d.air && FUEL[key]) d.fuel = Math.round(FUEL[key] * (1 + 0.1 * (tier - 1)));
+    if (!d.air && d.weapons.length) {
+      d.sup = Math.round((['sph', 'mlrs', 'tel'].includes(key) ? 90 : d.armor === 'inf' ? 80 : 140) * (1 + 0.15 * (tier - 1)));
+      d.weapons.forEach((w, i) => { w.sc = +Math.min(4, Math.max(0.08, b.weapons[i].dmg / 130)).toFixed(2); });
+    }
+    if (b.supply) d.supply = { cap: Math.round(b.supply.cap * (1 + 0.25 * (tier - 1))), radius: b.supply.radius, rate: Math.round(b.supply.rate * (1 + 0.2 * (tier - 1))) };
+    if (b.tank) d.tank = { cap: Math.round(b.tank.cap * (1 + 0.25 * (tier - 1))), range: b.tank.range, rate: b.tank.rate };
     // ---- higher tiers carry more equipment
     d.kit = [];
     const veh = !d.air && !d.drone && d.armor !== 'inf' && (d.armor === 'light' || d.armor === 'medium' || d.armor === 'heavy') && (b.weapons.length > 0 || b.ew);
@@ -249,6 +265,7 @@ export const BUILDINGS = {
   sam: { name: 'SAM Site', desc: 'Radar-guided defense against aircraft, drones and some cruise missiles. Has its own fire-control radar.', radar: { range: 95 }, cost: 350, energy: 200, time: 15, size: 2, hp: 600, armor: 'struct', vision: 60, requires: ['barracks'],
     weapons: [W({ type: 'aa', range: 75, dmg: 380, reload: 3.6, kind: 'missile', speed: 75, ground: false, air: true, radar: true })] },
   radar: { name: 'Ground Radar', desc: 'Long-range air-search radar. Detects aircraft far beyond visual range for your whole team; low flyers are harder to see. Drains energy.', cost: 500, energy: 300, time: 20, size: 2, hp: 600, armor: 'struct', vision: 44, requires: ['factory'], radar: { range: 170 }, upkeep: 5, weapons: [] },
+  supplydepot: { name: 'Supply Depot', desc: 'Forward supply base. Rearms ground units in range, tops up Supply Trucks and refuels helicopters. Build one beside an Engineer far from home; stock it by truck or air-dropped pallets.', cost: 400, energy: 100, time: 18, size: 2, hp: 700, armor: 'struct', vision: 44, requires: ['barracks'], depot: { cap: 3000, radius: 30, rate: 44, regen: 1.5 }, weapons: [] },
   ewtower: { name: 'EW Tower', desc: 'Static jammer: degrades enemy drones, aircraft radar and missile locks in a wide area. Drains energy.', cost: 450, energy: 350, time: 18, size: 2, hp: 500, armor: 'struct', vision: 40, requires: ['techlab'], ew: { radius: 62, power: 2 }, upkeep: 6, weapons: [] },
 };
 
@@ -277,7 +294,7 @@ export const AF_MODULES = {
 };
 export const AF_KEYS = Object.keys(AF_MODULES);
 
-export const BUILD_ORDER = ['derrick', 'powerplant', 'barracks', 'factory', 'dronebay', 'airfield', 'techlab', 'advtech', 'turret', 'sam', 'radar', 'ewtower'];
+export const BUILD_ORDER = ['derrick', 'powerplant', 'barracks', 'factory', 'dronebay', 'airfield', 'techlab', 'advtech', 'turret', 'sam', 'radar', 'ewtower', 'supplydepot'];
 // building tiers (derricks and power plants): output / storage multiplier by tier and the upgrade steps
 export const BTIER = { mult: [1, 1.9, 3.0], max: 3, steps: { derrick: [{ cost: 300, energy: 0, time: 16 }, { cost: 650, energy: 150, time: 24 }], powerplant: [{ cost: 300, energy: 0, time: 16 }, { cost: 650, energy: 0, time: 24 }] }, roman: ['', 'I', 'II', 'III'] };
 export const PRODUCER_KINDS = ['hq', 'barracks', 'factory', 'airfield', 'dronebay'];

@@ -78,6 +78,11 @@ input, select { font:inherit; color:inherit; user-select:text; -webkit-user-sele
 body:not(.touch) .touchonly { display:none; }
 
 /* ---------- menus ---------- */
+#screen-viewer { width:min(1000px,96vw); max-width:none; } .vwgrid { display:grid; grid-template-columns:1fr 300px; gap:14px; text-align:left; }
+#vwCanvas { width:100%; height:min(60vh,460px); display:block; border-radius:10px; background:#16202b; touch-action:none; cursor:grab; }
+.vwside .row { margin:6px 0; } .vwside select { flex:1; min-width:0; background:#101820; color:#e6eef7; border:1px solid #2c3d50; border-radius:8px; padding:7px; font-size:14px; }
+#vwInfo { max-height:34vh; overflow:auto; font-size:12.5px; } #vwInfo h3 { margin:6px 0 2px; font-size:16px; } .vwd { color:#9fb0c0; margin-bottom:6px; line-height:1.35; } .vwst { margin:4px 0; color:#c5d0da; line-height:1.4; } .vwkit { color:#e0b84a; }
+@media (max-width:760px) { .vwgrid { grid-template-columns:1fr; } }
 #menu, #pause, #endscreen { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:radial-gradient(ellipse at 30% 20%, #1c2a38 0%, #0b1015 70%); overflow:auto; padding:calc(14px + env(safe-area-inset-top)) 14px 14px; touch-action:pan-y; }
 #pause, #endscreen { background:rgba(5,8,11,.82); z-index:10; }
 .card { width:min(94vw,640px); background:rgba(17,23,30,.94); border:1px solid var(--line); border-radius:14px; padding:20px 22px; box-shadow:0 20px 60px #000a; margin:auto; }
@@ -119,6 +124,16 @@ body.touch .item { min-height:66px; } body.touch .btn { min-height:44px; }
 .lcard .cost { font-weight:700; font-size:12.5px; color:var(--acc2); } .lcard .cost em { font-style:normal; color:#5ec8ff; } .lcard .why { color:#ef5350; font-size:11.5px; font-weight:700; } .lcard .md { color:#8fd14f; font-size:11.5px; }
 #loadoutPanel .foot { display:flex; gap:14px; align-items:center; margin-top:8px; flex-wrap:wrap; font-size:12.5px; color:var(--dim); } #loadoutPanel .foot label { display:flex; gap:6px; align-items:center; } #loadoutPanel .foot .btn { margin-left:auto; min-height:32px; padding:4px 12px; }
 #afPanel { position:absolute; right:calc(86px + env(safe-area-inset-right)); top:calc(96px + env(safe-area-inset-top)); width:268px; background:rgba(10,14,18,.94); border:1px solid var(--line); border-radius:10px; padding:9px 11px; z-index:5; pointer-events:auto; font-size:12.5px; }
+
+#wxTint { position:absolute; inset:0; pointer-events:none; z-index:2; transition:background .8s; }
+#wxTint.rain { background-image:repeating-linear-gradient(105deg, rgba(190,210,235,.0) 0 7px, rgba(190,210,235,.16) 7px 8px); background-size:60px 60px; animation:rainfall .35s linear infinite; }
+#wxTint.storm { animation-duration:.22s; }
+@keyframes rainfall { from { background-position:0 0; } to { background-position:-12px 60px; } }
+#logiPanel { position:absolute; right:calc(86px + env(safe-area-inset-right)); top:calc(96px + env(safe-area-inset-top)); width:268px; max-height:60vh; overflow:auto; background:rgba(10,14,18,.94); border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:12.5px; z-index:20; }
+#logiPanel h3 { margin:0 0 4px; font-size:15px; display:flex; justify-content:space-between; } #logiPanel .st { color:var(--dim); margin-bottom:6px; line-height:1.35; } #logiPanel .x { background:none; border:0; color:var(--dim); font-size:18px; cursor:pointer; }
+#logiPanel .lsec { border-top:1px solid #202a35; padding:5px 0 2px; } #logiPanel .lrow { padding:2px 0 2px 8px; color:#c5d0da; cursor:pointer; } #logiPanel .lrow:hover { color:#fff; }
+#logiPanel .ok { color:#5bd18a; } #logiPanel .bad { color:#ff7a6b; } #logiPanel .mini { font-size:11px; padding:1px 7px; margin-left:4px; border-radius:6px; background:#1d2a38; color:#cfe3f7; border:1px solid #2c3d50; cursor:pointer; }
+.lbar { display:inline-block; width:70px; height:7px; background:#1b242e; border-radius:4px; vertical-align:middle; overflow:hidden; } .lbar i { display:block; height:100%; }
 #afPanel h3 { margin:0 0 4px; font-size:15px; } #afPanel .st { color:var(--dim); margin-bottom:6px; line-height:1.35; } #afPanel .st b { color:var(--acc2); }
 #afPanel .mod { border-top:1px solid #202a35; padding:6px 0; } #afPanel .mod .hd { display:flex; justify-content:space-between; align-items:center; font-weight:800; } .pips { letter-spacing:2px; color:var(--acc); }
 #afPanel .mod .btn { width:100%; margin-top:5px; min-height:34px; font-size:12px; padding:4px 6px; } #afPanel .mod .btn small { opacity:.75; font-weight:600; } #afPanel .mod .btn:disabled { opacity:.4; } #afPanel .mod .ds { color:var(--dim); font-size:11px; margin-top:2px; }
@@ -143,6 +158,7 @@ body.touch .item { min-height:66px; } body.touch .btn { min-height:44px; }
       <span id="netinfo"></span>
       <button class="iconbtn" id="btnMenu" title="Menu (Esc)">☰</button>
     </div>
+    <div id="wxTint"></div>
     <div id="toasts"></div>
     <div id="modeBanner" class="hidden"></div>
     <div id="sideBtns">
@@ -150,12 +166,14 @@ body.touch .item { min-height:66px; } body.touch .btn { min-height:44px; }
       <button id="btnArmy" title="Select all combat units (Ctrl/Cmd+A)">ARMY</button>
       <button id="btnIdle" title="Select idle engineers / jump to alert">ALERT</button>
       <button id="btnSensor" title="Sensor overlay: radars, jammers, contacts (O)">SENSORS</button>
+      <button id="btnLogi" title="Logistics: supplies, fuel, control points, weather (G)">LOGI</button>
       <button id="btnHome" title="Jump to Command Center (H)">HQ</button>
       <button id="btnDesel" title="Deselect (Esc)">CLEAR</button>
     </div>
     <div id="tip" class="hidden"></div>
     <div id="loadoutPanel" class="hidden"></div>
     <div id="afPanel" class="hidden"></div>
+    <div id="logiPanel" class="hidden"></div>
     <div id="placeBar" class="hidden"><button class="btn primary" id="btnPlaceOk">✔ Build</button><button class="btn danger" id="btnPlaceNo">✖ Cancel</button></div>
     <div id="bottom">
       <div id="minimapWrap"><canvas id="minimap" width="360" height="360"></canvas></div>
@@ -169,12 +187,30 @@ body.touch .item { min-height:66px; } body.touch .btn { min-height:44px; }
       <h1>SPEARHEAD</h1><div class="sub">Near-future combined-arms real-time strategy · 1–4 players</div>
       <div class="menu-col">
         <button class="btn primary" id="mSkirmish">Skirmish (Single Player)</button>
+        <button class="btn" id="mLoad">Load Saved Game</button><input type="file" id="loadFile" accept=".json,application/json" style="display:none">
         <button class="btn" id="mHost">Multiplayer – Host Game</button>
         <button class="btn" id="mJoin">Multiplayer – Join Game</button>
+        <button class="btn" id="mViewer">Model Viewer</button>
         <button class="btn" id="mHelp">How to Play &amp; Controls</button>
         <button class="btn" id="mSettings">Settings</button>
       </div>
       <div class="footer">Works on desktop browsers and iPad (touch + keyboard). Best in landscape.</div>
+    </div>
+
+    <div class="card hidden" id="screen-viewer">
+      <h2>Model Viewer</h2>
+      <div class="vwgrid">
+        <div><canvas id="vwCanvas"></canvas><div class="sub" style="margin:4px 0 0">Drag to orbit · scroll or pinch to zoom · rotors and turrets animate</div></div>
+        <div class="vwside">
+          <div class="row"><button class="btn" id="vwPrev">◀</button><select id="vwDef"></select><button class="btn" id="vwNext">▶</button></div>
+          <div class="row"><label>Tier</label><div class="seg" id="vwTier"></div></div>
+          <div class="row"><label>Team</label><div class="seg" id="vwTeam"></div></div>
+          <div class="row"><label>Detail</label><div class="seg" id="vwLod"></div></div>
+          <div class="row"><label>Auto-rotate</label><input type="checkbox" id="vwAuto" checked></div>
+          <div id="vwInfo"></div>
+        </div>
+      </div>
+      <div class="row" style="justify-content:center;margin-top:10px"><button class="btn" id="vwBack">Back</button></div>
     </div>
 
     <div class="card hidden" id="screen-setup">
@@ -245,6 +281,7 @@ body.touch .item { min-height:66px; } body.touch .btn { min-height:44px; }
       <h2>Paused</h2>
       <div class="menu-col">
         <button class="btn primary" id="pResume">Resume</button>
+        <button class="btn" id="pSave">Save Game (file)</button>
         <button class="btn" id="pSettings">Settings</button>
         <button class="btn" id="pHelp">Controls</button>
         <button class="btn danger" id="pResign">Resign</button>

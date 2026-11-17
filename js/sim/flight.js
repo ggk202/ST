@@ -111,6 +111,15 @@ export const FlightOps = {
         this.fwAttack(u, d, o.x, o.z, true, strike);
         break;
       }
+      case 'sdrop': this.fwSupplyDrop(u, d, o); break;
+      case 'escort': {
+        const ld = this.byId.get(o.tid);
+        if (!ld || ld.dead) { this.finishOrder(u); break; }
+        if (tg) { this.fwAttack(u, d, tg.x, tg.z, !tg.air, strike); break; }
+        const dd = (ld.x - u.x) * (ld.x - u.x) + (ld.z - u.z) * (ld.z - u.z);
+        if (dd > 90 * 90) this.fwNav(u, d, ld.x, ld.z, 10); else this.fwLoiter(u, d, ld.x, ld.z, 1);
+        break;
+      }
       case 'lift': this.fwLift(u, d, o); break;
       case 'drop': this.fwDrop(u, d, o); break;
       default: this.fwLoiter(u, d); break;

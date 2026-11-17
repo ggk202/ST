@@ -1,9 +1,11 @@
 // three.js renderer: terrain, entity views, effects, camera and screen-space picking.
+import { LogiGfx } from './logi-gfx.js';
 import { Craters } from './decals.js';
 import { buildProjModels, projKind } from './projectile-gfx.js';
 import * as THREE from 'three';
 import { CELL, DEFS, PLAYER_COLORS, UNITS } from './sim/defs.js';
 import { GROUND_PHASES } from './sim/airops.js';
+const VET_MAT = new THREE.MeshBasicMaterial({ color: 0xff5a3c });
 const PIP_GEO = new THREE.OctahedronGeometry(0.5), PIP_MAT = new THREE.MeshBasicMaterial({ color: 0xffd24a });
 const CANOPY_GEO = new THREE.SphereGeometry(3.4, 12, 6, 0, Math.PI * 2, 0, 1.25), CANOPY_MAT = new THREE.MeshStandardMaterial({ color: 0xd8d2b0, roughness: 0.9, side: THREE.DoubleSide });
 import { AirfieldGfx } from './airfield-gfx.js';
@@ -41,7 +43,7 @@ export class Renderer {
     this.crews = new CrewPool(this.scene, sim);
     this.frame = 0; this.time = 0;
     this.ghost = null; this.selection = new Set();
-    this.scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x4d4a3a, this.gfx ? 0.75 : 0.95));
+    this.hemi = new THREE.HemisphereLight(0xcfe0ff, 0x4d4a3a, this.gfx ? 0.75 : 0.95); this.scene.add(this.hemi);
     const sun = this.sun = new THREE.DirectionalLight(0xfff0d0, this.gfx ? 2.2 : 1.5);
     sun.castShadow = !!opts.shadows; sun.shadow.mapSize.set(opts.touch ? 1024 : 2048, opts.touch ? 1024 : 2048);
     sun.shadow.bias = -0.0006; sun.shadow.camera.near = 10; sun.shadow.camera.far = 600;
@@ -412,6 +414,13 @@ export class Renderer {
     for (let i = 0; i < e.tier - 1; i++) { const m = new THREE.Mesh(PIP_GEO, PIP_MAT); m.position.set((i - (e.tier - 2) / 2) * 1.1, h, 0); g.add(m); }
     v.obj.add(g); v.tierG = g;
   }
+  // veterancy chevrons above promoted units
+  vetMarks(v, e, d) {
+    v.vetN = e.vet || 0; if (v.vetG) v.obj.remove(v.vetG);
+    const g = new THREE.Group(), h = (d.air ? 3.2 : e.radius * 1.5 + 3.2);
+    for (let i = 0; i < v.vetN; i++) { const m = new THREE.Mesh(PIP_GEO, VET_MAT); m.scale.set(0.8, 1.1, 0.8); m.position.set((i - (v.vetN - 1) / 2) * 0.9, h, 0); g.add(m); }
+    v.obj.add(g); v.vetG = g;
+  }
   removeView(id, v) {
     this.scene.remove(v.obj); if (v.mat) v.mat.dispose(); if (v.afg) v.afg.dispose();
     if (v.ring) { this.scene.remove(v.ring); this.scene.remove(v.ring2); v.ring.geometry.dispose(); v.ring.material.dispose(); v.ring2.material.dispose(); }
@@ -434,7 +443,10 @@ export class Renderer {
       const o = v.obj;
       if (d.air) {
         const hh = e.h === undefined ? 1 : e.ph + (e.h - e.ph) * alpha, g0 = Math.max(0, y);
-        y = g0 + (v.gOff || 0) * (1 - hh) + (d.alt + Math.sin(this.time * 1.6 + e.id) * 0.5) * hh;
+        // airborne aircraft hold altitude over a smoothed terrain profile (following every bump of the ground made them bob up and down)
+        if (v.gs === undefined) v.gs = g0; else v.gs += (g0 - v.gs) * Math.min(1, dt * (d.fw ? 0.7 : 1.4));
+        const gAir = Math.max(v.gs, g0 - d.alt * 0.4), bob = d.fw ? 0 : Math.sin(this.time * 1.6 + e.id) * 0.35;
+        y = (gAir * hh + g0 * (1 - hh)) + (v.gOff || 0) * (1 - hh) + (d.alt + bob) * hh;
       }
       if (e.chute > 0) {   // paradropped: descend under a canopy
         y += Math.min(70, e.chute * 0.45);
@@ -442,6 +454,7 @@ export class Renderer {
         v.canopy.visible = true;
       } else if (v.canopy && v.canopy.visible) v.canopy.visible = false;
       o.position.set(x, y, z);
+      if ((e.vet || 0) !== (v.vetN || 0)) this.vetMarks(v, e, d);
       // view-frustum + distance driven level of detail
       this._sph.center.set(x, y + 1, z); this._sph.radius = e.kind === 'building' ? e.size * CELL * 0.9 + 8 : (d.air ? e.radius * 4.5 + 6 : Math.max(5, e.radius * 2.6));   // wingspan is much wider than the hull radius
       const inView = v.inView = this.frustum.intersectsSphere(this._sph);
@@ -590,6 +603,7 @@ export class Renderer {
     this.camera.updateMatrixWorld(); this._pv.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse.copy(this.camera.matrixWorld).invert()); this.frustum.setFromProjectionMatrix(this._pv);
     if (!this._ground) { const map = this.sim.map; this._ground = (x, z) => map.hAt(x, z); }
     this.syncEntities(alpha, dt);
+    if (!this.logiGfx) this.logiGfx = new LogiGfx(this); this.logiGfx.update(dt);
     this.updateSelection();
     if (this.pingT > 0) { this.pingT -= dt; const t = Math.max(0, this.pingT / 0.6), s = 1 + (1 - t) * 4; this.pingMesh.scale.set(s, 1, s); this.pingMesh.material.opacity = t; if (this.pingT <= 0) this.pingMesh.visible = false; }
     this.fogTimer += dt; if (this.fogTimer > 0.25) { this.fogTimer = 0; this.updateFog(); }

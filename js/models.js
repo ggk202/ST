@@ -9,8 +9,9 @@ import { AIR, PROPS_MODELS } from './model-air.js';
 import { DRONES } from './model-drones.js';
 import { BUILDINGS } from './model-buildings.js';
 import { tierKit } from './model-tier.js';
+import { LOGI } from './model-logi.js';
 
-const MODELS = { ...GROUND, ...AIR, ...DRONES, ...BUILDINGS, ...PROPS_MODELS };
+const MODELS = { ...GROUND, ...AIR, ...DRONES, ...BUILDINGS, ...PROPS_MODELS, ...LOGI };
 
 const cache = new Map();
 const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0.12, flatShading: true });

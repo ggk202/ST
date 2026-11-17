@@ -69,6 +69,8 @@ export class Controls {
   orderAttack(e) { const u = this.selUnits(); if (!u.length) return; this.cmd({ t: 'attack', ids: this.ids(u), tid: e.id }); this.r.ping(e.x, e.z, 0xff4040); sfx('ui', 0.6); }
   orderRally(x, z) { const b = this.selBlds(); if (!b.length) return; this.cmd({ t: 'rally', ids: this.ids(b), x, z }); this.r.ping(x, z, 0x6cb8ff); }
   orderBoard(tr) { const u = this.selUnits().filter((e) => !e.air && !e.cargo); if (!u.length) return false; this.cmd({ t: 'board', ids: this.ids(u), tid: tr.id }); this.r.ping(tr.x, tr.z, 0x6cb8ff); sfx('ui', 0.6); return true; }
+  orderEscort(tg) { const u = this.selUnits().filter((e) => e.id !== tg.id); if (!u.length || tg.kind !== 'unit') return false; this.cmd({ t: 'escort', ids: this.ids(u), tid: tg.id }); this.r.ping(tg.x, tg.z, 0x6cb8ff); return true; }
+  orderSupplyDrop(x, z) { const u = this.selUnits().filter((e) => e.pal > 0 && e.ap === 'fly'); if (!u.length) { this.g.toast('No aircraft with supply pallets selected', 'warn'); return; } this.cmd({ t: 'supplydrop', ids: this.ids(u), x, z }); this.r.ping(x, z, 0xffd24a); }
   orderLift(af) { const u = this.selUnits().filter((e) => e.cargo); if (!u.length) return false; this.cmd({ t: 'lift', ids: this.ids(u), bid: af.id }); this.r.ping(af.x, af.z, 0x6cb8ff); sfx('ui', 0.6); return true; }
   orderDrop(x, z) { const u = this.selUnits().filter((e) => e.cargo); if (!u.length) return; this.cmd({ t: 'drop', ids: this.ids(u), x, z }); this.r.ping(x, z, 0xffd24a); sfx('ui', 0.6); }
   unload() { const u = this.selUnits().filter((e) => e.cargo); if (u.length) this.cmd({ t: 'unload', ids: this.ids(u) }); }
@@ -97,6 +99,8 @@ export class Controls {
     else if (m === 'rally') { if (gp) this.orderRally(gp.x, gp.z); }
     else if (m === 'lift') { if (hit && hit.owner === this.local && hit.afd) this.orderLift(hit); else this.g.toast('Click one of your airfields', 'warn'); }
     else if (m === 'drop') { if (gp) this.orderDrop(gp.x, gp.z); }
+    else if (m === 'escort') { if (hit && hit.owner === this.local && hit.kind === 'unit') this.orderEscort(hit); else this.g.toast('Click one of your units to escort', 'warn'); }
+    else if (m === 'sdrop') { if (gp) this.orderSupplyDrop(gp.x, gp.z); }
     if (!shift) this.setMode({ t: 'normal' });
   }
 
@@ -348,6 +352,8 @@ export class Controls {
     }
     if (this.selBlds().length && !hasUnits && code === 'KeyF') { stop(); this.setMode({ t: 'rally' }); return; }
     if (!mod && code === 'KeyO') { stop(); this.g.sensor.toggle(); return; }
+    if (!mod && code === 'KeyK' && this.selUnits().length) { stop(); this.setMode({ t: 'escort' }); return; }
+    if (!mod && code === 'KeyG') { stop(); this.g.logi.toggle(); return; }
     if (!mod) {
       if (code === 'KeyB') this.g.hud.setTab('str'); else if (code === 'KeyI') this.g.hud.setTab('inf'); else if (code === 'KeyV') this.g.hud.setTab('veh'); else if (code === 'KeyY') this.g.hud.setTab('air'); else if (code === 'KeyD' && !e.ctrlKey && !e.metaKey) this.g.hud.setTab('drn'); else if (code === 'KeyT' && this.g.hud.tab !== 'str') this.g.hud.setTier(this.g.hud.tier % 3 + 1);
     }

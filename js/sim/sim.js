@@ -7,6 +7,7 @@ import { RNG, clamp } from './util.js';
 import { generateMap } from './map.js';
 import { Pathfinder } from './path.js';
 import { AIController } from './ai.js';
+import { LogiOps } from './logistics.js';
 
 const START_CREDITS = 2500;
 const START_ENERGY = 1200;
@@ -54,6 +55,7 @@ export class Sim {
     }));
     this.ais = {};
     for (const p of this.players) if (p.ai) this.ais[p.id] = new AIController(p.id, p.ai);
+    this.logiInit();
     for (const p of this.players) this.setupPlayer(p);
     this.updateVision();
   }
@@ -82,6 +84,11 @@ export class Sim {
     };
     if (d.aps) { e.apsN = d.aps.n; e.apsCd = 0; }
     if (d.laser) e.lcd = 0;
+    if (d.fuel) e.fuel = d.fuel;
+    if (d.tank) e.fstock = d.tank.cap;
+    if (d.sup) e.sup = d.sup;
+    if (d.supply) { e.stock = d.supply.cap; e.auto = false; }
+    if (d.depot) e.stock = d.depot.cap * 0.4;
     if (d.kind === 'unit') { e.order = { t: 'idle' }; e.path = null; e.pi = 0; e.stuck = 0; e.repath = 0; e.pending = false; e.pt = null; e.moving = false; }
     else { e.progress = 1; e.sm = 0; e.se = 0; e.tier = 1; e.tu = null; e.queue = []; e.rally = null; e.size = d.size; e.cx0 = 0; e.cz0 = 0; e.node = -1; }
     this.ents.push(e); this.byId.set(e.id, e);
@@ -214,6 +221,10 @@ export class Sim {
       case 'rtb': for (const u of this.own(c.ids, c.p)) if (u.kind === 'unit' && u.ap === 'fly' && UNITS[u.def].loadouts) this.startRtb(u, false); break;
       case 'bupg': for (const b of this.own(c.ids, c.p)) if (b.kind === 'building') this.bldStartUp(b); break;
       case 'cancelbupg': for (const b of this.own(c.ids, c.p)) if (b.kind === 'building' && b.tu) { p.credits += b.tu.sm; p.energy += b.tu.se; b.tu = null; } break;
+      case 'escort': { const ld = this.byId.get(c.tid); if (!ld || ld.dead || ld.team !== p.team) return; for (const u of this.own(c.ids, c.p)) if (u.kind === 'unit' && u.id !== ld.id) { u.order = { t: 'escort', tid: ld.id }; u.path = null; u.pt = null; u.pending = false; u.target = 0; } break; }
+      case 'emcon': for (const e of this.own(c.ids, c.p)) { const d = e.ed || DEFS[e.def]; if (d.radar || d.ew) e.emcon = !!c.v; } break;
+      case 'lauto': for (const u of this.own(c.ids, c.p)) if (u.kind === 'unit' && DEFS[u.def].supply) u.auto = !!c.v; break;
+      case 'supplydrop': for (const u of this.own(c.ids, c.p)) if (u.kind === 'unit' && u.ap === 'fly' && u.pal > 0) { u.order = { t: 'sdrop', x: clamp(c.x, 10, this.map.size - 10), z: clamp(c.z, 10, this.map.size - 10) }; u.lcx = undefined; } break;
       case 'resign': this.eliminate(p); break;
       case 'takeover': if (!p.ai) { p.ai = c.diff || 'normal'; this.ais[p.id] = new AIController(p.id, p.ai); } break;
       default: break;
@@ -294,7 +305,7 @@ export class Sim {
     this.buildGrid();
     this.economyPrepass();
     this.buildEW();
-    if (this.tick % 4 === 1) this.updateRadar();
+    if (this.tick % 4 === 1) { this.updateRadar(); this.updateEsm(); }
     for (let i = 0; i < PATHS_PER_TICK && this.pathQ.length; i++) {
       const u = this.byId.get(this.pathQ.shift());
       if (!u || u.dead || !u.pending) continue;
@@ -309,6 +320,7 @@ export class Sim {
       if (e.kind === 'building') this.updateBuilding(e); else this.updateUnit(e);
     }
     this.updateProjectiles();
+    this.logiTick();
     this.separate();
     this.economyApply();
     // cleanup
@@ -376,7 +388,7 @@ export class Sim {
       const d = e.ed || DEFS[e.def]; if (!d.ew) continue;
       if (e.kind === 'building' && e.progress < 1) continue;
       if (e.ap && GROUND_PHASES.has(e.ap)) continue;
-      if (e.stun > 0 || !this.players[e.owner].ewOn) continue;
+      if (e.stun > 0 || e.emcon || !this.players[e.owner].ewOn) continue;
       J.push({ id: e.id, x: e.x, z: e.z, r: d.ew.radius, r2: d.ew.radius * d.ew.radius, team: e.team, power: d.ew.power || 1, air: !!e.air });
     }
     for (const e of this.ents) {
@@ -403,7 +415,7 @@ export class Sim {
       const d = e.ed || DEFS[e.def]; if (!d.radar) continue;
       if (e.kind === 'building' && e.progress < 1) continue;
       if (e.ap && GROUND_PHASES.has(e.ap)) continue;
-      if (e.stun > 0 || !this.players[e.owner].ewOn) continue;
+      if (e.stun > 0 || e.emcon || !this.players[e.owner].ewOn) continue;
       const jam = e.jam || 0, r = d.radar.range * Math.max(0.25, 1 - 0.15 * jam);
       S.push({ id: e.id, x: e.x, z: e.z, team: e.team, r, r0: d.radar.range, arc: d.radar.arc === undefined ? -1 : d.radar.arc, dx: e.dirx || 0, dz: e.dirz || 0, air: !!e.air, jam, kind: e.kind });
     }
@@ -424,7 +436,7 @@ export class Sim {
   }
   // true if the target is held by radar (not necessarily visible)
   tracked(team, e) { return !!e.air && this.contact[team].has(e.id); }
-  wCan(w, tg) { if (tg.air ? !w.air : !w.ground) return false; if (w.drone && !DEFS[tg.def].drone) return false; return true; }
+  wCan(w, tg) { if (tg.air ? !w.air : !w.ground) return false; if (w.arm && !this.emits(tg)) return false; if (w.drone && !DEFS[tg.def].drone) return false; return true; }
   wRange(e, w) { if (e.jam && (w.radar || (e.air && w.kind === 'missile'))) return w.range * (1 - 0.14 * e.jam); return w.range; }
   aiHandicap(p) { return p.ai === 'easy' ? 0.8 : p.ai === 'hard' ? 1.25 : 1; }
 
@@ -468,7 +480,9 @@ export class Sim {
       return;
     }
     const tm = BTIER.mult[(b.tier || 1) - 1];
-    p.incM += d.income * tm; p.incE += d.incomeE * tm; p.capM += (d.capM || 0) * tm; p.capE += (d.capE || 0) * tm;
+    let ym = 1;
+    if (d.oil && b.node >= 0) { const nd = this.map.oil[b.node]; if (nd.res === undefined) nd.res = 30000; nd.res -= d.income * tm * DT; ym = nd.res > 0 ? 1 : 0.25; }   // fields run dry; a dribble remains
+    p.incM += d.income * tm * ym; p.incE += d.incomeE * tm; p.capM += (d.capM || 0) * tm; p.capE += (d.capE || 0) * tm;
     if (b.tu) this.bldUpTick(b, p);
     if (d.upkeep && !b.stun) p.upkeep += d.upkeep;
     if (b.queue.length && !b.stun) {
@@ -519,6 +533,7 @@ export class Sim {
     u.px = u.x; u.pz = u.z;
     if (u.boarded) return;
     if (u.chute > 0) { u.chute--; u.moving = false; u.vx = 0; u.vz = 0; return; }
+    if (u.h !== undefined) u.ph = u.h;   // previous-tick altitude fraction: renderer interpolates h between ticks (a stale value made diving aircraft saw-tooth up and down)
     if (u.stun > 0) { u.stun--; u.moving = false; u.vx = 0; u.vz = 0; return; }
     const cdr = (d.drone && u.jam) ? Math.max(0.3, 1 - 0.2 * u.jam) : 1;
     for (let k = 0; k < u.cd.length; k++) if (u.cd[k] > 0) u.cd[k] = Math.max(0, u.cd[k] - cdr);
@@ -526,8 +541,13 @@ export class Sim {
     if (u.lcd > 0) u.lcd--;
     if (u.apsCd > 0) u.apsCd--; else if (d.aps && u.apsN < d.aps.n && ((this.tick + u.id) % 900) === 0) u.apsN++;
     if (u.ap !== undefined && u.ap !== 'fly') { this.sortie(u, d); return; }
+    if (u.fuel !== undefined && (u.ap === 'fly' || (u.ap === undefined && d.decoy)) && this.fuelLogic(u, d)) return;
     if (u.ap === 'fly' && u.am && ((this.tick + u.id) % 10) === 0 && this.afBingo(u)) { if (this.startRtb(u, true)) { this.sortie(u, d); return; } }
     const o = u.order;
+    if (o.t === 'idle' && ((this.tick + u.id) % 20) === 0 && !u.air) {
+      if (d.sup && u.sup < d.sup * 0.3 && !u.target) this.autoResupply(u, d);
+      else if (d.supply && u.auto) this.truckAuto(u, d);
+    }
     if (d.upkeep) this.players[u.owner].upkeep += d.upkeep;
     if (d.heal && ((this.tick + u.id) & 3) === 0) this.healAround(u, d);
     if (d.escort && o.t === 'idle' && ((this.tick + u.id) % 10) === 0) this.escort(u, d);
@@ -560,6 +580,15 @@ export class Sim {
     switch (o.t) {
       case 'move': if (this.goTo(u, d, o.x, o.z, 2.2)) this.finishOrder(u); else moved = true; break;
       case 'board': moved = this.boardTick(u, d); break;
+      case 'escort': {
+        const ld = this.byId.get(o.tid);
+        if (!ld || ld.dead) { this.finishOrder(u); break; }
+        const lx = ld.x - u.x, lz = ld.z - u.z, ll = Math.sqrt(lx * lx + lz * lz);
+        if (tg && this.inRange(u, d, tg)) this.faceTo(u, tg.x, tg.z);
+        else if (tg && (tg.x - ld.x) * (tg.x - ld.x) + (tg.z - ld.z) * (tg.z - ld.z) < 70 * 70) { this.chaseTarget(u, d, tg); moved = true; }
+        else if (ll > 16) { this.goTo(u, d, ld.x - lx / ll * 8, ld.z - lz / ll * 8, 5); moved = true; }
+        break;
+      }
       case 'attackmove':
         if (tg) { if (this.inRange(u, d, tg)) { this.faceTo(u, tg.x, tg.z); } else { this.chaseTarget(u, d, tg); moved = true; } }
         else if (this.goTo(u, d, o.x, o.z, 2.5)) this.finishOrder(u); else moved = true;
@@ -660,7 +689,7 @@ export class Sim {
 
   // ---------- targeting & weapons ----------
   seen(team, e) { const c = this.map.cellOf(e.x, e.z); return c >= 0 && this.vis[team][c] === 1; }
-  canSee(team, e) { return this.seen(team, e) || (e.air && this.contact[team].has(e.id)); }
+  canSee(team, e) { return this.seen(team, e) || (e.air && this.contact[team].has(e.id)) || this.esm[team].has(e.id); }
   acquire(u, d, radius, filt) {
     const vis = this.vis[u.team], map = this.map;
     let best = null, bs = 1e18;
@@ -672,7 +701,8 @@ export class Sim {
       if (dd > radius + e.radius * 0.5) return;
       const c = map.cellOf(e.x, e.z);
       const sight = c >= 0 && vis[c] === 1;
-      if (!sight && !(e.air && this.contact[u.team].has(e.id))) return;   // radar tracks only support radar/missile weapons
+      const ctc = e.air && this.contact[u.team].has(e.id);
+      if (!sight && !ctc && !this.esm[u.team].has(e.id)) return;   // radar tracks / ESM bearings only support radar/missile weapons
       let usable = false;
       for (let k = 0; k < d.weapons.length; k++) { const w = d.weapons[k]; if ((w.sec && !filt) || (!w.sec && filt)) continue; if (!sight && !(w.radar || w.kind === 'missile')) continue; if (this.wCan(w, e) && dd >= w.min && !(u.am && u.am[k] === 0)) { usable = true; break; } }
       if (!usable) return;
@@ -706,6 +736,7 @@ export class Sim {
     for (let k = 0; k < d.weapons.length; k++) {
       const w = d.weapons[k];
       if (e.cd[k] > 0 || (e.am && e.am[k] === 0)) continue;
+      if (e.sup !== undefined && e.sup < w.sc) continue;   // out of ammunition
       // secondary guns (coaxial / top machine guns) pick their own infantry targets while the main gun works on its target
       const T = w.sec ? this.secTarget(e, d, w) : tg, gnd = ground && !w.sec;
       if (!T && !gnd) continue;
@@ -724,6 +755,7 @@ export class Sim {
       if (!w.sec && d.hasSec && !gnd && T.armor === 'inf' && !T.air && w.type === 'ap' && dd <= d.secRange + 2) continue;   // do not waste main-gun rounds on infantry the machine gun can reach
       if (d.fw && w.kind !== 'boom' && dd > 3) { const cs = (e.dirx * dx + e.dirz * dz) / dd; if (cs < (w.kind === 'hit' ? 0.9 : w.kind === 'missile' ? 0.35 : 0.6)) continue; }
       e.cd[k] = w.reloadTicks;
+      if (e.sup !== undefined) e.sup -= w.sc;
       if (e.am && e.am[k] > 0) e.am[k]--;
       e.flash = 3;
       const mx = e.x + (e.dirx || 0) * e.radius * 0.8, mz = e.z + (e.dirz || 0) * e.radius * 0.8;
@@ -907,7 +939,9 @@ export class Sim {
   }
   damage(t, amt, src) {
     if (t.dead || amt <= 0 || (t.kind === 'unit' && DEFS[t.def].untouchable)) return;
+    if (src && src.vet) amt *= 1 + 0.1 * src.vet;
     t.hp -= amt;
+    if (src && src.kind === 'unit') this.gainXp(src, amt, t.hp <= 0);
     const op = this.players[t.owner];
     if (this.tick - op.lastAlert > 80 && t.hp > 0) { op.lastAlert = this.tick; this.ev({ e: 'alert', owner: t.owner, x: t.x, z: t.z, kind: t.kind }); }
     if (t.hp <= 0) { if (src) this.players[src.owner].stats.killed++; this.kill(t); return; }
@@ -923,7 +957,7 @@ export class Sim {
     if (e.dead) return;
     e.dead = true; e.hp = 0;
     const p = this.players[e.owner];
-    if (e.kind === 'unit') { p.units--; if (e.ap !== undefined) this.afForget(e); if (e.cargo && e.cargo.length) this.loseCargo(e); }
+    if (e.kind === 'unit') { if (!silent && !e.boarded) this.addWreck(e); p.units--; if (e.ap !== undefined) this.afForget(e); if (e.cargo && e.cargo.length) this.loseCargo(e); }
     else {
       if (e.afd) {
         this.afRelease(e); this.afCancelUpgrade(e);
@@ -976,7 +1010,7 @@ export class Sim {
       if (e.dead) continue;
       const d = e.ed || DEFS[e.def];
       if (e.kind === 'building' && e.progress <= 0) continue;
-      const vm = d.spy ? Math.max(0, 1 - 0.45 * (e.jam || 0)) : (e.jam && (e.air || d.drone)) ? Math.max(0.35, 1 - 0.2 * e.jam) : 1;
+      const vm = (d.spy ? Math.max(0, 1 - 0.45 * (e.jam || 0)) : (e.jam && (e.air || d.drone)) ? Math.max(0.35, 1 - 0.2 * e.jam) : 1) * (e.kind === 'unit' ? this.visionMul(e, d) : 1);
       if (vm <= 0.05) continue;
       const r = d.vision * vm / CELL, cx = Math.floor(e.x / CELL), cz = Math.floor(e.z / CELL), ri = Math.ceil(r);
       const v = this.vis[e.team], ex = this.expl[e.team];
@@ -988,6 +1022,10 @@ export class Sim {
           if (dx * dx + dz * dz <= r2) { v[z * n + x] = 1; ex[z * n + x] = 1; }
         }
       }
+    }
+    for (const q of this.points) if (q.team >= 0) {   // owned control points give vision
+      const r = 52 / CELL, cx = Math.floor(q.x / CELL), cz = Math.floor(q.z / CELL), ri = Math.ceil(r), v = this.vis[q.team], ex = this.expl[q.team];
+      for (let z = Math.max(0, cz - ri); z <= Math.min(n - 1, cz + ri); z++) for (let x = Math.max(0, cx - ri); x <= Math.min(n - 1, cx + ri); x++) if ((x - cx) * (x - cx) + (z - cz) * (z - cz) <= r * r) { v[z * n + x] = 1; ex[z * n + x] = 1; }
     }
   }
 
@@ -1016,9 +1054,11 @@ export class Sim {
     mix(this.tick); mix(this.rng.s);
     for (const p of this.players) { mix(Math.round(p.credits * 10)); mix(Math.round(p.energy * 10)); mix(p.units); }
     for (const e of this.ents) { mix(e.id); mix(Math.round(e.x * 100)); mix(Math.round(e.z * 100)); mix(Math.round(e.hp)); if (e.h !== undefined) mix(Math.round(e.h * 100)); if (e.spd !== undefined) mix(Math.round(e.spd * 100)); if (e.apsN !== undefined) mix(e.apsN); if (e.tier > 1) mix(e.tier); }
-    mix(this.projs.length);
+    mix(this.projs.length); mix(this.wx.kind); mix(this.crates.length); mix(this.wrecks.length);
+    for (const q of this.points) { mix(q.team + 2); mix(Math.round(q.stock)); mix(Math.round(q.p)); }
+    for (const e of this.ents) { if (e.fuel !== undefined) mix(Math.round(e.fuel * 10)); if (e.sup !== undefined) mix(Math.round(e.sup * 10)); if (e.stock !== undefined) mix(Math.round(e.stock)); if (e.vet) mix(e.vet); }
     return h >>> 0;
   }
 }
 
-Object.assign(Sim.prototype, AirOps, FlightOps, CargoOps);
+Object.assign(Sim.prototype, AirOps, FlightOps, CargoOps, LogiOps);

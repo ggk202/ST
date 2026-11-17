@@ -159,3 +159,22 @@ Tests: `node tests/cargo-test.mjs` covers the transport, boarding, airlift, aird
 - **APS** now hard-kills guided anti-tank missiles, unguided rockets and attacking drones (not kinetic tank rounds, bombs, artillery or cruise missiles). **SAM sites and AA vehicles can intercept some cruise missiles.**
 - **Tiered derricks and power plants**: select one and press *Upgrade* for Mk II (×1.9 output and storage) and Mk III (×3).
 - **Huge map** size (560 × 560) in the lobby. Unexplored terrain is now much brighter.
+
+## Logistics and the long game
+
+- **Ammunition**: every armed ground unit carries a supply meter (shots cost more the harder they hit); a dry unit cannot fire. Units resupply near the HQ, a **Supply Depot**, an owned control point, a **Supply Truck** or a landed pallet. Idle units that run dry walk to the nearest source by themselves; the selection line shows ammo %.
+- **Supply Depot** (engineer-buildable anywhere): 3000 stock, trickle regen, rearms units, tops up trucks (stock flows toward the emptier store) and refuels helicopters hovering over it. **Supply Truck** (War Factory, airliftable / airdroppable): toggle **Auto supply** for a standing run between the HQ, depots and units that ran dry. The LOGI panel (G) can switch all trucks at once.
+- **Fuel**: aircraft burn fuel in flight (seconds of endurance per type). With a field in range they head home before the reserve is gone, otherwise they crash. An **Aerial Tanker** (Long Runway) loiters over the front; thirsty aircraft rendezvous with it and refuel in the air.
+- **Supply pallets**: load the Heavy Transport with the *Supply Pallets* loadout and use **Supply drop…** on a point. Pallets are neutral: whoever's units reach them first draw from them.
+- **SEAD / EMCON**: the Fighter's *SEAD* loadout fires anti-radiation missiles at any radar, SAM site or jammer that is transmitting. **Emitters: SILENT** (EMCON) hides a unit or building from them (and switches its radar and jamming off). The **Radar Decoy** drone shows up as a fighter on radar and soaks up SAM fire.
+- **Escort** (K): any unit can be ordered to follow and protect a friendly one; fighters orbit their charge. Radar-tracked transports, tankers and AWACS raise a warning.
+- **Veterancy** (damage dealt earns Veteran / Elite / Legend: +10% damage and HP each), **wrecks** (engineers salvage them for credits), **oil fields run dry** (30,000 metal each, then a 25% dribble).
+- **Control points**: capture with ground units (12 s, uncontested). Owned points give vision and supply; hold the majority for 8 minutes to win. (Skip with `points: false` in the setup config.)
+- **Weather and night**: clear / overcast / fog / rain / storm and a 20-minute day. They cut vision (Mk II sights halve and Mk III thermals ignore the night penalty; storms blind aircraft). The sky, fog and a rain overlay follow.
+- **Save / Load**: *Save Game (file)* in the pause menu (single player) and *Load Saved Game* on the main menu. A restored game continues bit-identically (`tests/save-test.mjs`).
+- **Model Viewer** (main menu): every unit and structure, tier, team colour, detail level, stats and equipment list.
+- Flicker fix: the renderer interpolates altitude between ticks; the previous-tick altitude was never refreshed for aircraft on a sortie, so diving or climbing aircraft saw-toothed up and down every tick. Altitude over terrain is also smoothed now.
+
+tests/logistics-test.mjs logistics / fuel / tankers / pallets / SEAD / escort / veterancy / salvage / points / weather
+tests/save-test.mjs save / load round trip
+

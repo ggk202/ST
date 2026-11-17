@@ -2,7 +2,7 @@
 import { UNITS, BUILDINGS, BUILD_ORDER, BASE_ORDER, BASE_UNITS, DEFS, UNIT_CAP, PLAYER_COLORS, unitId, ROMAN, AF, AF_MODULES, AF_KEYS, TICK_RATE, BTIER } from './sim/defs.js';
 import { sfx } from './fx.js';
 
-const ABBR = { rifleman: 'RIF', at: 'AT', manpads: 'MAN', engineer: 'ENG', scout: 'SCT', ifv: 'IFV', mbt: 'MBT', aa: 'FLK', sph: 'SPH', heavy: 'HVY', mlrs: 'MRL', tel: 'BMS', uav: 'UAV', heli: 'HEL', vtol: 'VTL', ewtruck: 'EWT', ewplane: 'EWA', robot: 'BOT', ewdog: 'EWD', sapper: 'CRW', repair: 'RPR', walker: 'WLK', fpv: 'FPV', fighter: 'FTR', bomber: 'BMB', strategic: 'SBM', airlifter: 'AIR', awacs: 'AWX', spydrone: 'SPY', radar: 'RAD', wingman: 'WNG', carrier: 'DSD', empcarrier: 'EMP', powerplant: 'PWR', dronebay: 'DRN', advtech: 'LB2', ewtower: 'EWS', derrick: 'OIL', barracks: 'BAR', factory: 'FAC', airfield: 'AIR', techlab: 'LAB', turret: 'GUN', sam: 'SAM', hq: 'HQ' };
+const ABBR = { rifleman: 'RIF', at: 'AT', manpads: 'MAN', engineer: 'ENG', scout: 'SCT', ifv: 'IFV', mbt: 'MBT', aa: 'FLK', sph: 'SPH', heavy: 'HVY', mlrs: 'MRL', tel: 'BMS', uav: 'UAV', heli: 'HEL', vtol: 'VTL', ewtruck: 'EWT', ewplane: 'EWA', robot: 'BOT', ewdog: 'EWD', sapper: 'CRW', repair: 'RPR', walker: 'WLK', fpv: 'FPV', fighter: 'FTR', bomber: 'BMB', strategic: 'SBM', airlifter: 'AIR', awacs: 'AWX', spydrone: 'SPY', radar: 'RAD', wingman: 'WNG', carrier: 'DSD', empcarrier: 'EMP', powerplant: 'PWR', dronebay: 'DRN', advtech: 'LB2', ewtower: 'EWS', derrick: 'OIL', barracks: 'BAR', factory: 'FAC', airfield: 'AIR', techlab: 'LAB', turret: 'GUN', sam: 'SAM', hq: 'HQ', supplytruck: 'SUP', tanker: 'TKR', decoy: 'DCY', supplydepot: 'DEP' };
 const TABS = [
   { id: 'str', label: 'Build', key: 'B', cls: 'str' },
   { id: 'inf', label: 'Infantry', key: 'I', cls: 'inf', from: ['barracks', 'hq'] },
@@ -39,6 +39,7 @@ export class HUD {
     this.on('btnArmy', () => this.c.selectArmy());
     this.on('btnIdle', () => { if (!this.c.selectIdleEngineers()) this.g.jumpAlert(); });
     this.on('btnSensor', () => this.g.sensor.toggle());
+    this.on('btnLogi', () => this.g.logi.toggle());
     this.on('btnHome', () => this.g.jumpHome());
     this.on('btnDesel', () => { this.c.cancelMode(); this.g.setSel([]); });
     this.on('btnPlaceOk', () => this.c.confirmPlace(false));
@@ -86,6 +87,13 @@ export class HUD {
       else if (e.e === 'cargomsg' && e.owner === L) { this.toast(e.msg, 'warn'); sfx('ui', 0.5); }
       else if (e.e === 'airdrop' && e.owner === L) this.toast('Airdrop: ' + e.n + ' unit' + (e.n > 1 ? 's' : '') + ' deployed', 'info');
       else if (e.e === 'unload' && e.owner === L) this.toast('Cargo unloaded (' + e.n + ' units)', 'info');
+      else if (e.e === 'lowfuel' && e.owner === L) { this.toast('⛽ Aircraft low on fuel with no airfield or tanker in reach', 'warn'); this.g.lastAlert = { x: e.x, z: e.z }; }
+      else if (e.e === 'bingofuel' && e.owner === L) { if (now - (this.lastBingo || 0) > 6) { this.lastBingo = now; this.toast('Aircraft low on fuel: returning to base', 'info'); } }
+      else if (e.e === 'flameout' && e.owner === L) { this.toast('Aircraft lost: out of fuel', 'warn'); sfx('ui', 0.6); }
+      else if (e.e === 'capture') { const own = e.team === this.g.team; this.toast(own ? 'Control point captured' : 'Control point lost to ' + (sim.players[e.owner] ? sim.players[e.owner].name : 'the enemy'), own ? 'info' : 'warn'); sfx('ui', 0.8); }
+      else if (e.e === 'promote' && e.owner === L) { if (now - (this.lastPromo || 0) > 3) { this.lastPromo = now; this.toast(DEFS[sim.byId.get(e.id) ? sim.byId.get(e.id).def : 'mbt'].name + ' promoted to ' + ['', 'Veteran', 'Elite', 'Legend'][e.vet], 'info'); } }
+      else if (e.e === 'salvage' && e.owner === L) { if (now - (this.lastSalv || 0) > 3) { this.lastSalv = now; this.toast('Salvaged a wreck: +⛏' + e.val, 'info'); } }
+      else if (e.e === 'weather') { this.toast(['Skies clear', 'Overcast: aircraft vision reduced', 'Fog rolling in: vision reduced', 'Rain: vision reduced', 'Storm: ground and air vision badly reduced'][e.kind], e.kind >= 2 ? 'warn' : 'info'); }
       else if (e.e === 'afdeny' && e.owner === L) { this.toast('Not enough resources for that loadout', 'warn'); sfx('ui', 0.5); }
       else if (e.e === 'elim') { const p = sim.players[e.p]; this.toast(p.name + ' has been eliminated', e.p === L ? 'warn' : ''); }
     }
@@ -162,6 +170,7 @@ export class HUD {
     if (d.ew) s += ' · jam r' + d.ew.radius; if (d.upkeep) s += ' · ⚡' + d.upkeep + '/s';
     if (d.drone) s += ' · DRONE';
     if (d.aps) s += ' · APS ' + d.aps.n;
+    if (d.sup) s += ' · ammo ' + d.sup; if (d.fuel) s += ' · fuel ' + d.fuel + ' s'; if (d.supply) s += ' · carries ' + d.supply.cap; if (d.tank) s += ' · tanks ' + d.tank.cap;
     s += '</small>'; if (d.kit && d.kit.length) s += '<br><small style="color:#e0b84a">' + d.kit.map((k) => '◆ ' + k).join('<br>') + '</small>'; s = s.replace(/<\/small><br><small style="color:#e0b84a">/, '</small><br><small style="color:#e0b84a">'); s += '<small>';
     if (d.loadouts) s += '<br>' + (d.rwy ? 'Needs runway level ' + d.rwy : 'Vertical take-off') + ' · ' + d.loadouts.length + ' loadouts (pick on the runway)';
     return s + '</small>';
@@ -248,6 +257,15 @@ export class HUD {
       if (e.kind === 'building' && e.en) s += ' · ' + e.en + ' engineer' + (e.en > 1 ? 's' : '') + ' helping (×' + e.eb.toFixed(1) + ' speed)';
       if (e.cargo) { const lo = e.ed && e.ed.lo; s += ' · cargo ' + this.sim.cargoUsed(e) + '/' + (lo && lo.cap ? lo.cap : 0) + (e.cargo.length ? ' (' + e.cargo.length + ' units)' : ''); }
       if (e.apsN !== undefined && d.aps) s += ' · APS ' + e.apsN + '/' + d.aps.n;
+      if (e.sup !== undefined && d.sup) s += ' · ammo ' + Math.round(e.sup / d.sup * 100) + '%';
+      if (e.fuel !== undefined && d.fuel) s += ' · fuel ' + Math.round(e.fuel / d.fuel * 100) + '%' + (e.rf ? ' (to tanker)' : '');
+      if (e.fstock !== undefined && d.tank) s += ' · tanker ' + Math.round(e.fstock) + '/' + d.tank.cap;
+      if (e.stock !== undefined && d.supply) s += ' · supplies ' + Math.round(e.stock) + '/' + d.supply.cap + (e.auto ? ' · AUTO' : '');
+      if (e.stock !== undefined && d.depot) s += ' · stock ' + Math.round(e.stock) + '/' + d.depot.cap;
+      if (e.pal > 0) s += ' · ' + e.pal + ' pallets';
+      if (e.vet) s += ' · ' + ['', 'Veteran', 'Elite', 'Legend'][e.vet] + ' ★'.repeat(e.vet);
+      if (e.emcon) s += ' · EMCON';
+      if (e.kind === 'building' && d.oil && e.node >= 0) { const nd = this.sim.map.oil[e.node]; if (nd) s += ' · field ' + Math.max(0, Math.round((nd.res === undefined ? 30000 : nd.res) / 300)) + '% left'; }
       if (e.kind !== 'building' && e.lo >= 0 && d.loadouts) { s += ' · ' + d.loadouts[e.lo].name; if (e.am && e.ed) { let t = 0, l = 0; e.ed.weapons.forEach((w, i) => { if (w.ammo > 0) { t += w.ammo; l += Math.max(0, e.am[i]); } }); if (t) s += ' (' + l + '/' + t + ' rounds)'; } }
       if (e.kind === 'building' && BTIER.steps[e.def]) s += ' · Mk ' + BTIER.roman[e.tier || 1] + (e.tu ? ' · upgrading to Mk ' + BTIER.roman[e.tier + 1] + ' ' + Math.round((1 - e.tu.left / e.tu.total) * 100) + '%' : '');
       if (e.kind === 'building' && e.afd) s += ' · runway ' + this.sim.afRunLen(e) + ' m · ' + this.sim.afStandCount(e) + ' stands';
@@ -274,6 +292,10 @@ export class HUD {
         add('Airdrop…', 'J', 'drop', () => c.setMode(c.mode.t === 'drop' ? { t: 'normal' } : { t: 'drop' }));
         add('Unload', 'U', null, () => c.unload());
       }
+      add('Escort…', 'K', 'escort', () => c.setMode(c.mode.t === 'escort' ? { t: 'normal' } : { t: 'escort' }));
+      if (units.some((u) => u.pal > 0 && u.ap === 'fly')) add('Supply drop…', '', 'sdrop', () => c.setMode(c.mode.t === 'sdrop' ? { t: 'normal' } : { t: 'sdrop' }));
+      const trk = units.filter((u) => DEFS[u.def].supply);
+      if (trk.length) { const on = trk.every((u) => u.auto); add(on ? 'Auto supply: ON' : 'Auto supply: OFF', '', null, () => { this.g.cmd({ t: 'lauto', ids: trk.map((u) => u.id), v: on ? 0 : 1 }); setTimeout(() => { this.selSig = null; }, 160); }, on ? 'on' : ''); }
       if (units.some((u) => UNITS[u.def].weapons.some((w) => w.ground && w.kind !== 'hit'))) add('Fire at ground', 'F', 'forcefire', () => c.setMode(c.mode.t === 'forcefire' ? { t: 'normal' } : { t: 'forcefire' }));
     } else if (blds.length) {
       if (blds.some((b) => BUILDINGS[b.def].produces)) add('Set rally point', 'F', 'rally', () => c.setMode(c.mode.t === 'rally' ? { t: 'normal' } : { t: 'rally' }));
@@ -283,12 +305,14 @@ export class HUD {
       if (nxt.length) { const b0 = nxt[0], st = BTIER.steps[b0.def][b0.tier - 1]; add('Upgrade to Mk ' + BTIER.roman[b0.tier + 1] + (nxt.length > 1 ? ' ×' + nxt.length : '') + ' (⛏' + st.cost * nxt.length + (st.energy ? ' ⚡' + st.energy * nxt.length : '') + ')', '', null, () => this.g.cmd({ t: 'bupg', ids: nxt.map((b) => b.id) })); }
       if (blds.some((b) => b.def !== 'hq')) add('Sell', '', null, () => { if (confirm('Sell selected structure(s) for a 50% refund?')) c.sell(); }, 'danger');
     }
+    const emt = ents.filter((e) => { const d = DEFS[e.def]; return (d.radar || d.ew) && !(e.kind === 'building' && e.progress < 1); });
+    if (emt.length) { const off = emt.every((e) => e.emcon); add(off ? 'Emitters: SILENT' : 'Emitters: ON', '', null, () => { this.g.cmd({ t: 'emcon', ids: emt.map((e) => e.id), v: off ? 0 : 1 }); setTimeout(() => { this.selSig = null; }, 160); }, off ? 'danger' : ''); }
     this.modeChanged();
   }
   modeChanged() {
     const m = this.c ? this.c.mode : { t: 'normal' }; this.mode = m.t;
     for (const k in this.cmdBtns || {}) this.cmdBtns[k].classList.toggle('on', m.t === k);
-    const txt = { attackmove: 'Attack-move: pick a destination or target (Esc cancels)', move: 'Move: pick a destination (Esc cancels)', forcefire: 'Fire at ground: pick a point (Esc cancels)', rally: 'Rally point: pick a location (Esc cancels)', lift: 'Airlift: click a friendly airfield to fly the loaded cargo there (Esc cancels)', drop: 'Airdrop: click the drop zone; infantry, drones and light vehicles are paradropped (Esc cancels)', place: '' }[m.t];
+    const txt = { escort: 'Escort: click a friendly unit to follow and protect (Esc cancels)', sdrop: 'Supply drop: pick the point to release the pallets over (Esc cancels)', attackmove: 'Attack-move: pick a destination or target (Esc cancels)', move: 'Move: pick a destination (Esc cancels)', forcefire: 'Fire at ground: pick a point (Esc cancels)', rally: 'Rally point: pick a location (Esc cancels)', lift: 'Airlift: click a friendly airfield to fly the loaded cargo there (Esc cancels)', drop: 'Airdrop: click the drop zone; infantry, drones and light vehicles are paradropped (Esc cancels)', place: '' }[m.t];
     this.el.banner.textContent = txt || ''; this.el.banner.classList.toggle('hidden', !txt);
     const placing = m.t === 'place';
     this.el.placeBar.classList.toggle('hidden', !(placing && this.g.touch));
