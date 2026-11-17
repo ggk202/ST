@@ -1,5 +1,6 @@
 // Deterministic RTS simulation. Runs identically on every client (lockstep multiplayer).
-import { DT, CELL, DMG, dmgMult, UNITS, BUILDINGS, DEFS, UNIT_CAP } from './defs.js';
+import { DT, CELL, DMG, dmgMult, UNITS, BUILDINGS, DEFS, UNIT_CAP, AF_MODULES } from './defs.js';
+import { AirOps, GROUND_PHASES } from './airops.js';
 import { RNG, clamp } from './util.js';
 import { generateMap } from './map.js';
 import { Pathfinder } from './path.js';
@@ -37,6 +38,7 @@ export class Sim {
     this.head = new Int32Array(this.gw * this.gw);
     this.next = new Int32Array(1024);
     const n = this.map.n;
+    this.rsv = new Int32Array(n * n);   // cells reserved for airfield runways / aprons (units can still walk there)
     this.vis = [0, 1, 2, 3].map(() => new Uint8Array(n * n));
     this.expl = [0, 1, 2, 3].map(() => new Uint8Array(n * n));
     this.players = slots.map((s, i) => ({
@@ -102,6 +104,7 @@ export class Sim {
     const n = this.map.n;
     for (let j = 0; j < d.size; j++) for (let i = 0; i < d.size; i++) this.map.occ[(sn.cz0 + j) * n + sn.cx0 + i] = b.id;
     if (node) { node.building = b.id; b.node = node.id; }
+    if (type === 'airfield') { const plan = this.afPlan(sn.x, sn.z, b.id); if (plan) this.afInit(b, plan); }
     if (instant) { b.progress = 1; } else { b.progress = 0; b.hp = Math.max(1, d.hp * 0.1); }
     // push ground units out of the footprint
     const half = d.size * CELL / 2;
@@ -153,6 +156,7 @@ export class Sim {
       if (e.kind === 'unit' && DEFS[e.def].builder && d2 <= ENGINEER_RADIUS * ENGINEER_RADIUS) { near = true; break; }
     }
     if (!near) { res.reason = 'Too far from your base or an Engineer'; return res; }
+    if (type === 'airfield') { const plan = this.afPlan(sn.x, sn.z, 0); if (!plan) { res.reason = 'No room for a runway and apron'; return res; } res.plan = plan; }
     res.ok = true; res.node = node;
     return res;
   }
@@ -175,7 +179,7 @@ export class Sim {
         if (!tg || tg.dead || tg.team === p.team) return;
         for (const u of this.own(c.ids, c.p)) {
           if (u.kind !== 'unit') continue;
-          const d = DEFS[u.def];
+          const d = u.ed || DEFS[u.def];
           if (!d.weapons.length || (tg.air ? !d.hitsAir : !d.hitsGround)) { this.cmdMove([u], tg.x, tg.z, 'move'); continue; }
           u.order = { t: 'attack', tid: tg.id }; u.path = null; u.pt = null; u.pending = false; u.stuck = 0; u.repath = 0;
         }
@@ -193,6 +197,11 @@ export class Sim {
       case 'dequeue': this.dequeue(c.p, c.type); break;
       case 'rally': for (const b of this.own(c.ids, c.p)) if (b.kind === 'building') b.rally = { x: clamp(c.x, 4, this.map.size - 4), z: clamp(c.z, 4, this.map.size - 4) }; break;
       case 'sell': for (const b of this.own(c.ids, c.p)) if (b.kind === 'building' && b.def !== 'hq') { if (b.progress >= 1) { p.credits += BUILDINGS[b.def].cost * 0.5; p.energy += BUILDINGS[b.def].energy * 0.5; } else { p.credits += b.sm; p.energy += b.se; } this.kill(b, true, true); } break;
+      case 'loadout': for (const u of this.own(c.ids, c.p)) if (u.kind === 'unit' && u.ap) this.afSelect(u, c.lo | 0); break;
+      case 'upgrade': for (const b of this.own(c.ids, c.p)) if (b.kind === 'building' && b.afd) { this.afStartUpgrade(b, c.key); break; } break;
+      case 'cancelup': for (const b of this.own(c.ids, c.p)) if (b.kind === 'building' && b.afd) this.afCancelUpgrade(b); break;
+      case 'afauto': for (const b of this.own(c.ids, c.p)) if (b.kind === 'building' && b.afd) b.auto = !!c.v; break;
+      case 'rtb': for (const u of this.own(c.ids, c.p)) if (u.kind === 'unit' && u.ap === 'fly' && UNITS[u.def].loadouts) this.startRtb(u, false); break;
       case 'resign': this.eliminate(p); break;
       case 'takeover': if (!p.ai) { p.ai = c.diff || 'normal'; this.ais[p.id] = new AIController(p.id, p.ai); } break;
       default: break;
@@ -214,7 +223,7 @@ export class Sim {
       let tx = slots[bi][0], tz = slots[bi][1];
       if (k === 1) { tx = x; tz = z; }
       tx = clamp(tx, 6, this.map.size - 6); tz = clamp(tz, 6, this.map.size - 6);
-      if (!u.air && !this.map.walkable(tx, tz) && this.map.walkable(x, z)) { tx = x; tz = z; }
+      if (!DEFS[u.def].air && !this.map.walkable(tx, tz) && this.map.walkable(x, z)) { tx = x; tz = z; }
       u.order = { t: type, x: tx, z: tz }; u.path = null; u.pt = null; u.pending = false; u.stuck = 0; u.repath = 0; u.target = 0;
     }
   }
@@ -225,9 +234,19 @@ export class Sim {
     for (const b of this.ents) {
       if (b.owner !== owner || b.dead || b.kind !== 'building' || b.progress < 1) continue;
       if (BUILDINGS[b.def].produces !== d.from) continue;
+      if (d.from === 'airfield' && (!b.afd || this.afRunLevel(b) < d.rwy)) continue;
       if (!best || b.queue.length < best.queue.length) best = b;
     }
     return best;
+  }
+  trainBlock(owner, type) {
+    const d = UNITS[type]; if (!d) return 'Unknown';
+    if (d.from === 'airfield') {
+      let any = false, rw = 0;
+      for (const b of this.ents) if (b.owner === owner && !b.dead && b.def === 'airfield' && b.progress >= 1 && b.afd) { any = true; rw = Math.max(rw, this.afRunLevel(b)); }
+      if (any && rw < d.rwy) return 'Requires ' + AF_MODULES.runway.levels[d.rwy - 2].name + ' (select the Airfield)';
+    }
+    return '';
   }
   canTrain(owner, type) {
     const d = UNITS[type]; if (!d) return false;
@@ -298,7 +317,8 @@ export class Sim {
       const p = P[b.owner];
       if (b.progress < 1) { const d = BUILDINGS[b.def]; p.demM += d.cost / d.time; p.demE += d.energy / d.time; continue; }
       if (b.def === 'techlab') p.tl1 = true; else if (b.def === 'advtech') p.tl2 = true;
-      if (b.queue.length && !b.stun) { const ud = UNITS[b.queue[0].type]; p.demM += ud.cost / ud.time; p.demE += ud.energy / ud.time; }
+      if (b.queue.length && !b.stun && b.queue[0].left > 0) { const ud = UNITS[b.queue[0].type]; p.demM += ud.cost / ud.time; p.demE += ud.energy / ud.time; }
+      if (b.up) { const lv = AF_MODULES[b.up.key].levels[b.mods[b.up.key]]; p.demM += lv.cost / lv.time; p.demE += lv.energy / lv.time; }
     }
     for (const p of P) {
       p.tech = p.tl2 ? 2 : p.tl1 ? 1 : 0;
@@ -323,8 +343,9 @@ export class Sim {
     const J = this.jammers; J.length = 0;
     for (const e of this.ents) {
       if (e.dead) continue;
-      const d = DEFS[e.def]; if (!d.ew) continue;
+      const d = e.ed || DEFS[e.def]; if (!d.ew) continue;
       if (e.kind === 'building' && e.progress < 1) continue;
+      if (e.ap && GROUND_PHASES.has(e.ap)) continue;
       if (e.stun > 0 || !this.players[e.owner].ewOn) continue;
       J.push({ x: e.x, z: e.z, r2: d.ew.radius * d.ew.radius, team: e.team, power: d.ew.power || 1 });
     }
@@ -373,18 +394,21 @@ export class Sim {
         const adv = Math.min(it.left, p.eff), fr = adv / ud.timeTicks;
         it.left -= adv; it.sm += ud.cost * fr; it.se += ud.energy * fr; p.spentM += ud.cost * fr; p.spentE += ud.energy * fr;
       }
-      if (it.left <= 0 && p.units + ud.batch <= UNIT_CAP) {
+      const si = ud.from === 'airfield' ? (b.afd ? this.afFreeStand(b) : -1) : 0;
+      if (it.left <= 0 && p.units + ud.batch <= UNIT_CAP && si >= 0) {
         b.queue.shift();
         const made = [];
-        for (let k = 0; k < ud.batch; k++) {
+        if (ud.from === 'airfield') made.push(this.spawnAircraft(b, it.type, si));
+        else for (let k = 0; k < ud.batch; k++) {
           const spot = this.spawnSpot(b, ud);
           const u = this.spawnUnit(it.type, b.owner, spot.x + (ud.air ? (k - (ud.batch - 1) / 2) * 3 : 0), spot.z);
           made.push(u);
         }
         this.ev({ e: 'trained', id: made[0].id, owner: b.owner, def: it.type, x: made[0].x, z: made[0].z });
-        if (b.rally && !ud.builder) this.cmdMove(made, b.rally.x, b.rally.z, 'move');
+        if (b.rally && !ud.builder && ud.from !== 'airfield') this.cmdMove(made, b.rally.x, b.rally.z, 'move');
       }
     }
+    if (b.up && !b.stun) this.afUpgradeTick(b, p);
     if (d.weapons.length && !b.stun) this.combat(b, d);
     if (b.flash > 0) b.flash--;
   }
@@ -408,12 +432,14 @@ export class Sim {
 
   // ---------- unit logic ----------
   updateUnit(u) {
-    const d = UNITS[u.def], map = this.map;
+    const d = u.ed || UNITS[u.def], map = this.map;
     u.px = u.x; u.pz = u.z;
     if (u.stun > 0) { u.stun--; u.moving = false; u.vx = 0; u.vz = 0; return; }
     const cdr = (d.drone && u.jam) ? Math.max(0.3, 1 - 0.2 * u.jam) : 1;
     for (let k = 0; k < u.cd.length; k++) if (u.cd[k] > 0) u.cd[k] = Math.max(0, u.cd[k] - cdr);
     if (u.flash > 0) u.flash--;
+    if (u.ap !== undefined && u.ap !== 'fly') { this.sortie(u, d); return; }
+    if (u.ap === 'fly' && u.am && ((this.tick + u.id) % 10) === 0 && this.afBingo(u)) { if (this.startRtb(u, true)) { this.sortie(u, d); return; } }
     const o = u.order;
     if (d.upkeep) this.players[u.owner].upkeep += d.upkeep;
     if (d.heal && ((this.tick + u.id) & 3) === 0) this.healAround(u, d);
@@ -472,7 +498,9 @@ export class Sim {
   }
   inRange(u, d, tg) {
     const dx = tg.x - u.x, dz = tg.z - u.z, dd = Math.sqrt(dx * dx + dz * dz);
-    for (const w of d.weapons) {
+    for (let k = 0; k < d.weapons.length; k++) {
+      const w = d.weapons[k];
+      if (u.am && u.am[k] === 0) continue;
       if (!this.wCan(w, tg)) continue;
       if (dd <= this.wRange(u, w) + tg.radius * 0.5 && dd >= w.min) return true;
     }
@@ -481,7 +509,7 @@ export class Sim {
   chaseTarget(u, d, tg) {
     // move toward the largest-range usable weapon's range
     let r = 0;
-    for (const w of d.weapons) if (this.wCan(w, tg)) r = Math.max(r, this.wRange(u, w));
+    for (let k = 0; k < d.weapons.length; k++) { const w = d.weapons[k]; if (this.wCan(w, tg) && !(u.am && u.am[k] === 0)) r = Math.max(r, this.wRange(u, w)); }
     this.goTo(u, d, tg.x, tg.z, Math.max(2, r * 0.85), true);
   }
   // returns true when arrived
@@ -546,7 +574,7 @@ export class Sim {
       const c = map.cellOf(e.x, e.z);
       if (c < 0 || vis[c] !== 1) return;
       let usable = false;
-      for (const w of d.weapons) if (this.wCan(w, e) && dd >= w.min) { usable = true; break; }
+      for (let k = 0; k < d.weapons.length; k++) { const w = d.weapons[k]; if (this.wCan(w, e) && dd >= w.min && !(u.am && u.am[k] === 0)) { usable = true; break; } }
       if (!usable) return;
       const ed = DEFS[e.def];
       const armed = ed.weapons.length > 0;
@@ -577,7 +605,7 @@ export class Sim {
     const sy = this.muzzleY(e, d);
     for (let k = 0; k < d.weapons.length; k++) {
       const w = d.weapons[k];
-      if (e.cd[k] > 0) continue;
+      if (e.cd[k] > 0 || (e.am && e.am[k] === 0)) continue;
       let ax, az, ay, tid = 0;
       if (ground) {
         if (!w.ground || w.kind === 'hit') continue;
@@ -591,6 +619,7 @@ export class Sim {
       const rad = ground ? 0 : tg.radius * 0.5;
       if (dd > this.wRange(e, w) + rad || dd < w.min) continue;
       e.cd[k] = w.reloadTicks;
+      if (e.am && e.am[k] > 0) e.am[k]--;
       e.flash = 3;
       const mx = e.x + (e.dirx || 0) * e.radius * 0.8, mz = e.z + (e.dirz || 0) * e.radius * 0.8;
       if (w.kind === 'boom') { this.detonate(e, w, ay); return; }
@@ -711,8 +740,8 @@ export class Sim {
     const op = this.players[t.owner];
     if (this.tick - op.lastAlert > 80 && t.hp > 0) { op.lastAlert = this.tick; this.ev({ e: 'alert', owner: t.owner, x: t.x, z: t.z, kind: t.kind }); }
     if (t.hp <= 0) { if (src) this.players[src.owner].stats.killed++; this.kill(t); return; }
-    if (t.kind === 'unit' && src && !src.dead && t.order.t === 'idle') {
-      const d = UNITS[t.def];
+    if (t.kind === 'unit' && src && !src.dead && t.order.t === 'idle' && (t.ap === undefined || t.ap === 'fly')) {
+      const d = t.ed || UNITS[t.def];
       if (d.weapons.length && (src.air ? d.hitsAir : d.hitsGround) && src.team !== t.team) {
         const dx = src.x - t.x, dz = src.z - t.z;
         if (dx * dx + dz * dz < d.vision * d.vision * 3) t.order = { t: 'attack', tid: src.id, auto: true };
@@ -723,8 +752,12 @@ export class Sim {
     if (e.dead) return;
     e.dead = true; e.hp = 0;
     const p = this.players[e.owner];
-    if (e.kind === 'unit') p.units--;
+    if (e.kind === 'unit') { p.units--; if (e.ap !== undefined) this.afForget(e); }
     else {
+      if (e.afd) {
+        this.afRelease(e); this.afCancelUpgrade(e);
+        for (const u of this.ents) if (!u.dead && u.kind === 'unit' && u.af === e.id && u.ap && GROUND_PHASES.has(u.ap)) { u.af = 0; this.kill(u, true); }
+      }
       const d = BUILDINGS[e.def], n = this.map.n;
       for (let j = 0; j < d.size; j++) for (let i = 0; i < d.size; i++) this.map.occ[(e.cz0 + j) * n + e.cx0 + i] = 0;
       if (e.node >= 0) this.map.oil[e.node].building = 0;
@@ -747,6 +780,7 @@ export class Sim {
           if (j <= i) continue;
           const b = list[j];
           if (b.dead || b.kind !== 'unit' || a.air !== b.air) continue;
+          if ((a.ap !== undefined && a.ap !== 'fly' && a.ap !== 'rtb') || (b.ap !== undefined && b.ap !== 'fly' && b.ap !== 'rtb')) continue;
           let dx = b.x - a.x, dz = b.z - a.z;
           const min = a.radius + b.radius;
           let dd = dx * dx + dz * dz;
@@ -769,7 +803,7 @@ export class Sim {
     for (let t = 0; t < 4; t++) this.vis[t].fill(0);
     for (const e of this.ents) {
       if (e.dead) continue;
-      const d = DEFS[e.def];
+      const d = e.ed || DEFS[e.def];
       if (e.kind === 'building' && e.progress <= 0) continue;
       const vm = (e.jam && (e.air || d.drone)) ? Math.max(0.35, 1 - 0.2 * e.jam) : 1;
       const r = d.vision * vm / CELL, cx = Math.floor(e.x / CELL), cz = Math.floor(e.z / CELL), ri = Math.ceil(r);
@@ -809,8 +843,10 @@ export class Sim {
     const mix = (v) => { h = Math.imul(h ^ (v | 0), 16777619) >>> 0; };
     mix(this.tick); mix(this.rng.s);
     for (const p of this.players) { mix(Math.round(p.credits * 10)); mix(Math.round(p.energy * 10)); mix(p.units); }
-    for (const e of this.ents) { mix(e.id); mix(Math.round(e.x * 100)); mix(Math.round(e.z * 100)); mix(Math.round(e.hp)); }
+    for (const e of this.ents) { mix(e.id); mix(Math.round(e.x * 100)); mix(Math.round(e.z * 100)); mix(Math.round(e.hp)); if (e.h !== undefined) mix(Math.round(e.h * 100)); }
     mix(this.projs.length);
     return h >>> 0;
   }
 }
+
+Object.assign(Sim.prototype, AirOps);

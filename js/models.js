@@ -5,11 +5,11 @@ import * as THREE from 'three';
 import { PLAYER_COLORS, DEFS } from './sim/defs.js';
 import { Builder } from './model-core.js';
 import { GROUND } from './model-ground.js';
-import { AIR } from './model-air.js';
+import { AIR, PROPS_MODELS } from './model-air.js';
 import { DRONES } from './model-drones.js';
 import { BUILDINGS } from './model-buildings.js';
 
-const MODELS = { ...GROUND, ...AIR, ...DRONES, ...BUILDINGS };
+const MODELS = { ...GROUND, ...AIR, ...DRONES, ...BUILDINGS, ...PROPS_MODELS };
 
 const cache = new Map();
 const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0.12, flatShading: true });

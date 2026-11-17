@@ -48,7 +48,7 @@ export class Controls {
     }
     const res = this.sim.canPlace(this.local, type, x, z, node ? node.id : -1);
     const ok = res.ok && (!d.oil || !!node);
-    const info = { x: res.x != null ? res.x : x, z: res.z != null ? res.z : z, size: d.size, ok, node: node ? node.id : -1, reason: d.oil && !node ? 'Must be built on an oil field' : res.reason, type, rx: x, rz: z };
+    const info = { x: res.x != null ? res.x : x, z: res.z != null ? res.z : z, size: d.size, ok, node: node ? node.id : -1, reason: d.oil && !node ? 'Must be built on an oil field' : res.reason, type, rx: x, rz: z, plan: res.plan || null };
     this.ghost = info; this.r.setGhost(info);
     this.g.hud.placeInfo(info);
   }
@@ -332,6 +332,8 @@ export class Controls {
       if (code === 'KeyM') { stop(); this.setMode({ t: 'move' }); return; }
       if (code === 'KeyS') { stop(); this.stop(); return; }
       if (code === 'KeyF') { stop(); this.setMode({ t: 'forcefire' }); return; }
+      if (code === 'KeyH') { stop(); const fl = this.selUnits().filter((u) => u.ap === 'fly' && UNITS[u.def].loadouts); if (fl.length) { this.cmd({ t: 'rtb', ids: this.ids(fl) }); this.g.toast('Returning to base to re-arm', 'info'); } return; }
+      if (code === 'KeyL') { stop(); const par = this.selUnits().find((u) => u.ap === 'stand' || u.ap === 'select'); if (par) { this.g.hud.loTarget = par.id; this.g.hud.loHide.delete(par.id); this.g.hud.loSig = ''; } return; }
     }
     if (this.selBlds().length && !hasUnits && code === 'KeyF') { stop(); this.setMode({ t: 'rally' }); return; }
     if (!mod) {

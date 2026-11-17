@@ -111,3 +111,13 @@ All of this is render-side only; the deterministic sim is untouched, so lockstep
 - **LOD**: every model is built at 3 detail levels (small parts dropped, primitives simplified; roughly 75k vs 327k vertices for the full roster at LOD2 vs LOD0). Distance-based with hysteresis, frustum culling, and animation skipped off-screen and throttled at LOD2.
 - **iPad**: pixel ratio capped at 1.5, 1024 shadow map, tighter LOD distances, and an adaptive-resolution governor that steps render scale down/up from frame time.
 - **Settings**: *Model detail* (Auto / Max) and *Adaptive resolution* (On / Off).
+
+## Airfields, loadouts and ground ops
+
+Aircraft run a full sortie cycle: **built → taxi to the runway (only if it is free and nobody is landing) → pick a loadout → ground crew arms it → take off → fly → return to base when out of ammo → land → taxi in → rearm**. Helicopters and VTOLs skip the runway and are armed on their stand.
+
+- **Loadouts**: every aircraft has role-based loadouts (cost, energy, prep time, ammo, stat mods). You have 60 s to choose on the runway, otherwise the last/standard loadout is used. The AI and airfields with *auto-arm* pick instantly. Heavy loadouts need a longer runway and a higher depot level.
+- **Modular airfield**: select an airfield to extend it with a *Long/Heavy Runway* (38 → 58 → 80), *Hangar Bays* (2 → 4 → 6 stands) and *Depot* levels (faster crews, heavier stores). Extensions are limited by the terrain; the placement ghost previews runway and apron.
+- **New aircraft**: Fighter (air superiority / strike) and Heavy Bomber (needs runway L2+).
+- **Hotkeys**: `H` return to base, `L` open the loadout picker.
+- **Tests**: `node tests/air-test.mjs` covers layout, upgrades, the full sortie cycle, runway locking, bingo/RTB, loadout locks, AI, selling and determinism.

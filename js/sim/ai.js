@@ -1,5 +1,5 @@
 // Computer opponents. They run inside the simulation (same on every client) and issue normal commands.
-import { UNITS, BUILDINGS, TICK_RATE, CELL, BASE_UNITS, BASE_ORDER, unitId } from './defs.js';
+import { UNITS, BUILDINGS, TICK_RATE, CELL, BASE_UNITS, BASE_ORDER, unitId, AF_MODULES } from './defs.js';
 
 const DIFF = {
   easy:   { interval: 30, base: 3400, step: 900, grace: 240, reserve: 0.5 },
@@ -7,7 +7,7 @@ const DIFF = {
   hard:   { interval: 12, base: 1800, step: 650, grace: 100, reserve: 1.0 },
 };
 const PLAN = [['barracks', 1], ['powerplant', 8], ['factory', 1], ['techlab', 1], ['turret', 1], ['dronebay', 1], ['airfield', 1], ['sam', 1], ['ewtower', 1], ['advtech', 1], ['turret', 2], ['factory', 2], ['sam', 2], ['barracks', 2], ['dronebay', 2], ['turret', 4], ['airfield', 2]];
-const WEIGHTS = { rifleman: 2, at: 1.6, manpads: 0.8, scout: 0.5, ifv: 2.5, mbt: 3.5, aa: 0.8, sph: 1.2, heavy: 2.5, mlrs: 1.4, tel: 0.25, uav: 0.15, heli: 2, vtol: 1.4, engineer: 0,
+const WEIGHTS = { rifleman: 2, at: 1.6, manpads: 0.8, scout: 0.5, ifv: 2.5, mbt: 3.5, aa: 0.8, sph: 1.2, heavy: 2.5, mlrs: 1.4, tel: 0.25, uav: 0.15, heli: 2, vtol: 1.4, fighter: 1.3, bomber: 0.9, engineer: 0,
   ewtruck: 0.35, ewplane: 0.3, robot: 2.5, ewdog: 0.9, sapper: 0.8, repair: 0.5, walker: 2, fpv: 1.2, wingman: 1.3, carrier: 0.9, empcarrier: 0.3 };
 const hyp = (a, b) => Math.sqrt(a * a + b * b);
 const DIRS = [[1, 0], [0.7, 0.7], [0, 1], [-0.7, 0.7], [-1, 0], [-0.7, -0.7], [0, -1], [0.7, -0.7]];
@@ -91,6 +91,19 @@ export class AIController {
       break;
     }
 
+    // ---- airfield modules: longer runway for bombers, bigger depot for heavy loads, more stands
+    for (const af of blds) {
+      if (af.def !== 'airfield' || af.progress < 1 || af.up || !af.afd || secs < 200) continue;
+      for (const key of ['depot', 'runway', 'apron', 'depot', 'runway', 'apron']) {
+        if (sim.afCanUpgrade(af, key)) continue;
+        const lv = AF_MODULES[key].levels[af.mods[key]];
+        if (key === 'apron' && af.mods.apron >= 1 && secs < 420) continue;
+        if (p.credits >= lv.cost * 1.5 && p.energy >= lv.energy) sim.exec({ t: 'upgrade', p: id, ids: [af.id], key });
+        break;
+      }
+      break;
+    }
+
     // ---- production
     const reserve = nextCost * cfg.reserve;
     const enemyAir = enemies.filter((e) => e.kind === 'unit' && e.air && sim.canSee(p.team, e)).length;
@@ -116,7 +129,7 @@ export class AIController {
     }
 
     // ---- army
-    const army = units.filter((u) => UNITS[u.def].weapons.length > 0 && !UNITS[u.def].strike);
+    const army = units.filter((u) => (u.ed || UNITS[u.def]).weapons.length > 0 && !UNITS[u.def].strike && !(u.ap === 'rtb' || u.ap === 'land'));
     const strikers = units.filter((u) => UNITS[u.def].strike && u.order.t === 'idle');
     const support = units.filter((u) => UNITS[u.def].weapons.length === 0 && !UNITS[u.def].builder && !UNITS[u.def].air && (UNITS[u.def].heal || UNITS[u.def].ew || UNITS[u.def].escort));
     const value = army.reduce((s, u) => s + UNITS[u.def].cost, 0);
@@ -189,12 +202,12 @@ export class AIController {
   }
   findSpot(sim, id, type, blds, toward) {
     const d = BUILDINGS[type];
-    for (let tries = 0; tries < 40; tries++) {
+    for (let tries = 0; tries < (type === 'airfield' ? 160 : 40); tries++) {
       const base = blds[sim.rng.int(blds.length)];
       let dir = DIRS[sim.rng.int(8)];
       if (toward && tries < 20) { const dx = toward.x - base.x, dz = toward.z - base.z, l = Math.sqrt(dx * dx + dz * dz) || 1; dir = [dx / l + (sim.rng.next() - 0.5) * 0.8, dz / l + (sim.rng.next() - 0.5) * 0.8]; }
       const dl = Math.sqrt(dir[0] * dir[0] + dir[1] * dir[1]) || 1;
-      const dist = base.radius + d.size * CELL * 0.5 + 6 + sim.rng.next() * 14;
+      const dist = base.radius + d.size * CELL * 0.5 + 6 + sim.rng.next() * (type === 'airfield' ? 40 : 14);
       const x = base.x + dir[0] / dl * dist, z = base.z + dir[1] / dl * dist;
       if (sim.canPlace(id, type, x, z).ok) return { x, z };
     }

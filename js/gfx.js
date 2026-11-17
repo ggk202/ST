@@ -424,9 +424,21 @@ export class Scatter {
       });
       im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
       im.computeBoundingSphere(); scene.add(im);
-      this.chunks.push({ mesh: im, cx: b.cx, cz: b.cz, grass: b.type === 'grass', type: b.type });
+      this.chunks.push({ mesh: im, cx: b.cx, cz: b.cz, grass: b.type === 'grass', type: b.type, items: b.items });
     }
     this.count = buckets.size;
+  }
+  // remove vegetation / rocks inside world rectangles (e.g. under a new runway)
+  clearRects(rects) {
+    const m = new THREE.Matrix4().makeScale(0, 0, 0);
+    for (const c of this.chunks) {
+      let hit = false;
+      for (let i = 0; i < c.items.length; i++) {
+        const it = c.items[i]; if (it[3] === 0) continue;
+        for (const r of rects) if (it[0] >= r.x0 - 1 && it[0] <= r.x1 + 1 && it[2] >= r.z0 - 1 && it[2] <= r.z1 + 1) { c.mesh.setMatrixAt(i, m); it[3] = 0; hit = true; break; }
+      }
+      if (hit) c.mesh.instanceMatrix.needsUpdate = true;
+    }
   }
   update(cam) {
     const reach = 150 + cam.dist * 0.45, show = cam.dist < 210;
@@ -472,21 +484,25 @@ export function animateUnit(v, e, d, dt, time, speed, firing, lod = 0, ground = 
     const k = an.recoil * (0.18 + d.radius * 0.12), pv = v.rp.turret || [0, 0, 0];
     v.turret.position.set(pv[0] - Math.sin(v.tyaw) * k, pv[1], pv[2] - Math.cos(v.tyaw) * k);
   }
-  if (e.air) {
+  if (d.air) {
     // hover bob, bank into turns, pitch with speed
     let dy = v.yaw - an.lastYaw; while (dy > Math.PI) dy -= 6.283; while (dy < -Math.PI) dy += 6.283; an.lastYaw = v.yaw;
     const rate = dy / Math.max(dt, 1e-3); an.bank += (clamp(rate * 0.35, -0.6, 0.6) - an.bank) * Math.min(1, dt * 4);
     v.obj.rotation.z = -an.bank * (base === 'heli' || base === 'uav' || base === 'fpv' ? 0.6 : 1);
-    v.obj.rotation.x = e.moving ? (base === 'heli' ? 0.2 : 0.06) : 0;
+    let pit = e.moving ? (base === 'heli' ? 0.2 : 0.06) : 0;
+    if (d.rwy > 0) { const hv = e.h === undefined ? 1 : e.h; if (e.ap === 'takeoff') pit = -0.3 * Math.min(1, hv * 3); else if (e.ap === 'land') pit = hv < 0.35 ? -0.16 : 0.05; else if (hv < 0.3) pit = 0; }
+    v.obj.rotation.x = pit;
+    if (e.h !== undefined && e.h < 0.3) v.obj.rotation.z = 0;
   }
+  const idle = e.ap === 'wait' || e.ap === 'stand' || e.ap === 'select' || e.ap === 'equip' || e.ap === 'rearm', pf = idle ? 0 : (e.ap === 'taxiOut' || e.ap === 'taxiIn' ? 0.35 : 1);
   // rotors / props / dishes
   const pr = PROPS[base];
   for (const k in m) {
     const mesh = m[k];
-    if (/^propz/.test(k)) mesh.rotation.z += dt * 70;
-    else if (/^prop/.test(k)) mesh.rotation.y += dt * 90;
-    else if (k === 'rotor' && pr) { if (base === 'heli') mesh.rotation.y += dt * 40; else mesh.rotation.z += dt * 50; }
-    else if (k === 'rotor2' && base === 'heli') mesh.rotation.x += dt * 40;
+    if (/^propz/.test(k)) mesh.rotation.z += dt * 70 * pf;
+    else if (/^prop/.test(k)) mesh.rotation.y += dt * 90 * pf;
+    else if (k === 'rotor' && pr) { if (base === 'heli') mesh.rotation.y += dt * 40 * (idle ? 0.06 : 1); else mesh.rotation.z += dt * 50 * pf; }
+    else if (k === 'rotor2' && base === 'heli') mesh.rotation.x += dt * 40 * (idle ? 0.06 : 1);
     else if (k === 'rotor' && (base === 'ewdog' || base === 'ewtruck' || base === 'ewplane')) mesh.rotation.y += dt * 4;
     else if (k === 'rotor' && base === 'fpv') mesh.rotation.y += dt * 60;
   }

@@ -1,6 +1,9 @@
 // three.js renderer: terrain, entity views, effects, camera and screen-space picking.
 import * as THREE from 'three';
-import { CELL, DEFS, PLAYER_COLORS } from './sim/defs.js';
+import { CELL, DEFS, PLAYER_COLORS, UNITS } from './sim/defs.js';
+import { GROUND_PHASES } from './sim/airops.js';
+import { AirfieldGfx } from './airfield-gfx.js';
+import { updateStores, CrewPool } from './aircraft-gfx.js';
 import { makeModel, modelMaterial } from './models.js';
 import { Fx, sfx } from './fx.js';
 import { makeDetailTexture, makeCloudTexture, makeUniforms, patchTerrain, patchWater, makeUnitMaterial, Sky, Clouds, Scatter, animateUnit } from './gfx.js';
@@ -31,6 +34,7 @@ export class Renderer {
     this.cam = { x: 0, z: 0, yaw: 0.0, pitch: 0.92, dist: 110, vx: 0, vz: 0 };
     this.shake = 0;
     this.views = new Map(); this.projViews = new Map();
+    this.crews = new CrewPool(this.scene, sim);
     this.frame = 0; this.time = 0;
     this.ghost = null; this.selection = new Set();
     this.scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x4d4a3a, this.gfx ? 0.75 : 0.95));
@@ -208,11 +212,19 @@ export class Renderer {
   setGhost(info) {
     // info: {x,z,size,ok} or null
     const m = this.ghostMesh;
-    if (!info) { m.visible = false; this.radiusMesh.visible = false; return; }
+    if (!info) { m.visible = false; this.radiusMesh.visible = false; if (this.planMeshes) for (const pm of this.planMeshes) pm.visible = false; return; }
     const s = info.size * CELL, y = this.sim.map.hAt(info.x, info.z);
     m.visible = true; m.scale.set(s, 4, s); m.position.set(info.x, y + 2, info.z);
     this.ghostMat.color.setHex(info.ok ? 0x40ff60 : 0xff4040);
     this.radiusMesh.visible = true; this.radiusMesh.position.set(info.x, y + 0.5, info.z);
+    // airfield: preview the runway + apron that will be reserved (extension space is shown dimmer)
+    const rects = info.plan ? info.plan.rects : [];
+    if (!this.planMeshes) this.planMeshes = [];
+    while (this.planMeshes.length < rects.length) { const pm = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0x40ff60, transparent: true, opacity: 0.22, depthWrite: false })); this.scene.add(pm); this.planMeshes.push(pm); }
+    this.planMeshes.forEach((pm, k) => {
+      const r = rects[k]; pm.visible = !!r; if (!r) return;
+      const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2; pm.scale.set(r.x1 - r.x0, 0.3, r.z1 - r.z0); pm.position.set(cx, Math.max(0, this.sim.map.hAt(cx, cz)) + 0.3, cz); pm.material.opacity = k < 2 ? 0.3 : 0.14;
+    });
   }
 
   applyPixelRatio() { this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.pixelCap) * this.resScale); }
@@ -334,14 +346,14 @@ export class Renderer {
 
   // ---------------- per-frame ----------------
   createView(e) {
-    const m = makeModel(e.def, this.sim.players[e.owner].color);
+    const m = makeModel(e.def, this.sim.players[e.owner].color), d0 = DEFS[e.def];
     this.scene.add(m.root);
     const v = { ent: e, obj: m.root, turret: m.turret, rotor: m.rotor, rotor2: m.rotor2, parts: m.parts, hull: m.hull, rp: m.rp, chains: m.chains, setLod: m.setLod, lod: 0, acc: 0, inView: true, yaw: Math.atan2(e.dirx, e.dirz), tyaw: 0, frame: 0, visible: true, built: false, flash: 0, mat: null, an: null, ring: null, maxY: 1 };
     m.root.rotation.order = 'YXZ';
     if (this.gfx) {
       const mat = makeUnitMaterial(this.U, modelMaterial); v.mat = mat;
       m.root.traverse((o) => { if (o.isMesh) o.material = mat; });
-      mat.userData.u.uGround.value = (e.air || e.kind === 'building') ? 0 : 1;
+      mat.userData.u.uGround.value = (d0.air || e.kind === 'building') ? 0 : 1;
       if (e.kind === 'building') { m.hull.geometry.computeBoundingBox(); v.maxY = m.hull.geometry.boundingBox.max.y + 3; }
       const d = DEFS[e.def];
       if (d.ew) {
@@ -351,32 +363,38 @@ export class Renderer {
         v.ring2 = v.ring.clone(); v.ring2.material = v.ring.material.clone(); this.scene.add(v.ring2);
       }
     }
+    if (d0.air && d0.loadouts) { m.hull.geometry.computeBoundingBox(); v.gOff = Math.max(0, -m.hull.geometry.boundingBox.min.y) + 0.2; }
+    if (e.def === 'airfield') v.afg = new AirfieldGfx(this.scene, this.sim, e, this.sim.players[e.owner].color, this.scatter);
     this.views.set(e.id, v);
     return v;
   }
   removeView(id, v) {
-    this.scene.remove(v.obj); if (v.mat) v.mat.dispose();
+    this.scene.remove(v.obj); if (v.mat) v.mat.dispose(); if (v.afg) v.afg.dispose();
     if (v.ring) { this.scene.remove(v.ring); this.scene.remove(v.ring2); v.ring.geometry.dispose(); v.ring.material.dispose(); v.ring2.material.dispose(); }
     this.views.delete(id);
   }
   syncEntities(alpha, dt) {
     const sim = this.sim, map = sim.map, f = ++this.frame;
+    this.crews.begin();
     for (const e of sim.ents) {
       if (e.dead) continue;
       let v = this.views.get(e.id); if (!v) v = this.createView(e);
       v.frame = f; v.ent = e;
       const vis = this.visibleToLocal(e);
-      v.visible = vis; v.obj.visible = vis;
-      if (v.ring) { v.ring.visible = v.ring2.visible = vis && (e.kind === 'unit' || e.progress >= 1) && e.stun <= 0 && this.sim.players[e.owner].ewOn; }
+      v.visible = vis; v.obj.visible = vis; if (v.afg) v.afg.group.visible = vis;
+      if (v.ring) { v.ring.visible = v.ring2.visible = vis && (e.kind === 'unit' || e.progress >= 1) && e.stun <= 0 && this.sim.players[e.owner].ewOn && !(e.ap && GROUND_PHASES.has(e.ap)); }
       if (!vis) continue;
       const d = DEFS[e.def];
       const x = e.px + (e.x - e.px) * alpha, z = e.pz + (e.z - e.pz) * alpha;
       let y = map.hAt(x, z);
       const o = v.obj;
-      if (e.air) { y = Math.max(0, y) + d.alt + Math.sin(this.time * 1.6 + e.id) * 0.5; }
+      if (d.air) {
+        const hh = e.h === undefined ? 1 : e.ph + (e.h - e.ph) * alpha, g0 = Math.max(0, y);
+        y = g0 + (v.gOff || 0) * (1 - hh) + (d.alt + Math.sin(this.time * 1.6 + e.id) * 0.5) * hh;
+      }
       o.position.set(x, y, z);
       // view-frustum + distance driven level of detail
-      this._sph.center.set(x, y + 1, z); this._sph.radius = e.kind === 'building' ? e.size * CELL * 0.9 + 8 : Math.max(5, e.radius * 2.6) + (e.air ? 4 : 0);
+      this._sph.center.set(x, y + 1, z); this._sph.radius = e.kind === 'building' ? e.size * CELL * 0.9 + 8 : Math.max(5, e.radius * 2.6) + (d.air ? 4 : 0);
       const inView = v.inView = this.frustum.intersectsSphere(this._sph);
       if (inView) {
         const cp = this.camera.position, dx = x - cp.x, dy = y - cp.y, dz = z - cp.z, dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -386,13 +404,14 @@ export class Renderer {
         if (this.lodForce === 0) lod = 0;
         if (lod !== cur || !v.lodInit) { v.lodInit = true; v.lod = lod; v.setLod(lod, this.opts.shadows); }
       }
+      if (v.afg) v.afg.update(e, true);
       const want = Math.atan2(e.dirx, e.dirz);
       if (e.kind === 'unit') {
         v.yaw += angDiff(want, v.yaw) * Math.min(1, dt * 14); o.rotation.y = v.yaw;
-        if (!e.air && e.armor !== 'inf') {
+        if (!d.air && e.armor !== 'inf') {
           const r = e.radius * 1.2, fx = x + Math.sin(v.yaw) * r, fz = z + Math.cos(v.yaw) * r, bx = x - Math.sin(v.yaw) * r, bz = z - Math.cos(v.yaw) * r;
           o.rotation.x = -Math.atan2(map.hAt(fx, fz) - map.hAt(bx, bz), r * 2);
-        } else if (e.air) { o.rotation.x = e.moving ? 0.12 : 0; }
+        } else if (d.air) { o.rotation.x = e.moving ? 0.12 : 0; }
         // turret aiming
         if (v.turret) {
           let aim = 0;
@@ -400,6 +419,10 @@ export class Renderer {
           if (tg && !tg.dead) aim = angDiff(Math.atan2(tg.x - e.x, tg.z - e.z), v.yaw);
           else if (e.order && e.order.t === 'attackground') aim = angDiff(Math.atan2(e.order.x - e.x, e.order.z - e.z), v.yaw);
           v.tyaw += angDiff(aim, v.tyaw) * Math.min(1, dt * 7); v.turret.rotation.y = v.tyaw;
+        }
+        if (d.loadouts && inView) {
+          updateStores(v, e, this.sim.players[e.owner].color);
+          if (e.ap === 'equip' || e.ap === 'rearm') this.crews.tend(v, e, this.time, map);
         }
         if (this.gfx) {
           if (inView) {
@@ -427,9 +450,10 @@ export class Renderer {
         }
       }
     }
+    this.crews.end();
     for (const [id, v] of this.views) if (v.frame !== f) this.removeView(id, v);
     for (const v of this.views.values()) if (v.ring && v.ring.visible) {
-      const e = v.ent, gy = Math.max(0, map.hAt(v.obj.position.x, v.obj.position.z)) + 0.6, R = DEFS[e.def].ew.radius, friend = e.team === this.team;
+      const e = v.ent, gy = Math.max(0, map.hAt(v.obj.position.x, v.obj.position.z)) + 0.6, R = (e.ed || DEFS[e.def]).ew.radius, friend = e.team === this.team;
       const ph = (this.time * 0.35 + e.id * 0.17) % 1;
       v.ring.position.set(v.obj.position.x, gy, v.obj.position.z); v.ring.scale.set(R, 1, R); v.ring.material.color.setHex(friend ? 0x5ec8ff : 0xff5ec8); v.ring.material.opacity = friend ? 0.22 : 0.4;
       v.ring2.position.copy(v.ring.position); v.ring2.scale.set(R * ph, 1, R * ph); v.ring2.material.color.copy(v.ring.material.color); v.ring2.material.opacity = (1 - ph) * 0.35;

@@ -1,8 +1,8 @@
 // HUD: top bar, minimap, selection panel, build/production panel, toasts.
-import { UNITS, BUILDINGS, BUILD_ORDER, BASE_ORDER, BASE_UNITS, DEFS, UNIT_CAP, PLAYER_COLORS, unitId, ROMAN } from './sim/defs.js';
+import { UNITS, BUILDINGS, BUILD_ORDER, BASE_ORDER, BASE_UNITS, DEFS, UNIT_CAP, PLAYER_COLORS, unitId, ROMAN, AF, AF_MODULES, AF_KEYS, TICK_RATE } from './sim/defs.js';
 import { sfx } from './fx.js';
 
-const ABBR = { rifleman: 'RIF', at: 'AT', manpads: 'MAN', engineer: 'ENG', scout: 'SCT', ifv: 'IFV', mbt: 'MBT', aa: 'FLK', sph: 'SPH', heavy: 'HVY', mlrs: 'MRL', tel: 'BMS', uav: 'UAV', heli: 'HEL', vtol: 'VTL', ewtruck: 'EWT', ewplane: 'EWA', robot: 'BOT', ewdog: 'EWD', sapper: 'CRW', repair: 'RPR', walker: 'WLK', fpv: 'FPV', wingman: 'WNG', carrier: 'DSD', empcarrier: 'EMP', powerplant: 'PWR', dronebay: 'DRN', advtech: 'LB2', ewtower: 'EWS', derrick: 'OIL', barracks: 'BAR', factory: 'FAC', airfield: 'AIR', techlab: 'LAB', turret: 'GUN', sam: 'SAM', hq: 'HQ' };
+const ABBR = { rifleman: 'RIF', at: 'AT', manpads: 'MAN', engineer: 'ENG', scout: 'SCT', ifv: 'IFV', mbt: 'MBT', aa: 'FLK', sph: 'SPH', heavy: 'HVY', mlrs: 'MRL', tel: 'BMS', uav: 'UAV', heli: 'HEL', vtol: 'VTL', ewtruck: 'EWT', ewplane: 'EWA', robot: 'BOT', ewdog: 'EWD', sapper: 'CRW', repair: 'RPR', walker: 'WLK', fpv: 'FPV', fighter: 'FTR', bomber: 'BMB', wingman: 'WNG', carrier: 'DSD', empcarrier: 'EMP', powerplant: 'PWR', dronebay: 'DRN', advtech: 'LB2', ewtower: 'EWS', derrick: 'OIL', barracks: 'BAR', factory: 'FAC', airfield: 'AIR', techlab: 'LAB', turret: 'GUN', sam: 'SAM', hq: 'HQ' };
 const TABS = [
   { id: 'str', label: 'Build', key: 'B', cls: 'str' },
   { id: 'inf', label: 'Infantry', key: 'I', cls: 'inf', from: ['barracks', 'hq'] },
@@ -12,6 +12,10 @@ const TABS = [
 ];
 const $ = (id) => document.getElementById(id);
 const abbr = (def) => { const d = DEFS[def]; return (ABBR[d.base] || d.base) + (d.tier > 1 ? ROMAN[d.tier] : ''); };
+const PHASE = { wait: 'Waiting for the runway', taxiOut: 'Taxiing to the runway', select: 'Awaiting loadout', equip: 'Ground crew arming', takeoff: 'Taking off', rtb: 'Returning to base', land: 'Landing', taxiIn: 'Taxiing to its stand', rearm: 'Being re-armed', stand: 'Parked and ready', fly: '' };
+const wName = (w) => w.kind === 'missile' ? (w.type === 'aa' ? 'AA missile' : w.type === 'ap' ? 'AT missile' : 'Cruise missile') : w.kind === 'shell' ? (w.type === 'blast' ? 'Heavy bomb' : w.reload < 0.5 && w.range >= 20 ? 'Rockets' : 'Bomb') : 'Cannon';
+const wLine = (w) => (w.ammo > 0 ? w.ammo + '× ' : '∞ ') + wName(w) + ' · ' + w.dmg + ' dmg · ' + w.range + ' rng';
+const modLine = (m) => [m.vision ? '+' + Math.round((m.vision - 1) * 100) + '% vision' : '', m.speed ? (m.speed > 1 ? '+' : '') + Math.round((m.speed - 1) * 100) + '% speed' : '', m.hp ? '+' + Math.round((m.hp - 1) * 100) + '% HP' : '', m.ewm ? (m.ewm > 1 ? '+' : '') + Math.round((m.ewm - 1) * 100) + '% jam radius' : '', m.upk ? '+' + Math.round((m.upk - 1) * 100) + '% upkeep' : ''].filter(Boolean).join(' · ');
 const fmtTime = (s) => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 
 export class HUD {
@@ -19,7 +23,8 @@ export class HUD {
     this.g = game; this.sim = game.sim; this.tab = 'str'; this.tier = 1; this.items = {}; this.lastSig = ''; this.acc = 1; this.mmAcc = 1;
     this.el = { credits: $('credits'), income: $('income'), energy: $('energy'), eincome: $('eincome'), eff: $('eff'), tierSel: $('tierSel'), credBox: $('statM'), enBox: $('statE'), units: $('unitcount'), clock: $('clock'), net: $('netinfo'), toasts: $('toasts'), banner: $('modeBanner'), tip: $('tip'), placeBar: $('placeBar'), selInfo: $('selInfo'), cmdBar: $('cmdBar'), tabs: $('tabs'), queue: $('queue'), items: $('items'), mm: $('minimap') };
     this.mmCtx = this.el.mm.getContext('2d');
-    this.lastToast = 0; this.lastAlertToast = -99; this.lastReady = 0; this.pings = [];
+    this.loTarget = 0; this.loHide = new Set(); this.toldSel = new Set(); this.loSig = ''; this.afSig = ''; this.lastToast = 0; this.lastAlertToast = -99; this.lastReady = 0; this.pings = [];
+    this.loEl = $('loadoutPanel'); this.afEl = $('afPanel');
     this.buildTabs(); this.buildTierSel(); this.buildItems(); this.bindStatic(); this.buildMinimapTerrain();
     this.fogCanvas = document.createElement('canvas'); this.fogCanvas.width = this.fogCanvas.height = this.sim.map.n;
     this.fogCtx = this.fogCanvas.getContext('2d'); this.fogImg = this.fogCtx.createImageData(this.sim.map.n, this.sim.map.n);
@@ -75,6 +80,8 @@ export class HUD {
         if (now - this.lastAlertToast > 8) { this.lastAlertToast = now; this.toast(e.kind === 'building' ? '⚠ Base under attack!' : '⚠ Units under attack!', 'warn'); sfx('ui', 1.2); }
       } else if (e.e === 'built' && e.owner === L) { this.toast(DEFS[e.def].name + ' complete', 'info'); sfx('ui', 0.8); this.refreshItems(); }
       else if (e.e === 'trained' && e.owner === L) { if (now - this.lastReady > 1.2) { this.lastReady = now; this.toast(DEFS[e.def].name + ' ready', 'info'); } }
+      else if (e.e === 'afmod' && e.owner === L) { this.toast(AF_MODULES[e.key].levels[e.lv - 1].name + ' complete', 'info'); sfx('ui', 0.8); this.afSig = ''; this.refreshItems(); }
+      else if (e.e === 'afdeny' && e.owner === L) { this.toast('Not enough resources for that loadout', 'warn'); sfx('ui', 0.5); }
       else if (e.e === 'elim') { const p = sim.players[e.p]; this.toast(p.name + ' has been eliminated', e.p === L ? 'warn' : ''); }
     }
   }
@@ -127,6 +134,7 @@ export class HUD {
     if (!sim.ownerHas(L, d.from)) return 'Requires ' + BUILDINGS[d.from].name;
     const tech = sim.players[L].tech;
     if (tech < d.techLv) return 'Requires ' + (d.techLv >= 2 ? BUILDINGS.advtech.name : BUILDINGS.techlab.name);
+    if (d.from === 'airfield') return sim.trainBlock(L, type);
     return '';
   }
   itemClick(type, e) {
@@ -148,6 +156,7 @@ export class HUD {
     const w = d.weapons[0]; if (w) s += ' · dmg ' + w.dmg + ' · range ' + w.range;
     if (d.ew) s += ' · jam r' + d.ew.radius; if (d.upkeep) s += ' · ⚡' + d.upkeep + '/s';
     if (d.drone) s += ' · DRONE';
+    if (d.loadouts) s += '<br>' + (d.rwy ? 'Needs runway level ' + d.rwy : 'Vertical take-off') + ' · ' + d.loadouts.length + ' loadouts (pick on the runway)';
     return s + '</small>';
   }
   hideTip() { if (this.mode !== 'place') this.el.tip.classList.add('hidden'); }
@@ -194,7 +203,7 @@ export class HUD {
   groupByDef(ents) { const m = new Map(); for (const e of ents) m.set(e.def, (m.get(e.def) || 0) + 1); return m; }
   renderSel(force) {
     const ents = this.c ? this.c.selEnts() : [];
-    const sig = ents.map((e) => e.id).join(',') + '|' + this.c?.mode.t;
+    const sig = ents.map((e) => e.id + (e.ap || '')).join(',') + '|' + this.c?.mode.t;
     if (!force && sig === this.selSig) { this.updateSelDynamic(ents); return; }
     this.selSig = sig;
     const box = this.el.selInfo; box.innerHTML = '';
@@ -228,7 +237,10 @@ export class HUD {
       const e = ents[0], d = DEFS[e.def];
       let s = Math.ceil(e.hp) + ' / ' + e.maxhp + ' HP';
       if (e.kind === 'building') { if (e.progress < 1) s += ' · constructing ' + Math.floor(e.progress * 100) + '%'; else if (e.queue.length) s += ' · training ' + UNITS[e.queue[0].type].name; }
-      else if (e.order) s += ' · ' + ({ idle: 'idle', move: 'moving', attackmove: 'attack-moving', attack: 'attacking', attackground: 'firing at ground' }[e.order.t] || '');
+      else if (e.ap && e.ap !== 'fly') { s += ' · ' + PHASE[e.ap]; }
+      if (e.kind !== 'building' && e.lo >= 0 && d.loadouts) { s += ' · ' + d.loadouts[e.lo].name; if (e.am && e.ed) { let t = 0, l = 0; e.ed.weapons.forEach((w, i) => { if (w.ammo > 0) { t += w.ammo; l += Math.max(0, e.am[i]); } }); if (t) s += ' (' + l + '/' + t + ' rounds)'; } }
+      if (e.kind === 'building' && e.afd) s += ' · runway ' + this.sim.afRunLen(e) + ' m · ' + this.sim.afStandCount(e) + ' stands';
+      if (e.kind !== 'building' && (!e.ap || e.ap === 'fly') && e.order) s += ' · ' + ({ idle: 'idle', move: 'moving', attackmove: 'attack-moving', attack: 'attacking', attackground: 'firing at ground' }[e.order.t] || '');
       this.selLine.textContent = s;
     }
   }
@@ -244,6 +256,8 @@ export class HUD {
       add('Move', 'M', 'move', () => c.setMode(c.mode.t === 'move' ? { t: 'normal' } : { t: 'move' }));
       if (units.some((u) => UNITS[u.def].weapons.length)) add('Attack-Move', 'A', 'attackmove', () => c.setMode(c.mode.t === 'attackmove' ? { t: 'normal' } : { t: 'attackmove' }));
       add('Stop', 'S', null, () => c.stop());
+      if (units.some((u) => u.ap === 'fly' && UNITS[u.def].loadouts)) add('Return to base', 'H', null, () => { this.g.cmd({ t: 'rtb', ids: units.filter((u) => u.ap === 'fly').map((u) => u.id) }); this.toast('Returning to base to re-arm', 'info'); });
+      const par = units.find((u) => u.ap === 'stand' || u.ap === 'select'); if (par) add('Loadout…', 'L', null, () => { this.loTarget = par.id; this.loHide.delete(par.id); this.loSig = ''; });
       if (units.some((u) => UNITS[u.def].weapons.some((w) => w.ground && w.kind !== 'hit'))) add('Fire at ground', 'F', 'forcefire', () => c.setMode(c.mode.t === 'forcefire' ? { t: 'normal' } : { t: 'forcefire' }));
     } else if (blds.length) {
       if (blds.some((b) => BUILDINGS[b.def].produces)) add('Set rally point', 'F', 'rally', () => c.setMode(c.mode.t === 'rally' ? { t: 'normal' } : { t: 'rally' }));
@@ -341,5 +355,74 @@ export class HUD {
     this.el.net.style.color = g.desync ? '#ef5350' : '';
     this.refreshItems();
     this.renderSel(false);
+    this.updateAir();
+  }
+
+  // ---------- airfield: loadout picker + module panel ----------
+  updateAir() {
+    const sim = this.sim, L = this.g.local;
+    const waiting = []; for (const e of sim.ents) if (!e.dead && e.owner === L && e.ap === 'select') waiting.push(e);
+    for (const e of waiting) if (!this.toldSel.has(e.id)) { this.toldSel.add(e.id); this.toast(DEFS[e.def].name + ' is on the runway: choose a loadout', 'info'); sfx('ui', 0.9); }
+    let target = null;
+    if (this.loTarget) { const t = sim.byId.get(this.loTarget); if (t && !t.dead && (t.ap === 'stand' || t.ap === 'select')) target = t; else this.loTarget = 0; }
+    if (!target) target = waiting.find((e) => !this.loHide.has(e.id)) || null;
+    this.renderLoadout(target, waiting);
+    this.renderAfPanel();
+  }
+  renderLoadout(t, waiting) {
+    const el = this.loEl, sim = this.sim;
+    if (!t) { if (!el.classList.contains('hidden')) { el.classList.add('hidden'); this.loSig = ''; } return; }
+    const b = sim.afOf(t), D = UNITS[t.def], p = sim.players[t.owner];
+    if (!b) return;
+    const same = waiting.filter((e) => e.def === t.def && e.id !== t.id).length;
+    const sig = [t.id, t.ap, t.lo, b.mods.runway, b.mods.depot, Math.floor(p.credits / 25), Math.floor(p.energy / 25), same, b.auto ? 1 : 0].join('|');
+    if (el.classList.contains('hidden')) el.classList.remove('hidden');
+    const tm = el.querySelector('#loTimer');
+    if (tm && t.ap === 'select') tm.textContent = Math.max(0, Math.ceil((AF.selectTimeout * TICK_RATE - t.t) / TICK_RATE)) + ' s';
+    if (sig === this.loSig) return; this.loSig = sig;
+    const crew = 1 + 0.3 * b.mods.depot;
+    let html = '<h3>' + D.name + ' · choose loadout</h3><div class="sub">' + (t.ap === 'select' ? 'On the runway — it blocks take-offs and landings. Default loadout in <b id="loTimer"></b>.' : 'Parked on a stand. Changing the loadout sends the ground crew back to work.') + ' Runway <b>L' + sim.afRunLevel(b) + '</b> · Depot <b>L' + sim.afDepotLevel(b) + '</b> · crews ×' + crew.toFixed(1) + '</div><div class="cards">';
+    D.loadouts.forEach((lo) => {
+      let why = ''; if (lo.dp > sim.afDepotLevel(b)) why = 'Needs ' + AF_MODULES.depot.levels[lo.dp - 2].name; else if (lo.rw > sim.afRunLevel(b)) why = 'Needs ' + AF_MODULES.runway.levels[lo.rw - 2].name;
+      const poor = lo.cost > 0 && (p.credits < lo.cost || p.energy < lo.energy), cur = t.rdy && t.lo === lo.idx;
+      html += '<button class="lcard' + (why ? ' locked' : '') + (poor ? ' poor' : '') + (cur ? ' cur' : '') + '" data-lo="' + lo.idx + '"><span class="nm">' + lo.name + (cur ? ' ✓' : '') + '</span><span class="ds">' + lo.desc + '</span><span class="wp">' + (lo.weapons.length ? lo.weapons.map((w) => '<div>' + wLine(w) + '</div>').join('') : '<div>Unarmed</div>') + '</span>' + (modLine(lo.mods) ? '<span class="md">' + modLine(lo.mods) + '</span>' : '') +
+        '<span class="cost">' + (lo.cost ? '⛏' + lo.cost + ' <em>⚡' + lo.energy + '</em>' : 'Free') + ' · crew ' + Math.round(lo.prep / crew) + ' s</span>' + (why ? '<span class="why">' + why + '</span>' : '') + '</button>';
+    });
+    html += '</div><div class="foot">' + (same ? '<label><input type="checkbox" id="loAll" checked> Apply to all ' + same + ' other waiting ' + D.baseName + '</label>' : '') + '<label><input type="checkbox" id="loAuto"' + (b.auto ? ' checked' : '') + '> Auto-arm at this airfield with the last loadout</label><button class="btn" id="loClose">Close</button></div>';
+    el.innerHTML = html;
+    el.querySelectorAll('.lcard').forEach((c) => c.addEventListener('click', () => {
+      this.g.unlockAudio(); const lo = D.loadouts[+c.dataset.lo]; if (c.classList.contains('locked')) { this.toast(c.querySelector('.why').textContent, 'warn'); sfx('ui', 0.5); return; }
+      const all = el.querySelector('#loAll'), ids = [t.id];
+      if (all && all.checked) for (const e of waiting) if (e.def === t.def && e.id !== t.id) ids.push(e.id);
+      this.g.cmd({ t: 'loadout', ids, lo: lo.idx }); this.loTarget = 0; sfx('ui', 0.8); this.loSig = '';
+    }));
+    const au = el.querySelector('#loAuto'); if (au) au.addEventListener('change', () => this.g.cmd({ t: 'afauto', ids: [b.id], v: au.checked }));
+    el.querySelector('#loClose').addEventListener('click', () => { this.loHide.add(t.id); this.loTarget = 0; this.loSig = ''; el.classList.add('hidden'); });
+  }
+  renderAfPanel() {
+    const el = this.afEl, sim = this.sim, L = this.g.local, ents = this.c ? this.c.selEnts() : [];
+    const b = ents.length === 1 && ents[0].owner === L && ents[0].def === 'airfield' && ents[0].progress >= 1 && ents[0].afd ? ents[0] : null;
+    if (!b) { if (!el.classList.contains('hidden')) { el.classList.add('hidden'); this.afSig = ''; } return; }
+    el.classList.remove('hidden');
+    const p = sim.players[L];
+    const used = b.stands.slice(0, sim.afStandCount(b)).filter((x) => x).length;
+    const sig = [b.id, b.mods.runway, b.mods.apron, b.mods.depot, b.up ? b.up.key : '', b.auto ? 1 : 0, used, Math.floor(p.credits / 50)].join('|');
+    if (b.up) { const bar = el.querySelector('#upBar'); if (bar) bar.style.width = Math.round((1 - b.up.left / b.up.total) * 100) + '%'; }
+    if (sig === this.afSig) return; this.afSig = sig;
+    let html = '<h3>Airfield</h3><div class="st">Runway <b>' + sim.afRunLen(b) + ' m</b> (L' + sim.afRunLevel(b) + ') · Stands <b>' + used + '/' + sim.afStandCount(b) + '</b> · Depot <b>L' + sim.afDepotLevel(b) + '</b><br>' + (b.rwy ? 'Runway: in use for take-off' : b.land ? 'Runway: aircraft landing' : 'Runway: clear') + '</div>';
+    for (const key of AF_KEYS) {
+      const m = AF_MODULES[key], lv = b.mods[key], max = m.levels.length, next = m.levels[lv], why = sim.afCanUpgrade(b, key), building = b.up && b.up.key === key;
+      let pips = ''; for (let i = 0; i <= max; i++) pips += i <= lv ? '●' : '○';
+      html += '<div class="mod"><div class="hd"><span>' + m.name + '</span><span class="pips">' + pips + '</span></div>';
+      if (building) html += '<div class="bar"><i id="upBar" style="width:' + Math.round((1 - b.up.left / b.up.total) * 100) + '%"></i></div><button class="btn danger" data-cancel="1">Cancel <small>(refund spent)</small></button>';
+      else if (next) html += '<div class="ds">' + next.desc + '</div><button class="btn" data-up="' + key + '"' + (why ? ' disabled' : '') + '>' + next.name + ' <small>⛏' + next.cost + ' ⚡' + next.energy + ' · ' + next.time + ' s</small></button>' + (why && why !== 'Unavailable' ? '<div class="ds" style="color:#ef5350">' + why + '</div>' : '');
+      else html += '<div class="ds">Fully upgraded.</div>';
+      html += '</div>';
+    }
+    html += '<label><input type="checkbox" id="afAuto"' + (b.auto ? ' checked' : '') + '> Auto-arm aircraft with the last loadout</label>';
+    el.innerHTML = html;
+    el.querySelectorAll('[data-up]').forEach((x) => x.addEventListener('click', () => { this.g.unlockAudio(); this.g.cmd({ t: 'upgrade', ids: [b.id], key: x.dataset.up }); sfx('ui', 0.7); this.afSig = ''; }));
+    const cn = el.querySelector('[data-cancel]'); if (cn) cn.addEventListener('click', () => { this.g.cmd({ t: 'cancelup', ids: [b.id] }); this.afSig = ''; });
+    el.querySelector('#afAuto').addEventListener('change', (e) => this.g.cmd({ t: 'afauto', ids: [b.id], v: e.target.checked }));
   }
 }

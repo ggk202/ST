@@ -20,7 +20,7 @@ export const DMG = {
 // damage multiplier of a hit against a particular entity (drones are fried by HPM regardless of armor class)
 export function dmgMult(type, armor, drone) { if (type === 'hpm' && drone) return 1; return DMG[type][armor]; }
 
-const W = (o) => Object.assign({ min: 0, kind: 'hit', speed: 0, splash: 0, ground: true, air: false, arc: 0, spread: 0, radar: false, drone: false, stun: 0 }, o);
+const W = (o) => Object.assign({ min: 0, kind: 'hit', speed: 0, splash: 0, ground: true, air: false, arc: 0, spread: 0, radar: false, drone: false, stun: 0, ammo: 0 }, o);
 
 // per-tier multipliers (Mk I, Mk II, Mk III)
 const TS = [null,
@@ -64,13 +64,54 @@ const BASE = {
   ewtruck: { name: 'EW Truck', desc: 'Wide-area jammer. Degrades enemy drones, aircraft radar and missile locks. Drains energy.', from: 'factory', techLv: 1, cost: 800, time: 20, hp: 320, speed: 7, armor: 'light', radius: 2.4, vision: 50,
     ew: { radius: 60 }, upkeep: 7, weapons: [] },
   // ---- aircraft (Airfield) ----
-  uav: { name: 'UAV Drone', desc: 'Unarmed recon drone with huge vision.', from: 'airfield', cost: 300, time: 14, hp: 80, speed: 20, armor: 'air', radius: 1.5, vision: 90, air: true, alt: 28, drone: true, weapons: [] },
-  heli: { name: 'Attack Helicopter', desc: 'Anti-armor missiles from the air.', from: 'airfield', cost: 1200, time: 28, hp: 380, speed: 16, armor: 'air', radius: 2.5, vision: 52, air: true, alt: 14,
-    weapons: [W({ type: 'ap', range: 40, dmg: 45, reload: 1.4, kind: 'missile', speed: 55 })] },
-  vtol: { name: 'VTOL Strike Fighter', desc: 'Bombs ground, radar missiles for air.', from: 'airfield', techLv: 1, cost: 1600, time: 36, hp: 320, speed: 30, armor: 'air', radius: 2.5, vision: 60, air: true, alt: 24,
-    weapons: [W({ type: 'he', range: 26, dmg: 150, reload: 4, kind: 'shell', speed: 45, splash: 6, spread: 0.1 }), W({ type: 'aa', range: 60, dmg: 50, reload: 1.5, kind: 'missile', speed: 70, ground: false, air: true, radar: true })] },
-  ewplane: { name: 'EW Aircraft', desc: 'Airborne jammer. Blinds enemy radar and protects aircraft from missile locks. Drains energy.', from: 'airfield', techLv: 1, cost: 1300, time: 26, hp: 300, speed: 18, armor: 'air', radius: 2.6, vision: 70, air: true, alt: 26,
-    ew: { radius: 70 }, upkeep: 9, weapons: [] },
+  // rwy = runway level needed (0 = vertical take-off: uses its apron stand). lo = optional loadouts besides the standard one.
+  // Loadout fields: cost, prep (ground-crew seconds), dp (munitions depot level), rw (runway level), mods (vision/speed/hp/ewm/upk multipliers), vis (stores shown on the wings).
+  uav: { name: 'UAV Drone', desc: 'Unarmed recon drone with huge vision.', from: 'airfield', rwy: 1, cost: 300, time: 14, hp: 80, speed: 20, armor: 'air', radius: 1.5, vision: 90, air: true, alt: 28, drone: true, weapons: [],
+    stdName: 'Recon Suite', stdDesc: 'Standard EO/IR sensor ball.', stdPrep: 2, stdVis: [],
+    lo: [
+      { id: 'optics', name: 'Long-Range Optics', desc: '+40% vision radius, 10% slower.', cost: 80, prep: 4, mods: { vision: 1.4, speed: 0.9 }, vis: [['optics', 1]], weapons: [] },
+      { id: 'rack', name: 'Micro-Munition Rack', desc: 'Three small guided bombs for opportunistic strikes.', cost: 160, prep: 6, vis: [['bomb', 2]], weapons: [W({ type: 'he', range: 8, dmg: 70, reload: 1.0, kind: 'shell', speed: 35, splash: 3, spread: 0.05, ammo: 3 })] },
+    ] },
+  heli: { name: 'Attack Helicopter', desc: 'Anti-armor missiles from the air. Vertical take-off from an apron stand.', from: 'airfield', rwy: 0, cost: 1200, time: 28, hp: 380, speed: 16, armor: 'air', radius: 2.5, vision: 52, air: true, alt: 14,
+    stdName: 'Anti-Armor ATGM', stdDesc: 'Eight radar-quiet tank-killer missiles.', stdPrep: 4, stdVis: [['atgm', 4]],
+    weapons: [W({ type: 'ap', range: 40, dmg: 45, reload: 1.4, kind: 'missile', speed: 55, ammo: 8 })],
+    lo: [
+      { id: 'rockets', name: 'Rocket Pods', desc: 'Unguided HE rockets. Excellent against infantry and light vehicles.', cost: 120, prep: 5, vis: [['rocket', 2]], weapons: [W({ type: 'he', range: 28, dmg: 18, reload: 0.35, kind: 'shell', speed: 50, splash: 3, spread: 0.08, ammo: 28 })] },
+      { id: 'aam', name: 'Air Cover', desc: 'Four air-to-air missiles and a door gun. Hunts aircraft and drones.', cost: 160, prep: 5, vis: [['aam', 2]], weapons: [W({ type: 'aa', range: 45, dmg: 40, reload: 1.2, kind: 'missile', speed: 60, ground: false, air: true, ammo: 4 }), W({ type: 'bullet', range: 24, dmg: 8, reload: 0.2, air: true, ammo: 90 })] },
+      { id: 'gunship', name: 'Heavy Gunship', desc: 'Chin cannon plus six missiles. Tougher airframe, slower.', cost: 260, prep: 8, dp: 2, mods: { hp: 1.15, speed: 0.92 }, vis: [['atgm', 3], ['rocket', 1]], weapons: [W({ type: 'bullet', range: 30, dmg: 14, reload: 0.18, air: true, ammo: 140 }), W({ type: 'ap', range: 40, dmg: 60, reload: 1.6, kind: 'missile', speed: 55, ammo: 6 })] },
+      { id: 'barrage', name: 'Missile Barrage', desc: 'Fourteen heavy anti-armor missiles at a rapid rate of fire.', cost: 320, prep: 10, dp: 2, vis: [['atgm', 7]], weapons: [W({ type: 'ap', range: 44, dmg: 70, reload: 0.7, kind: 'missile', speed: 60, ammo: 14 })] },
+    ] },
+  vtol: { name: 'VTOL Strike Fighter', desc: 'Bombs ground, radar missiles for air. Vertical take-off from an apron stand.', from: 'airfield', rwy: 0, techLv: 1, cost: 1600, time: 36, hp: 320, speed: 30, armor: 'air', radius: 2.5, vision: 60, air: true, alt: 24,
+    stdName: 'Strike Package', stdDesc: 'Six bombs and two radar missiles.', stdPrep: 5, stdVis: [['bomb', 3], ['aam', 1]],
+    weapons: [W({ type: 'he', range: 26, dmg: 150, reload: 4, kind: 'shell', speed: 45, splash: 6, spread: 0.1, ammo: 6 }), W({ type: 'aa', range: 60, dmg: 50, reload: 1.5, kind: 'missile', speed: 70, ground: false, air: true, radar: true, ammo: 2 })],
+    lo: [
+      { id: 'cas', name: 'Close Air Support', desc: 'Autocannon and rocket pods for sustained ground attack.', cost: 180, prep: 6, vis: [['rocket', 2]], weapons: [W({ type: 'bullet', range: 26, dmg: 14, reload: 0.2, air: true, ammo: 150 }), W({ type: 'he', range: 30, dmg: 22, reload: 0.3, kind: 'shell', speed: 55, splash: 3, spread: 0.08, ammo: 30 })] },
+      { id: 'air', name: 'Air Superiority', desc: 'Six radar-guided missiles and a gun pod.', cost: 200, prep: 6, vis: [['aam', 3]], weapons: [W({ type: 'aa', range: 62, dmg: 50, reload: 1.0, kind: 'missile', speed: 72, ground: false, air: true, radar: true, ammo: 6 }), W({ type: 'bullet', range: 22, dmg: 9, reload: 0.15, air: true, ammo: 100 })] },
+      { id: 'heavy', name: 'Heavy Ordnance', desc: 'Two huge bombs. Devastating against structures; slower with the load.', cost: 520, prep: 14, dp: 3, mods: { speed: 0.85 }, vis: [['heavy', 1]], weapons: [W({ type: 'blast', range: 24, dmg: 320, reload: 5, kind: 'shell', speed: 45, splash: 9, spread: 0.08, ammo: 2 }), W({ type: 'aa', range: 55, dmg: 50, reload: 1.5, kind: 'missile', speed: 70, ground: false, air: true, ammo: 2 })] },
+    ] },
+  fighter: { name: 'Air Superiority Fighter', desc: 'Fast jet. Needs a runway. Radar missiles and cannon; swap loadouts for strike roles.', from: 'airfield', rwy: 1, techLv: 1, cost: 1400, time: 30, hp: 260, speed: 38, armor: 'air', radius: 2.2, vision: 62, air: true, alt: 28,
+    stdName: 'Air Superiority', stdDesc: 'Six radar missiles and a cannon.', stdPrep: 5, stdVis: [['aam', 3]],
+    weapons: [W({ type: 'aa', range: 62, dmg: 48, reload: 1.4, kind: 'missile', speed: 75, ground: false, air: true, radar: true, ammo: 6 }), W({ type: 'bullet', range: 22, dmg: 10, reload: 0.12, air: true, ammo: 200 })],
+    lo: [
+      { id: 'multi', name: 'Multirole', desc: 'Two missiles and four bombs: capable against air and ground.', cost: 160, prep: 6, vis: [['aam', 1], ['bomb', 2]], weapons: [W({ type: 'aa', range: 62, dmg: 48, reload: 1.4, kind: 'missile', speed: 75, ground: false, air: true, radar: true, ammo: 2 }), W({ type: 'he', range: 22, dmg: 120, reload: 1.5, kind: 'shell', speed: 50, splash: 5, spread: 0.08, ammo: 4 })] },
+      { id: 'strike', name: 'Strike Fighter', desc: 'Six heavy bombs and a cannon for ground attack.', cost: 260, prep: 8, dp: 2, vis: [['bomb', 3]], weapons: [W({ type: 'he', range: 22, dmg: 150, reload: 1.2, kind: 'shell', speed: 50, splash: 6, spread: 0.08, ammo: 6 }), W({ type: 'bullet', range: 22, dmg: 10, reload: 0.12, air: true, ammo: 200 })] },
+      { id: 'intercept', name: 'Fast Interceptor', desc: 'Four long-range missiles, no cannon, 15% faster.', cost: 200, prep: 5, mods: { speed: 1.15 }, vis: [['aam', 2]], weapons: [W({ type: 'aa', range: 70, dmg: 55, reload: 1.0, kind: 'missile', speed: 80, ground: false, air: true, radar: true, ammo: 4 })] },
+    ] },
+  bomber: { name: 'Heavy Bomber', desc: 'Large aircraft that needs an extended runway. Carries the heaviest loads; heavy loadouts need a bigger depot.', from: 'airfield', rwy: 2, techLv: 1, cost: 2400, time: 44, hp: 700, speed: 22, armor: 'air', radius: 4.2, vision: 58, air: true, alt: 30,
+    stdName: 'Carpet Bombing', stdDesc: 'Thirty light bombs for area saturation.', stdPrep: 8, stdVis: [['bomb', 4]],
+    weapons: [W({ type: 'he', range: 12, dmg: 85, reload: 0.35, kind: 'shell', speed: 30, splash: 7, spread: 0.12, ammo: 30 })],
+    lo: [
+      { id: 'precision', name: 'Precision Bombs', desc: 'Ten guided bombs. Far more damage per drop.', cost: 400, prep: 12, dp: 2, vis: [['bomb', 5]], weapons: [W({ type: 'he', range: 14, dmg: 260, reload: 1.0, kind: 'shell', speed: 35, splash: 5, spread: 0.03, ammo: 10 })] },
+      { id: 'buster', name: 'Bunker Busters', desc: 'Four massive bombs. Needs the Heavy Runway and a Level III depot.', cost: 900, prep: 20, dp: 3, rw: 3, mods: { speed: 0.9 }, vis: [['heavy', 2]], weapons: [W({ type: 'blast', range: 14, dmg: 520, reload: 3, kind: 'shell', speed: 35, splash: 9, spread: 0.03, ammo: 4 })] },
+      { id: 'cruise', name: 'Cruise Missiles', desc: 'Six stand-off cruise missiles with 150 range. Needs the Heavy Runway and a Level III depot.', cost: 1000, prep: 22, dp: 3, rw: 3, vis: [['cruise', 3]], weapons: [W({ type: 'he', range: 150, min: 30, dmg: 170, reload: 1.6, kind: 'missile', speed: 75, splash: 7, ammo: 6 })] },
+    ] },
+  ewplane: { name: 'EW Aircraft', desc: 'Airborne jammer. Blinds enemy radar and protects aircraft from missile locks. Drains energy.', from: 'airfield', rwy: 1, techLv: 1, cost: 1300, time: 26, hp: 300, speed: 18, armor: 'air', radius: 2.6, vision: 70, air: true, alt: 26,
+    ew: { radius: 70 }, upkeep: 9, weapons: [],
+    stdName: 'Escort Jammer', stdDesc: 'Standard jamming pods.', stdPrep: 4, stdVis: [['jam', 1]],
+    lo: [
+      { id: 'wide', name: 'Wide-Area Jammer', desc: '+45% jamming radius, +50% energy upkeep, slower.', cost: 140, prep: 6, mods: { ewm: 1.45, upk: 1.5, speed: 0.9 }, vis: [['jam', 2]], weapons: [] },
+      { id: 'hard', name: 'Hardened Airframe', desc: 'Armour plating: +40% hit points, -10% jamming radius.', cost: 120, prep: 5, mods: { hp: 1.4, ewm: 0.9 }, vis: [['jam', 1]], weapons: [] },
+    ] },
   // ---- drones (Drone Bay) ----
   robot: { name: 'Combat Robot', desc: 'Cheap robotic infantry. Fearless, but vulnerable to EW and HPM.', from: 'dronebay', cost: 140, time: 7, hp: 110, speed: 5.2, armor: 'inf', radius: 1.1, vision: 34, drone: true,
     weapons: [W({ type: 'bullet', range: 20, dmg: 9, reload: 0.5, air: true })] },
@@ -93,6 +134,17 @@ const BASE = {
     weapons: [W({ type: 'emp', range: 3.2, dmg: 35, reload: 0.2, kind: 'boom', splash: 20, stun: 160 })] },
 };
 
+const scaleW = (w, t, tier) => {
+  const nw = Object.assign({}, w);
+  nw.dmg = Math.round(w.dmg * t.dmg);
+  if (w.range > 6) nw.range = Math.round(w.range * t.range);
+  nw.reload = +(w.reload * t.reload).toFixed(3);
+  if (w.splash) nw.splash = +(w.splash * (1 + 0.06 * (tier - 1))).toFixed(1);
+  if (w.stun) nw.stun = Math.round(w.stun * t.dmg);
+  return nw;
+};
+const wStats = (o) => { o.maxRange = 0; o.hitsGround = false; o.hitsAir = false; for (const w of o.weapons) { o.maxRange = Math.max(o.maxRange, w.range); o.hitsGround = o.hitsGround || w.ground; o.hitsAir = o.hitsAir || w.air; w.reloadTicks = Math.max(1, Math.round(w.reload * TICK_RATE)); } };
+
 export const UNITS = {};       // every tier, keyed by id ('mbt', 'mbt2', 'mbt3')
 export const BASE_UNITS = {};  // tier-1 definitions keyed by base id
 export const BASE_ORDER = Object.keys(BASE);
@@ -112,21 +164,24 @@ for (const [key, b] of Object.entries(BASE)) {
     d.cost = Math.round(b.cost * t.cost / 5) * 5;
     d.energy = Math.round(b.cost * (ENERGY_SHARE[b.from] || 0.5) * t.cost / 5) * 5;
     d.time = +(b.time * t.time).toFixed(1);
-    d.weapons = b.weapons.map((w) => {
-      const nw = Object.assign({}, w);
-      nw.dmg = Math.round(w.dmg * t.dmg);
-      if (w.range > 6) nw.range = Math.round(w.range * t.range);
-      nw.reload = +(w.reload * t.reload).toFixed(3);
-      if (w.splash) nw.splash = +(w.splash * (1 + 0.06 * (tier - 1))).toFixed(1);
-      if (w.stun) nw.stun = Math.round(w.stun * t.dmg);
-      return nw;
-    });
+    d.weapons = b.weapons.map((w) => scaleW(w, t, tier));
     if (b.ew) d.ew = { radius: Math.round(b.ew.radius * t.range), power: tier };
     if (b.heal) d.heal = { radius: b.heal.radius, rate: +(b.heal.rate * t.dmg).toFixed(1) };
     if (b.upkeep) d.upkeep = +(b.upkeep * (1 + 0.4 * (tier - 1))).toFixed(1);
     d.maxRange = 0; d.hitsGround = false; d.hitsAir = false;
     for (const w of d.weapons) { d.maxRange = Math.max(d.maxRange, w.range); d.hitsGround = d.hitsGround || w.ground; d.hitsAir = d.hitsAir || w.air; w.reloadTicks = Math.max(1, Math.round(w.reload * TICK_RATE)); }
     d.timeTicks = Math.round(d.time * TICK_RATE);
+    if (b.from === 'airfield') {
+      d.rwy = b.rwy || 0;
+      d.loadouts = [{ id: 'std', name: b.stdName, desc: b.stdDesc, cost: 0, prep: b.stdPrep, vis: b.stdVis, mods: {}, weapons: d.weapons }].concat((b.lo || []).map((l) => Object.assign({}, l, { weapons: l.weapons.map((w) => scaleW(w, t, tier)) })));
+      d.loadouts.forEach((l, i) => {
+        l.idx = i; l.mods = l.mods || {}; l.dp = l.dp || 1; l.rw = l.rw !== undefined ? l.rw : d.rwy;
+        l.cost = Math.round(l.cost * t.cost / 5) * 5; l.energy = Math.round(l.cost * 0.5 / 5) * 5; l.prepTicks = Math.round(l.prep * TICK_RATE); wStats(l);
+        const m = l.mods;
+        l.ed = Object.assign({}, d, { weapons: l.weapons, maxRange: l.maxRange, hitsGround: l.hitsGround, hitsAir: l.hitsAir, vision: Math.round(d.vision * (m.vision || 1)), speed: +(d.speed * (m.speed || 1)).toFixed(2), hp: Math.round(d.hp * (m.hp || 1)),
+          ew: d.ew ? { radius: Math.round(d.ew.radius * (m.ewm || 1)), power: d.ew.power } : undefined, upkeep: d.upkeep ? +(d.upkeep * (m.upk || 1)).toFixed(1) : undefined, lo: l });
+      });
+    }
     UNITS[d.id] = d;
     if (tier === 1) BASE_UNITS[key] = d;
   }
@@ -139,7 +194,7 @@ export const BUILDINGS = {
   barracks: { name: 'Barracks', desc: 'Trains infantry.', cost: 350, energy: 140, time: 20, size: 3, hp: 1000, armor: 'struct', vision: 36, requires: ['hq'], produces: 'barracks', weapons: [] },
   factory: { name: 'War Factory', desc: 'Builds vehicles.', cost: 600, energy: 300, time: 30, size: 4, hp: 1400, armor: 'struct', vision: 36, requires: ['barracks'], produces: 'factory', weapons: [] },
   dronebay: { name: 'Drone Bay', desc: 'Builds combat robots, EW dogs and air drones.', cost: 650, energy: 520, time: 28, size: 4, hp: 1200, armor: 'struct', vision: 36, requires: ['factory'], produces: 'dronebay', weapons: [] },
-  airfield: { name: 'Airfield', desc: 'Builds aircraft.', cost: 800, energy: 480, time: 35, size: 5, hp: 1200, armor: 'struct', vision: 40, requires: ['factory'], produces: 'airfield', weapons: [] },
+  airfield: { name: 'Airfield', desc: 'Builds, arms and launches aircraft. Extend it with a longer runway, more hangar bays and a munitions depot.', cost: 800, energy: 480, time: 35, size: 5, hp: 1200, armor: 'struct', vision: 40, requires: ['factory'], produces: 'airfield', weapons: [] },
   techlab: { name: 'Tech Lab', desc: 'Unlocks Mk II units and advanced designs.', cost: 700, energy: 400, time: 30, size: 3, hp: 900, armor: 'struct', vision: 36, requires: ['factory'], weapons: [] },
   advtech: { name: 'Advanced Tech Lab', desc: 'Unlocks Mk III units.', cost: 1300, energy: 900, time: 40, size: 3, hp: 1100, armor: 'struct', vision: 36, requires: ['techlab'], weapons: [] },
   turret: { name: 'Gun Turret', desc: 'Defends against ground units.', cost: 300, energy: 120, time: 15, size: 1, hp: 900, armor: 'struct', vision: 52, requires: ['barracks'],
@@ -148,6 +203,31 @@ export const BUILDINGS = {
     weapons: [W({ type: 'aa', range: 75, dmg: 70, reload: 1.8, kind: 'missile', speed: 75, ground: false, air: true, radar: true })] },
   ewtower: { name: 'EW Tower', desc: 'Static jammer: degrades enemy drones, aircraft radar and missile locks in a wide area. Drains energy.', cost: 450, energy: 350, time: 18, size: 2, hp: 500, armor: 'struct', vision: 40, requires: ['techlab'], ew: { radius: 62, power: 2 }, upkeep: 6, weapons: [] },
 };
+
+// ---- Airfield layout & modules. Local frame: u along the runway (away from the terminal), v toward the apron side.
+export const AF = {
+  rw0: 14,                 // runway starts this far (u) from the airfield centre
+  rwLen: [0, 38, 58, 80],  // usable runway length by runway level (1 = base)
+  rwHalf: 6,               // half width
+  hold: 8,                 // arming / take-off hold point, distance past the threshold
+  stands: [0, 2, 4, 6],    // parking & arming stands by apron level
+  standU0: 22, standDU: 12, rowV: [13.5, 25.5], lane: 19.5, conn: 12, apV0: 8, apV1: 36,
+  taxi: 9,                 // taxi speed
+  selectTimeout: 60,       // seconds an aircraft waits on the runway for a loadout choice
+  maxLevel: 3,
+};
+export const AF_MODULES = {
+  runway: { name: 'Runway', short: 'RWY', levels: [
+    { name: 'Long Runway', cost: 550, energy: 200, time: 24, desc: 'Extends the runway to ' + AF.rwLen[2] + ' m. Required for the Heavy Bomber.' },
+    { name: 'Heavy Runway', cost: 1000, energy: 400, time: 32, desc: 'Extends the runway to ' + AF.rwLen[3] + ' m. Required for the heaviest loadouts.' } ] },
+  apron: { name: 'Apron & Hangars', short: 'APR', levels: [
+    { name: 'Hangar Bay I', cost: 450, energy: 150, time: 20, desc: 'Four aircraft stands (two more) and a hangar.' },
+    { name: 'Hangar Bay II', cost: 700, energy: 250, time: 26, desc: 'Six aircraft stands and a second hangar.' } ] },
+  depot: { name: 'Munitions Depot', short: 'DEP', levels: [
+    { name: 'Depot Level II', cost: 500, energy: 250, time: 22, desc: 'Unlocks level II loadouts. Ground crews work 30% faster.' },
+    { name: 'Depot Level III', cost: 900, energy: 500, time: 30, desc: 'Unlocks level III heavy ordnance. Ground crews work 60% faster.' } ] },
+};
+export const AF_KEYS = Object.keys(AF_MODULES);
 
 export const BUILD_ORDER = ['derrick', 'powerplant', 'barracks', 'factory', 'dronebay', 'airfield', 'techlab', 'advtech', 'turret', 'sam', 'ewtower'];
 export const PRODUCER_KINDS = ['hq', 'barracks', 'factory', 'airfield', 'dronebay'];

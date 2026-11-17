@@ -82,8 +82,8 @@ export function animateLegsIK(v, an, base, dt, speed, ground) {
 // aircraft get gentle turbulence.
 export function animateBody(v, e, d, dt, speed, time, firing) {
   const an = v.an, o = v.obj;
-  if (e.air) {
-    const t = time + e.id * 1.7, amp = d.base === 'fpv' ? 0.05 : 0.025;
+  if (d.air) {
+    const hv = e.h === undefined ? 1 : e.h, t = time + e.id * 1.7, amp = (d.base === 'fpv' ? 0.05 : 0.025) * hv;
     o.rotation.z += Math.sin(t * 1.3) * amp + Math.sin(t * 2.9) * amp * 0.4; o.rotation.x += Math.sin(t * 0.9 + 1) * amp * 0.7;
     return;
   }

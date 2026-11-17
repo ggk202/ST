@@ -107,6 +107,23 @@ table.stats { width:100%; margin:12px 0; border-collapse:collapse; } table.stats
 #tierSel { display:flex; gap:4px; } #tierSel button { flex:1; padding:3px 2px; border-radius:6px; border:1px solid var(--line); background:#131a22; font-size:11px; font-weight:800; } #tierSel button.on { background:#2b5a8a; color:#fff; } #tierSel button.locked { opacity:.4; }
 .item .co em { font-style:normal; color:#5ec8ff; } .item.cls-drn { border-color:#5a4a8a; }
 body.touch .item { min-height:66px; } body.touch .btn { min-height:44px; }
+
+/* ---- airfield: loadout picker + module panel ---- */
+#loadoutPanel { position:absolute; left:50%; transform:translateX(-50%); top:calc(54px + env(safe-area-inset-top)); width:min(96vw,900px); max-height:calc(100vh - 290px); overflow-y:auto; background:rgba(10,14,18,.96); border:1px solid var(--line); border-top:3px solid var(--blue); border-radius:10px; padding:10px 12px; z-index:6; pointer-events:auto; touch-action:pan-y; }
+#loadoutPanel h3 { margin:0; font-size:16px; } #loadoutPanel .sub { color:var(--dim); font-size:12px; margin:2px 0 8px; } #loadoutPanel .sub b { color:var(--acc2); }
+#loadoutPanel .cards { display:flex; flex-wrap:wrap; gap:8px; }
+.lcard { flex:1 1 200px; max-width:290px; background:#16202a; border:1px solid var(--line); border-radius:9px; padding:8px 10px; display:flex; flex-direction:column; gap:3px; text-align:left; }
+.lcard:not(.locked):active { filter:brightness(1.4); } .lcard.cur { border-color:var(--acc); box-shadow:0 0 0 1px var(--acc) inset; }
+.lcard.locked { opacity:.45; } .lcard.poor .cost { color:var(--bad); }
+.lcard .nm { font-weight:800; font-size:14px; } .lcard .ds { color:var(--dim); font-size:11.5px; line-height:1.25; } .lcard .wp { font-size:11.5px; color:#cfd8e0; } .lcard .wp div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lcard .cost { font-weight:700; font-size:12.5px; color:var(--acc2); } .lcard .cost em { font-style:normal; color:#5ec8ff; } .lcard .why { color:#ef5350; font-size:11.5px; font-weight:700; } .lcard .md { color:#8fd14f; font-size:11.5px; }
+#loadoutPanel .foot { display:flex; gap:14px; align-items:center; margin-top:8px; flex-wrap:wrap; font-size:12.5px; color:var(--dim); } #loadoutPanel .foot label { display:flex; gap:6px; align-items:center; } #loadoutPanel .foot .btn { margin-left:auto; min-height:32px; padding:4px 12px; }
+#afPanel { position:absolute; right:calc(86px + env(safe-area-inset-right)); top:calc(96px + env(safe-area-inset-top)); width:268px; background:rgba(10,14,18,.94); border:1px solid var(--line); border-radius:10px; padding:9px 11px; z-index:5; pointer-events:auto; font-size:12.5px; }
+#afPanel h3 { margin:0 0 4px; font-size:15px; } #afPanel .st { color:var(--dim); margin-bottom:6px; line-height:1.35; } #afPanel .st b { color:var(--acc2); }
+#afPanel .mod { border-top:1px solid #202a35; padding:6px 0; } #afPanel .mod .hd { display:flex; justify-content:space-between; align-items:center; font-weight:800; } .pips { letter-spacing:2px; color:var(--acc); }
+#afPanel .mod .btn { width:100%; margin-top:5px; min-height:34px; font-size:12px; padding:4px 6px; } #afPanel .mod .btn small { opacity:.75; font-weight:600; } #afPanel .mod .btn:disabled { opacity:.4; } #afPanel .mod .ds { color:var(--dim); font-size:11px; margin-top:2px; }
+#afPanel .bar { max-width:none; margin:5px 0 2px; } #afPanel label { display:flex; gap:6px; align-items:center; color:var(--dim); margin-top:6px; }
+@media (max-width: 860px) { #afPanel { top:calc(100px + env(safe-area-inset-top)); width:230px; } #loadoutPanel { max-height:calc(100vh - 330px); } }
 </style>
 </head>
 <body>
@@ -136,6 +153,8 @@ body.touch .item { min-height:66px; } body.touch .btn { min-height:44px; }
       <button id="btnDesel" title="Deselect (Esc)">CLEAR</button>
     </div>
     <div id="tip" class="hidden"></div>
+    <div id="loadoutPanel" class="hidden"></div>
+    <div id="afPanel" class="hidden"></div>
     <div id="placeBar" class="hidden"><button class="btn primary" id="btnPlaceOk">✔ Build</button><button class="btn danger" id="btnPlaceNo">✖ Cancel</button></div>
     <div id="bottom">
       <div id="minimapWrap"><canvas id="minimap" width="360" height="360"></canvas></div>
