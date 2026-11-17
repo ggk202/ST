@@ -6,12 +6,13 @@ import { PLAYER_COLORS, DEFS } from './sim/defs.js';
 import { Builder } from './model-core.js';
 import { GROUND } from './model-ground.js';
 import { AIR, PROPS_MODELS } from './model-air.js';
+import { AIR2 } from './model-air2.js';
 import { DRONES } from './model-drones.js';
 import { BUILDINGS } from './model-buildings.js';
 import { tierKit } from './model-tier.js';
 import { LOGI } from './model-logi.js';
 
-const MODELS = { ...GROUND, ...AIR, ...DRONES, ...BUILDINGS, ...PROPS_MODELS, ...LOGI };
+const MODELS = { ...GROUND, ...AIR, ...AIR2, ...DRONES, ...BUILDINGS, ...PROPS_MODELS, ...LOGI };
 
 const cache = new Map();
 const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0.12, flatShading: true });
@@ -26,8 +27,8 @@ function geoms(def, team, lod = 0) {
   if (!g) {
     const base = DEFS[def] ? DEFS[def].base : def;
     const b = new Builder(PLAYER_COLORS[team % PLAYER_COLORS.length], lod, lodScaleOf(base));
-    (MODELS[base] || MODELS.rifleman)(b);
-    const dd = DEFS[def]; if (dd && dd.kind === 'unit' && dd.tier > 1) tierKit(b, base, dd.tier);
+    const dd = DEFS[def];
+    (MODELS[base] || MODELS.rifleman)(b, dd && dd.tier || 1); if (dd && dd.kind === 'unit' && dd.tier > 1) tierKit(b, base, dd.tier);
     g = b.finish(); cache.set(key, g);
   }
   return g;

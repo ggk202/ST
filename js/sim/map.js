@@ -80,10 +80,10 @@ function flatten(map, cxw, czw, radius, target, inner) {
   }
 }
 
-function carve(map, ax, az, bx, bz, rng) {
+function carve(map, ax, az, bx, bz, rng, bend = 0.35) {
   const len = dist(ax, az, bx, bz);
-  const mx = (ax + bx) / 2 + (-(bz - az) / (len || 1)) * (rng.next() - 0.5) * len * 0.35;
-  const mz = (az + bz) / 2 + ((bx - ax) / (len || 1)) * (rng.next() - 0.5) * len * 0.35;
+  const mx = (ax + bx) / 2 + (-(bz - az) / (len || 1)) * (rng.next() - 0.5) * len * bend;
+  const mz = (az + bz) / 2 + ((bx - ax) / (len || 1)) * (rng.next() - 0.5) * len * bend;
   const seg = (x0, z0, x1, z1) => {
     const l = dist(x0, z0, x1, z1), steps = Math.max(1, Math.ceil(l));
     for (let s = 0; s <= steps; s++) {
@@ -180,11 +180,42 @@ export function generateMap({ size = 'medium', type = 'island', seed = 1, player
     if (nodes.some((o) => dist(o.ci, o.cj, ci, cj) < 22)) continue;
     addNode(ci, cj); k++;
   }
-  // guarantee connectivity between all spawns
+  // no direct route between bases: serpentine ridge walls across every spawn-to-spawn line, each with a gap far off-centre
+  // (alternating sides), then a winding road is carved through the gaps so every base stays reachable
+  const routes = [];
   for (let a = 0; a < map.spawns.length; a++) for (let b = a + 1; b < map.spawns.length; b++) {
-    carve(map, map.spawns[a].ci, map.spawns[a].cj, map.spawns[b].ci, map.spawns[b].cj, rng);
+    const A = map.spawns[a], B = map.spawns[b], L = dist(A.ci, A.cj, B.ci, B.cj);
+    const dx = (B.ci - A.ci) / L, dz = (B.cj - A.cj) / L, px = -dz, pz = dx;
+    const side = rng.next() < 0.5 ? 1 : -1, wp = [[A.ci, A.cj]];
+    (L < 150 ? [0.4, 0.5, 0.6] : [0.3, 0.5, 0.7]).forEach((t, k) => {
+      const cx = A.ci + dx * L * t, cz = A.cj + dz * L * t, g = side * (k % 2 ? -1 : 1) * L * (0.2 + 0.08 * rng.next());
+      const gx = cx + px * g, gz = cz + pz * g;
+      const wob = rng.next() * 100;
+      for (let o = -n; o <= n; o += 0.5) {
+        const wx = cx + px * o + dx * (fbm(o * 0.05, wob, s + 21, 2) - 0.5) * 14, wz = cz + pz * o + dz * (fbm(o * 0.05, wob, s + 21, 2) - 0.5) * 14;
+        const ci = Math.round(wx), cj = Math.round(wz);
+        if (ci < 1 || cj < 1 || ci > n - 1 || cj > n - 1) continue;
+        if (Math.abs(o - g) < 6) continue;
+        if (map.spawns.some((sp) => dist(sp.ci, sp.cj, wx, wz) < 28)) continue;
+        if (nodes.some((nd) => dist(nd.ci, nd.cj, wx, wz) < 9)) continue;
+        for (let j = cj - 5; j <= cj + 5; j++) for (let i = ci - 5; i <= ci + 5; i++) {
+          if (i < 0 || j < 0 || i > n || j > n) continue;
+          const wt = 1 - smoothstep(1.5, 5, dist(i, j, wx, wz));
+          if (wt > 0) { const kk = j * w + i; map.h[kk] = Math.max(map.h[kk], 46 * wt * (0.9 + 0.2 * fbm(i * 0.2, j * 0.2, s + 5, 2))); }
+        }
+      }
+      wp.push([gx, gz]);
+    });
+    wp.push([B.ci, B.cj]); routes.push(wp);
   }
+  for (const wp of routes) for (let i = 0; i + 1 < wp.length; i++) carve(map, wp[i][0], wp[i][1], wp[i + 1][0], wp[i + 1][1], rng, i > 0 && i + 2 < wp.length ? 0 : 0.35);
   map.computeCells();
+  // fallback: if walls/carving still left a base cut off, carve a direct link to the nearest connected base
+  for (let a = 1; a < map.spawns.length; a++) {
+    const sd = map.reachable(Math.floor(map.spawns[0].ci), Math.floor(map.spawns[0].cj));
+    const sp = map.spawns[a];
+    if (!sd[Math.floor(sp.cj) * n + Math.floor(sp.ci)]) { carve(map, map.spawns[0].ci, map.spawns[0].cj, sp.ci, sp.cj, rng, 0.35); map.computeCells(); }
+  }
   let seen = map.reachable(Math.floor(map.spawns[0].ci), Math.floor(map.spawns[0].cj));
   for (const nd of nodes) {
     if (seen[Math.min(n - 1, nd.cj) * n + Math.min(n - 1, nd.ci)]) continue;

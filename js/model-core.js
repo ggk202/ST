@@ -84,6 +84,64 @@ export class Builder {
     this.groups[this.cur].push({ pos, nor, cols, aw });
     return this;
   }
+
+  // raw geometry with per-vertex colour (indexed positions + smooth normals); pushes into the current group
+  raw(pos, idx, colFn, flip) {
+    const k = this.sc, g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+    let cx = 0, cy = 0, cz = 0; const n = pos.length / 3; for (let i = 0; i < pos.length; i += 3) { cx += pos[i]; cy += pos[i + 1]; cz += pos[i + 2]; } cx /= n; cy /= n; cz /= n;
+    // orientation check: normals should point away from the centroid on average
+    const nn = g.getAttribute('normal').array; let dot = 0; for (let i = 0; i < pos.length; i += 3) dot += nn[i] * (pos[i] - cx) + nn[i + 1] * (pos[i + 1] - cy) + nn[i + 2] * (pos[i + 2] - cz);
+    if (dot < 0) { const ix = g.index.array; for (let i = 0; i < ix.length; i += 3) { const t = ix[i + 1]; ix[i + 1] = ix[i + 2]; ix[i + 2] = t; } g.computeVertexNormals(); }
+    const ni = g.toNonIndexed(), P = ni.getAttribute('position').array, N = ni.getAttribute('normal').array;
+    const cols = new Float32Array(P.length), aw = new Float32Array(P.length);
+    const rp = this.cur !== 'hull' ? (this.rp[this.cur] || [0, 0, 0]) : [0, 0, 0];
+    for (let i = 0; i < P.length; i += 3) {
+      colFn(P[i], P[i + 1], P[i + 2], _c); cols[i] = _c.r; cols[i + 1] = _c.g; cols[i + 2] = _c.b;
+      P[i] = P[i] * k - rp[0]; P[i + 1] = P[i + 1] * k - rp[1]; P[i + 2] = P[i + 2] * k - rp[2];
+    }
+    this.groups[this.cur].push({ pos: P, nor: N, cols, aw });
+    return this;
+  }
+  // loft closed rings (arrays of [x,y,z], equal point count) into a smooth solid with flat end caps.
+  // color: hex / T, or [top, bottom] hex for vertical shading across the part
+  loft(rings, color, capEnds = true) {
+    const m = rings[0].length, pos = [], idx = [];
+    for (const r of rings) for (const p of r) pos.push(p[0], p[1], p[2]);
+    for (let i = 0; i + 1 < rings.length; i++) for (let j = 0; j < m; j++) {
+      const a = i * m + j, b2 = i * m + (j + 1) % m, c = (i + 1) * m + j, d = (i + 1) * m + (j + 1) % m;
+      idx.push(a, b2, c, b2, d, c);
+    }
+    if (capEnds) for (const ri of [0, rings.length - 1]) {
+      const r = rings[ri], base = pos.length / 3; let cx = 0, cy = 0, cz = 0; for (const p of r) { cx += p[0]; cy += p[1]; cz += p[2]; } cx /= m; cy /= m; cz /= m;
+      for (const p of r) pos.push(p[0], p[1], p[2]); pos.push(cx, cy, cz);
+      for (let j = 0; j < m; j++) idx.push(base + j, base + (j + 1) % m, base + m);
+    }
+    let y0 = 1e9, y1 = -1e9; for (let i = 1; i < pos.length; i += 3) { if (pos[i] < y0) y0 = pos[i]; if (pos[i] > y1) y1 = pos[i]; }
+    const top = new THREE.Color(Array.isArray(color) ? color[0] : (color === T ? this.team : color)), bot = new THREE.Color(Array.isArray(color) ? color[1] : (color === T ? this.team : color));
+    return this.raw(pos, idx, (x, y, z, out) => { const t = y1 > y0 ? (y - y0) / (y1 - y0) : 0.5; out.copy(bot).lerp(top, Math.min(1, Math.max(0, t * 1.15 - 0.05))); }, false);
+  }
+  // smooth fuselage / nacelle / canopy along Z from stations {z, w (half width), t (top), bt (bottom), y, x, p (superellipse exponent: 2 round, 3+ boxy, <2 faceted)}
+  fuse(st, color, seg = 14) {
+    if (this.lod === 1) seg = Math.max(8, seg - 4); else if (this.lod >= 2) seg = Math.max(6, seg - 8);
+    const rings = st.map((q) => {
+      const p = 2 / (q.p || 2.2), r = [];
+      for (let j = 0; j < seg; j++) {
+        const a = j / seg * PI * 2, c = Math.cos(a), s = Math.sin(a);
+        r.push([(q.x || 0) + q.w * Math.sign(c) * Math.pow(Math.abs(c), p), (q.y || 0) + (s >= 0 ? q.t : (q.bt ?? q.t)) * Math.sign(s) * Math.pow(Math.abs(s), p), q.z]);
+      }
+      return r;
+    });
+    return this.loft(rings, color);
+  }
+  // swept tapered aerofoil panel. sections [{x (span pos), z (leading edge), c (chord), y, t (half thickness)}]; map(x,y,z) turns local to model space
+  // (default identity, pass a mapper for fins / mirrored wings)
+  wing(sec, color, map) {
+    const f = map || ((x, y, z) => [x, y, z]);
+    const rings = sec.map((q) => [[q.x, q.y, q.z], [q.x, q.y + q.t, q.z - q.c * 0.22], [q.x, q.y + q.t * 0.7, q.z - q.c * 0.65], [q.x, q.y + q.t * 0.1, q.z - q.c], [q.x, q.y - q.t * 0.6, q.z - q.c * 0.65], [q.x, q.y - q.t, q.z - q.c * 0.22]].map((p) => f(p[0], p[1], p[2])));
+    return this.loft(rings, color);
+  }
+  wingPair(sec, color) { this.wing(sec, color); return this.wing(sec, color, (x, y, z) => [-x, y, z]); }
   box(w, h, d, x, y, z, color, rot) { return this.add('box', w, h, d, x, y, z, color, rot); }
   cyl(r, h, x, y, z, color, rot) { return this.add('cyl', r, h, r, x, y, z, color, rot); }
   cyl6(r, h, x, y, z, color, rot) { return this.add('cyl6', r, h, r, x, y, z, color, rot); }

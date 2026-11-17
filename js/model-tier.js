@@ -77,17 +77,17 @@ function infantry(b, tier) {
 // ---------------- aircraft ----------------
 // sy: spine height, sz: spine centre, zr: tail z, wx: half span, wy / wz: wing height / z, bl: belly, nz: nose z, fx / fy: fin x / height
 const AIRK = {
-  uav: { sy: 0.34, sz: 0.2, zr: -1.9, wx: 3.6, wy: 0.08, wz: 0.1, bl: -0.3, nz: 1.5, fx: 0.4, fy: 0.7 },
-  fighter: { sy: 0.5, sz: -0.5, zr: -4.2, wx: 5.0, wy: -0.1, wz: -0.9, bl: -0.7, nz: 3.5, fx: 0.85, fy: 1.7 },
-  vtol: { sy: 0.55, sz: -0.2, zr: -3.6, wx: 4.4, wy: -0.1, wz: -0.5, bl: -0.7, nz: 3.2, fx: 0.8, fy: 1.5 },
-  heli: { sy: 0.95, sz: -1.5, zr: -4.5, wx: 1.6, wy: -0.2, wz: 0.2, bl: -0.7, nz: 2.6, fx: 0.0, fy: 0 },
-  ewplane: { sy: 1.0, sz: 0.4, zr: -3.2, wx: 4.5, wy: -0.2, wz: -0.6, bl: -0.7, nz: 3.0, fx: 0.0, fy: 0 },
-  bomber: { sy: 1.6, sz: 0.5, zr: -9.0, wx: 12.0, wy: 0.4, wz: -0.6, bl: -1.9, nz: 8.0, fx: 0.9, fy: 4.2 },
-  strategic: { sy: 2.0, sz: 2.0, zr: -14.5, wx: 23.0, wy: 0.3, wz: -1.5, bl: -2.2, nz: 12, fx: 1.0, fy: 4.8 },
+  uav: { sy: 0.4, sz: 0.2, zr: -1.9, wx: 3.6, wy: 0.08, wz: 0.1, bl: -0.3, nz: 1.5, fx: 0.0, fy: 0, smooth: 1 },
+  fighter: { sy: 0.5, sz: -0.5, zr: -4.2, wx: 5.0, wy: -0.1, wz: -0.9, bl: -0.7, nz: 3.5, fx: 0.0, fy: 0, smooth: 1 },
+  vtol: { sy: 0.55, sz: -0.2, zr: -3.6, wx: 4.4, wy: -0.1, wz: -0.5, bl: -0.7, nz: 3.2, fx: 0.0, fy: 0, smooth: 1 },
+  heli: { sy: 0.95, sz: -1.5, zr: -4.5, wx: 1.6, wy: -0.2, wz: 0.2, bl: -0.7, nz: 2.6, fx: 0.0, fy: 0, smooth: 1 },
+  ewplane: { sy: 1.0, sz: 0.4, zr: -3.2, wx: 4.5, wy: -0.2, wz: -0.6, bl: -0.7, nz: 3.0, fx: 0.0, fy: 0, smooth: 1 },
+  bomber: { sy: 1.6, sz: 0.5, zr: -9.0, wx: 12.0, wy: 0.4, wz: -0.6, bl: -1.9, nz: 8.0, fx: 0.0, fy: 0, smooth: 1 },
+  strategic: { sy: 2.0, sz: 2.0, zr: -14.5, wx: 23.0, wy: 0.3, wz: -1.5, bl: -2.2, nz: 12, fx: 0.0, fy: 0, smooth: 1 },
   airlifter: { sy: 3.1, sz: 5.0, zr: -19.0, wx: 26.0, wy: 2.7, wz: -1.0, bl: -3.0, nz: 14, fx: 0.0, fy: 11 },
   tanker: { sy: 3.1, sz: 5.0, zr: -19.0, wx: 26.0, wy: 2.7, wz: -1.0, bl: -3.0, nz: 14, fx: 0.0, fy: 11 },
   awacs: { sy: 2.2, sz: 5.0, zr: -14.5, wx: 17.0, wy: 0.9, wz: -0.8, bl: -2.3, nz: 11, fx: 1.0, fy: 5 },
-  spydrone: { sy: 1.4, sz: 3.0, zr: -8.0, wx: 26.0, wy: 0.0, wz: -1.2, bl: -1.0, nz: 9, fx: 0.0, fy: 0 },
+  spydrone: { sy: 1.4, sz: 3.0, zr: -8.0, wx: 26.0, wy: 0.0, wz: -1.2, bl: -1.0, nz: 9, fx: 0.0, fy: 0, smooth: 1 },
 };
 function aircraft(b, A, tier) {
   const t3 = tier >= 3, acc = t3 ? ACC3 : ACC2, k = Math.pow(Math.max(0.6, Math.min(3.2, A.wx / 5)), 0.7);
@@ -97,7 +97,7 @@ function aircraft(b, A, tier) {
   chevron(b, 0, A.sy + 0.03, A.sz - 1.6 * k, acc, 1.2 * k, 0.5);
   if (A.fy) for (const s of A.fx ? [-1, 1] : [0]) b.box(0.07, 0.45 * k, 1.0 * k, s * (A.fx + 0.06), A.fy * 0.72, A.zr + 0.8 * k + (A.fx ? 0.4 : 0), acc);
   b.sph(0.32 * k, 0, A.bl + 0.12 * k, A.nz * 0.55, DARK2, 0.8, 1.0); b.sph6(0.14 * k, 0, A.bl + 0.1 * k, A.nz * 0.55 + 0.25 * k, t3 ? ACC3 : GLASS);
-  for (const s of [-1, 1]) b.box(0.5 * k, 0.05, 0.3 * k, s * A.wx * 0.97, A.wy + 0.12, A.wz - A.wx * 0.12, acc);   // wingtip markers
+  if (!A.smooth) for (const s of [-1, 1]) b.box(0.5 * k, 0.05, 0.3 * k, s * A.wx * 0.97, A.wy + 0.12, A.wz - A.wx * 0.12, acc);   // wingtip markers
   b.box(0.5 * k, 0.06, 1.4 * k, 0, A.sy + 0.04, A.sz + 1.2 * k, PLATE);                                           // dorsal blade-antenna panel
   if (t3) {
     // directed-energy defense turrets (dorsal + ventral): ball turret with a cyan emitter lens
@@ -105,7 +105,7 @@ function aircraft(b, A, tier) {
       const z = dir > 0 ? A.sz + 0.2 : A.sz * 0.4;
       b.cyl(0.42 * k, 0.28 * k, 0, y, z, DARK2); b.sph(0.4 * k, 0, y + dir * 0.28 * k, z, PLATE3, 0.8, 0.9); b.cyl(0.09 * k, 0.55 * k, 0, y + dir * 0.4 * k, z + 0.32 * k, METAL, [PI / 2, 0, 0]); b.sph6(0.13 * k, 0, y + dir * 0.4 * k, z + 0.66 * k, ACC3);
     }
-    for (const s of [-1, 1]) {
+    if (!A.smooth) for (const s of [-1, 1]) {
       b.box(A.wx * 0.5, 0.04, 0.12 * k, s * A.wx * 0.38, A.wy + 0.16, A.wz + 0.3 * k, ACC3);                      // conformal EW antenna arrays
       b.box(A.wx * 0.22, 0.05, 0.4 * k, s * A.wx * 0.2, A.wy + 0.14, A.wz - 0.7 * k, PLATE3);
     }
