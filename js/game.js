@@ -52,7 +52,7 @@ export class Game {
     // on selecting own production buildings, show the matching tab
     const e = ids.length === 1 ? this.sim.byId.get(ids[0]) : null;
     if (e && e.owner === this.local && e.kind === 'building') {
-      const p = { barracks: 'inf', hq: 'inf', factory: 'veh', airfield: 'air' }[e.def]; if (p) this.hud.setTab(p);
+      const p = { barracks: 'inf', hq: 'inf', factory: 'veh', airfield: 'air', dronebay: 'drn' }[e.def]; if (p) this.hud.setTab(p);
     }
   }
   jumpHome() { const h = this.sim.hq(this.local); if (h) this.renderer.centerOn(h.x, h.z); }

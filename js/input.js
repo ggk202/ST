@@ -335,7 +335,7 @@ export class Controls {
     }
     if (this.selBlds().length && !hasUnits && code === 'KeyF') { stop(); this.setMode({ t: 'rally' }); return; }
     if (!mod) {
-      if (code === 'KeyB') this.g.hud.setTab('str'); else if (code === 'KeyI') this.g.hud.setTab('inf'); else if (code === 'KeyV') this.g.hud.setTab('veh'); else if (code === 'KeyY') this.g.hud.setTab('air');
+      if (code === 'KeyB') this.g.hud.setTab('str'); else if (code === 'KeyI') this.g.hud.setTab('inf'); else if (code === 'KeyV') this.g.hud.setTab('veh'); else if (code === 'KeyY') this.g.hud.setTab('air'); else if (code === 'KeyD' && !e.ctrlKey && !e.metaKey) this.g.hud.setTab('drn'); else if (code === 'KeyT' && this.g.hud.tab !== 'str') this.g.hud.setTier(this.g.hud.tier % 3 + 1);
     }
     if (code.startsWith('Arrow') || code === 'Space') stop();
   }

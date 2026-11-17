@@ -23,7 +23,7 @@ for (const [size, type, seed, n] of [['small', 'island', 1, 2], ['medium', 'high
   const cfg = mk(size, type, seed, n);
   const r = run(cfg, 600);
   const s = r.sim;
-  const counts = s.players.map((p) => `${p.name}:${p.alive ? 'alive' : 'dead'} u=${p.units} cr=${Math.floor(p.credits)} kills=${p.stats.killed}`).join(' | ');
+  const counts = s.players.map((p) => `${p.name}:${p.alive ? 'alive' : 'dead'} u=${p.units} M=${Math.floor(p.credits)} E=${Math.floor(p.energy)} +${p.pM.toFixed(0)}m/${(p.pE-p.pU).toFixed(0)}e tech=${p.tech} kills=${p.stats.killed}`).join(' | ');
   console.log(`${size}/${type}/seed${seed}/${n}p  t=${(s.tick / 20) | 0}s ents=${s.ents.length} over=${s.over} winner=${s.winner}  wall=${r.ms.toFixed(0)}ms avg=${(r.ms / s.tick).toFixed(2)}ms/tick max=${r.maxTick.toFixed(1)}ms`);
   console.log('   ' + counts);
   // reachability check: every spawn must reach every other spawn and all oil nodes

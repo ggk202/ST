@@ -1,24 +1,26 @@
 // HUD: top bar, minimap, selection panel, build/production panel, toasts.
-import { UNITS, BUILDINGS, BUILD_ORDER, DEFS, UNIT_CAP, PLAYER_COLORS } from './sim/defs.js';
+import { UNITS, BUILDINGS, BUILD_ORDER, BASE_ORDER, BASE_UNITS, DEFS, UNIT_CAP, PLAYER_COLORS, unitId, ROMAN } from './sim/defs.js';
 import { sfx } from './fx.js';
 
-const ABBR = { rifleman: 'RIF', at: 'AT', manpads: 'MAN', engineer: 'ENG', scout: 'SCT', ifv: 'IFV', mbt: 'MBT', aa: 'FLK', sph: 'SPH', heavy: 'HVY', mlrs: 'MRL', tel: 'BMS', uav: 'UAV', heli: 'HEL', vtol: 'VTL', derrick: 'OIL', barracks: 'BAR', factory: 'FAC', airfield: 'AIR', techlab: 'LAB', turret: 'GUN', sam: 'SAM', hq: 'HQ' };
+const ABBR = { rifleman: 'RIF', at: 'AT', manpads: 'MAN', engineer: 'ENG', scout: 'SCT', ifv: 'IFV', mbt: 'MBT', aa: 'FLK', sph: 'SPH', heavy: 'HVY', mlrs: 'MRL', tel: 'BMS', uav: 'UAV', heli: 'HEL', vtol: 'VTL', ewtruck: 'EWT', ewplane: 'EWA', robot: 'BOT', ewdog: 'EWD', sapper: 'CRW', repair: 'RPR', walker: 'WLK', fpv: 'FPV', wingman: 'WNG', carrier: 'DSD', empcarrier: 'EMP', powerplant: 'PWR', dronebay: 'DRN', advtech: 'LB2', ewtower: 'EWS', derrick: 'OIL', barracks: 'BAR', factory: 'FAC', airfield: 'AIR', techlab: 'LAB', turret: 'GUN', sam: 'SAM', hq: 'HQ' };
 const TABS = [
   { id: 'str', label: 'Build', key: 'B', cls: 'str' },
   { id: 'inf', label: 'Infantry', key: 'I', cls: 'inf', from: ['barracks', 'hq'] },
   { id: 'veh', label: 'Vehicles', key: 'V', cls: 'veh', from: ['factory'] },
   { id: 'air', label: 'Aircraft', key: 'Y', cls: 'air', from: ['airfield'] },
+  { id: 'drn', label: 'Drones', key: 'D', cls: 'drn', from: ['dronebay'] },
 ];
 const $ = (id) => document.getElementById(id);
+const abbr = (def) => { const d = DEFS[def]; return (ABBR[d.base] || d.base) + (d.tier > 1 ? ROMAN[d.tier] : ''); };
 const fmtTime = (s) => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 
 export class HUD {
   constructor(game) {
-    this.g = game; this.sim = game.sim; this.tab = 'str'; this.items = {}; this.lastSig = ''; this.acc = 1; this.mmAcc = 1;
-    this.el = { credits: $('credits'), income: $('income'), units: $('unitcount'), clock: $('clock'), net: $('netinfo'), toasts: $('toasts'), banner: $('modeBanner'), tip: $('tip'), placeBar: $('placeBar'), selInfo: $('selInfo'), cmdBar: $('cmdBar'), tabs: $('tabs'), queue: $('queue'), items: $('items'), mm: $('minimap') };
+    this.g = game; this.sim = game.sim; this.tab = 'str'; this.tier = 1; this.items = {}; this.lastSig = ''; this.acc = 1; this.mmAcc = 1;
+    this.el = { credits: $('credits'), income: $('income'), energy: $('energy'), eincome: $('eincome'), eff: $('eff'), tierSel: $('tierSel'), credBox: $('statM'), enBox: $('statE'), units: $('unitcount'), clock: $('clock'), net: $('netinfo'), toasts: $('toasts'), banner: $('modeBanner'), tip: $('tip'), placeBar: $('placeBar'), selInfo: $('selInfo'), cmdBar: $('cmdBar'), tabs: $('tabs'), queue: $('queue'), items: $('items'), mm: $('minimap') };
     this.mmCtx = this.el.mm.getContext('2d');
     this.lastToast = 0; this.lastAlertToast = -99; this.lastReady = 0; this.pings = [];
-    this.buildTabs(); this.buildItems(); this.bindStatic(); this.buildMinimapTerrain();
+    this.buildTabs(); this.buildTierSel(); this.buildItems(); this.bindStatic(); this.buildMinimapTerrain();
     this.fogCanvas = document.createElement('canvas'); this.fogCanvas.width = this.fogCanvas.height = this.sim.map.n;
     this.fogCtx = this.fogCanvas.getContext('2d'); this.fogImg = this.fogCtx.createImageData(this.sim.map.n, this.sim.map.n);
     this.renderSel(true);
@@ -88,19 +90,28 @@ export class HUD {
   }
   setTab(id) { if (this.tab === id && this.built) return; this.tab = id; this.buildItems(); sfx('ui', 0.3); }
   cycleTab(d) { const i = TABS.findIndex((t) => t.id === this.tab); this.setTab(TABS[(i + d + TABS.length) % TABS.length].id); }
+  buildTierSel() {
+    const box = this.el.tierSel; if (!box) return; box.innerHTML = '';
+    for (let t = 1; t <= 3; t++) {
+      const b = document.createElement('button'); b.textContent = 'Mk ' + ROMAN[t]; b.dataset.t = t; b.title = 'Unit tier (T cycles). Mk II needs a Tech Lab, Mk III an Advanced Tech Lab.';
+      b.addEventListener('click', () => this.setTier(t)); box.appendChild(b);
+    }
+  }
+  setTier(t) { this.tier = t; this.buildItems(); sfx('ui', 0.3); }
   typesForTab() {
     if (this.tab === 'str') return BUILD_ORDER;
     const t = TABS.find((x) => x.id === this.tab);
-    return Object.keys(UNITS).filter((k) => t.from.includes(UNITS[k].from));
+    return BASE_ORDER.filter((k) => t.from.includes(BASE_UNITS[k].from)).map((k) => unitId(k, this.tier));
   }
   buildItems() {
     const box = this.el.items; box.innerHTML = ''; this.items = {}; this.built = true;
     for (const b of this.el.tabs.children) b.classList.toggle('on', b.dataset.id === this.tab);
     const cls = TABS.find((x) => x.id === this.tab).cls;
+    if (this.el.tierSel) { this.el.tierSel.classList.toggle('hidden', this.tab === 'str'); for (const b of this.el.tierSel.children) b.classList.toggle('on', +b.dataset.t === this.tier); }
     for (const type of this.typesForTab()) {
       const d = DEFS[type];
       const it = document.createElement('div'); it.className = 'item cls-' + cls;
-      it.innerHTML = '<span class="ab">' + (ABBR[type] || type) + '</span><span class="nm">' + d.name + '</span><span class="co">' + d.cost + '</span><span class="bd hidden"></span>';
+      it.innerHTML = '<span class="ab">' + (d.kind === 'unit' ? abbr(type) : (ABBR[type] || type)) + '</span><span class="nm">' + (d.baseName || d.name) + (d.batch > 1 ? ' ×' + d.batch : '') + '</span><span class="co">' + d.cost + '<em>' + (d.energy ? ' · ' + d.energy : '') + '</em></span><span class="bd hidden"></span>';
       it.addEventListener('click', (e) => this.itemClick(type, e));
       it.addEventListener('contextmenu', (e) => { e.preventDefault(); if (UNITS[type]) this.g.cmd({ t: 'dequeue', type }); });
       const tip = () => this.showItemTip(type);
@@ -114,7 +125,8 @@ export class HUD {
     const L = this.g.local, sim = this.sim, d = DEFS[type];
     if (d.kind === 'building') { for (const r of d.requires) if (!sim.ownerHas(L, r)) return 'Requires ' + BUILDINGS[r].name; return ''; }
     if (!sim.ownerHas(L, d.from)) return 'Requires ' + BUILDINGS[d.from].name;
-    for (const t of d.tech) if (!sim.ownerHas(L, t)) return 'Requires ' + BUILDINGS[t].name;
+    const tech = sim.players[L].tech;
+    if (tech < d.techLv) return 'Requires ' + (d.techLv >= 2 ? BUILDINGS.advtech.name : BUILDINGS.techlab.name);
     return '';
   }
   itemClick(type, e) {
@@ -122,24 +134,32 @@ export class HUD {
     const why = this.lockReason(type), d = DEFS[type], p = this.sim.players[this.g.local];
     if (why) { this.toast(why, 'warn'); sfx('ui', 0.5); return; }
     if (d.kind === 'building') { this.c.startPlace(type); return; }
-    if (p.credits < d.cost) { this.toast('Not enough credits', 'warn'); return; }
     this.g.cmd({ t: 'train', type, n: e.shiftKey ? 5 : 1 }); sfx('ui', 0.6);
   }
   showItemTip(type) {
     const d = DEFS[type], why = this.lockReason(type);
     const t = this.el.tip; t.classList.remove('hidden');
-    t.innerHTML = '<b>' + d.name + '</b> · ' + d.cost + ' cr · ' + d.time + 's<br>' + d.desc + (why ? '<br><span style="color:#ef5350">' + why + '</span>' : '') + (d.kind === 'unit' ? '<br><small style="color:#8a99a8">Shift+click: ×5 · right-click: cancel</small>' : '');
+    t.innerHTML = '<b>' + d.name + '</b> · ⛏' + d.cost + (d.energy ? ' ⚡' + d.energy : '') + ' · ' + d.time + 's<br>' + d.desc + this.statLine(d) + (why ? '<br><span style="color:#ef5350">' + why + '</span>' : '') + (d.kind === 'unit' ? '<br><small style="color:#8a99a8">Shift+click: ×5 · right-click: cancel</small>' : '');
     clearTimeout(this.tipT); this.tipT = setTimeout(() => this.hideTip(), 4000);
+  }
+  statLine(d) {
+    if (d.kind !== 'unit') return d.upkeep ? '<br><small style="color:#8a99a8">Upkeep ⚡' + d.upkeep + '/s</small>' : (d.incomeE ? '<br><small style="color:#8a99a8">+⚡' + d.incomeE + '/s</small>' : (d.income ? '<br><small style="color:#8a99a8">+⛏' + d.income + '/s</small>' : ''));
+    let s = '<br><small style="color:#8a99a8">HP ' + d.hp + ' · speed ' + d.speed;
+    const w = d.weapons[0]; if (w) s += ' · dmg ' + w.dmg + ' · range ' + w.range;
+    if (d.ew) s += ' · jam r' + d.ew.radius; if (d.upkeep) s += ' · ⚡' + d.upkeep + '/s';
+    if (d.drone) s += ' · DRONE';
+    return s + '</small>';
   }
   hideTip() { if (this.mode !== 'place') this.el.tip.classList.add('hidden'); }
   refreshItems() {
     const L = this.g.local, sim = this.sim, p = sim.players[L];
     const queued = {};
     for (const b of sim.ents) if (!b.dead && b.owner === L && b.kind === 'building') for (const q of b.queue) queued[q.type] = (queued[q.type] || 0) + 1;
+    if (this.el.tierSel) for (const b of this.el.tierSel.children) b.classList.toggle('locked', p.tech < (+b.dataset.t - 1));
     for (const type in this.items) {
       const it = this.items[type], d = DEFS[type];
       it.classList.toggle('locked', !!this.lockReason(type));
-      it.classList.toggle('poor', p.credits < d.cost);
+      it.classList.toggle('poor', p.credits < d.cost * 0.1 || p.energy < d.energy * 0.05);
       const bd = it.querySelector('.bd'), q = queued[type] || 0;
       bd.textContent = q; bd.classList.toggle('hidden', !q);
     }
@@ -155,7 +175,7 @@ export class HUD {
     for (const b of sim.ents) {
       if (b.dead || b.owner !== L || b.kind !== 'building' || !b.queue.length) continue;
       const it = b.queue[0], d = UNITS[it.type];
-      chips.push({ type: it.type, pct: 1 - it.left / d.timeTicks, more: b.queue.length - 1 });
+      chips.push({ type: it.type, pct: 1 - it.left / d.timeTicks, more: b.queue.length - 1, stall: p.eff < 0.5 });
     }
     chips.sort((a, b) => b.pct - a.pct);
     const sig = chips.slice(0, 7).map((c) => c.type + Math.floor(c.pct * 20) + c.more).join('|');
@@ -163,7 +183,7 @@ export class HUD {
       this.qSig = sig; q.innerHTML = '';
       for (const c of chips.slice(0, 7)) {
         const s = document.createElement('span'); s.className = 'qchip'; s.title = 'Tap to cancel one';
-        s.innerHTML = ABBR[c.type] + (c.more ? ' +' + c.more : '') + '<i style="width:' + Math.round(c.pct * 100) + '%"></i>';
+        s.innerHTML = abbr(c.type) + (c.more ? ' +' + c.more : '') + '<i style="width:' + Math.round(c.pct * 100) + '%"></i>';
         s.addEventListener('click', () => this.g.cmd({ t: 'dequeue', type: c.type }));
         q.appendChild(s);
       }
@@ -191,7 +211,7 @@ export class HUD {
       box.innerHTML = '<h3>' + ents.length + ' selected</h3><div class="bar"><i id="hpFill"></i></div><div class="chips" id="selChips"></div>';
       const chips = box.querySelector('#selChips');
       for (const [def, n] of g) {
-        const c = document.createElement('button'); c.className = 'chip'; c.textContent = (ABBR[def] || def) + ' ×' + n; c.title = 'Select only ' + DEFS[def].name;
+        const c = document.createElement('button'); c.className = 'chip'; c.textContent = (DEFS[def].kind === 'unit' ? abbr(def) : (ABBR[def] || def)) + ' ×' + n; c.title = 'Select only ' + DEFS[def].name;
         c.addEventListener('click', () => this.g.setSel(ents.filter((e) => e.def === def).map((e) => e.id)));
         chips.appendChild(c);
       }
@@ -245,7 +265,7 @@ export class HUD {
   placeInfo(info) {
     const t = this.el.tip; t.classList.remove('hidden');
     const d = BUILDINGS[info.type];
-    t.innerHTML = '<b>' + d.name + '</b> · ' + d.cost + ' cr<br>' + (info.ok ? (this.g.touch ? 'Tap to move, ✔ to build.' : 'Click to build (Shift: keep placing, right-click cancels).') : '<span style="color:#ef5350">' + (info.reason || 'Cannot build here') + '</span>');
+    t.innerHTML = '<b>' + d.name + '</b> · ⛏' + d.cost + (d.energy ? ' ⚡' + d.energy : '') + this.statLine(d) + '<br>' + (info.ok ? (this.g.touch ? 'Tap to move, ✔ to build.' : 'Click to build (Shift: keep placing, right-click cancels).') : '<span style="color:#ef5350">' + (info.reason || 'Cannot build here') + '</span>');
   }
   showPlaceBar(v) { this.el.placeBar.classList.toggle('hidden', !(v && this.g.touch)); }
 
@@ -306,8 +326,14 @@ export class HUD {
     if (this.mmAcc > 0.1) { this.drawMinimap(this.mmAcc); this.mmAcc = 0; }
     if (this.acc < 0.2) return;
     this.acc = 0;
+    const dm = p.pM - p.demM * p.eff, de = p.pE - p.pU - p.demE * p.eff;
     this.el.credits.textContent = Math.floor(p.credits);
-    this.el.income.textContent = '+' + (p.income * (p.ai ? 1 : 1)).toFixed(0) + '/s';
+    this.el.income.textContent = '+' + p.pM.toFixed(0) + ' / −' + (p.demM * p.eff).toFixed(0);
+    this.el.energy.textContent = Math.floor(p.energy);
+    this.el.eincome.textContent = '+' + p.pE.toFixed(0) + ' / −' + (p.pU + p.demE * p.eff).toFixed(0);
+    this.el.credBox.classList.toggle('low', p.credits < 20 && p.demM > p.pM); this.el.enBox.classList.toggle('low', p.energy < 20 && p.demE + p.pU > p.pE);
+    this.el.eff.textContent = p.eff < 0.97 ? 'Build speed ' + Math.round(p.eff * 100) + '%' : ''; this.el.eff.style.color = p.eff < 0.5 ? '#ef5350' : '#e8c04a';
+    this.el.credBox.querySelector('i').style.width = Math.round(p.credits / Math.max(1, p.capM) * 100) + '%'; this.el.enBox.querySelector('i').style.width = Math.round(p.energy / Math.max(1, p.capE) * 100) + '%';
     this.el.units.textContent = p.units + '/' + UNIT_CAP;
     this.el.clock.textContent = fmtTime(sim.tick / 20);
     const g = this.g;

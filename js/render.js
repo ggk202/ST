@@ -310,7 +310,7 @@ export class Renderer {
           else if (e.order && e.order.t === 'attackground') aim = angDiff(Math.atan2(e.order.x - e.x, e.order.z - e.z), v.yaw);
           v.tyaw += angDiff(aim, v.tyaw) * Math.min(1, dt * 7); v.turret.rotation.y = v.tyaw;
         }
-        if (d.id === 'heli' || d.id === 'uav') { if (v.rotor) { if (d.id === 'heli') v.rotor.rotation.y += dt * 40; else v.rotor.rotation.z += dt * 50; } if (v.rotor2) v.rotor2.rotation.x += dt * 40; }
+        if (d.base === 'heli' || d.base === 'uav') { if (v.rotor) { if (d.base === 'heli') v.rotor.rotation.y += dt * 40; else v.rotor.rotation.z += dt * 50; } if (v.rotor2) v.rotor2.rotation.x += dt * 40; }
       } else {
         o.rotation.y = 0;
         if (e.progress < 1) o.scale.set(1, 0.12 + 0.88 * e.progress, 1); else if (o.scale.y !== 1) o.scale.set(1, 1, 1);
@@ -321,8 +321,8 @@ export class Renderer {
           v.tyaw += angDiff(aim, v.tyaw) * Math.min(1, dt * 6); v.turret.rotation.y = v.tyaw;
         }
         if (e.progress >= 1 && v.rotor) {
-          if (d.id === 'derrick') v.rotor.rotation.x = Math.sin(this.time * 1.6 + e.id) * 0.16;
-          else v.rotor.rotation.y += dt * (d.id === 'airfield' ? 2.5 : 1.3);
+          if (d.base === 'derrick') v.rotor.rotation.x = Math.sin(this.time * 1.6 + e.id) * 0.16;
+          else v.rotor.rotation.y += dt * (d.base === 'airfield' ? 2.5 : 1.3);
         }
       }
     }

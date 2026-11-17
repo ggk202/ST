@@ -1,13 +1,14 @@
 // Computer opponents. They run inside the simulation (same on every client) and issue normal commands.
-import { UNITS, BUILDINGS, TICK_RATE, CELL } from './defs.js';
+import { UNITS, BUILDINGS, TICK_RATE, CELL, BASE_UNITS, BASE_ORDER, unitId } from './defs.js';
 
 const DIFF = {
   easy:   { interval: 30, base: 3400, step: 900, grace: 240, reserve: 0.5 },
   normal: { interval: 20, base: 2400, step: 800, grace: 150, reserve: 1.0 },
   hard:   { interval: 12, base: 1800, step: 650, grace: 100, reserve: 1.0 },
 };
-const PLAN = [['barracks', 1], ['factory', 1], ['techlab', 1], ['turret', 1], ['airfield', 1], ['sam', 1], ['turret', 2], ['factory', 2], ['sam', 2], ['barracks', 2], ['turret', 4], ['airfield', 2]];
-const WEIGHTS = { rifleman: 3, at: 2, manpads: 0.8, scout: 0.7, ifv: 2.5, mbt: 3.5, aa: 0.8, sph: 1.2, heavy: 2.5, mlrs: 1.4, tel: 0.25, uav: 0.15, heli: 2, vtol: 1.4, engineer: 0 };
+const PLAN = [['barracks', 1], ['powerplant', 8], ['factory', 1], ['techlab', 1], ['turret', 1], ['dronebay', 1], ['airfield', 1], ['sam', 1], ['ewtower', 1], ['advtech', 1], ['turret', 2], ['factory', 2], ['sam', 2], ['barracks', 2], ['dronebay', 2], ['turret', 4], ['airfield', 2]];
+const WEIGHTS = { rifleman: 2, at: 1.6, manpads: 0.8, scout: 0.5, ifv: 2.5, mbt: 3.5, aa: 0.8, sph: 1.2, heavy: 2.5, mlrs: 1.4, tel: 0.25, uav: 0.15, heli: 2, vtol: 1.4, engineer: 0,
+  ewtruck: 0.35, ewplane: 0.3, robot: 2.5, ewdog: 0.9, sapper: 0.8, repair: 0.5, walker: 2, fpv: 1.2, wingman: 1.3, carrier: 0.9, empcarrier: 0.3 };
 const hyp = (a, b) => Math.sqrt(a * a + b * b);
 const DIRS = [[1, 0], [0.7, 0.7], [0, 1], [-0.7, 0.7], [-1, 0], [-0.7, -0.7], [0, -1], [0.7, -0.7]];
 
@@ -39,14 +40,14 @@ export class AIController {
     // ---- derricks & engineers
     const engineers = units.filter((u) => u.def === 'engineer');
     const derricks = cnt('derrick');
-    const wantDerricks = Math.min(sim.map.oil.length, 2 + Math.floor(secs / 90));
+    const wantDerricks = Math.min(sim.map.oil.length, 3 + Math.floor(secs / 70));
     let nextCost = 0;
     if (derricks < wantDerricks) {
       const free = sim.map.oil.filter((o) => !o.building).map((o) => ({ o, d: hyp(o.x - hq.x, o.z - hq.z) })).sort((a, b) => a.d - b.d || a.o.id - b.o.id);
       let placed = false;
       for (const f of free) {
         if (f.d > 62) break;
-        if (p.credits >= BUILDINGS.derrick.cost && sim.canPlace(id, 'derrick', f.o.x, f.o.z, f.o.id).ok) { sim.exec({ t: 'build', p: id, type: 'derrick', x: f.o.x, z: f.o.z, node: f.o.id }); placed = true; break; }
+        if (p.credits >= 60 && sim.canPlace(id, 'derrick', f.o.x, f.o.z, f.o.id).ok) { sim.exec({ t: 'build', p: id, type: 'derrick', x: f.o.x, z: f.o.z, node: f.o.id }); placed = true; break; }
       }
       if (!placed) {
         if (engineers.length === 0 && !this.queued(blds, 'engineer') && p.credits > 400) sim.train(id, 'engineer');
@@ -64,7 +65,7 @@ export class AIController {
           }
           if (!best) continue;
           this.claims[best.id] = eng.id;
-          if (bd <= 22 && p.credits >= BUILDINGS.derrick.cost && sim.canPlace(id, 'derrick', best.x, best.z, best.id).ok) sim.exec({ t: 'build', p: id, type: 'derrick', x: best.x, z: best.z, node: best.id });
+          if (bd <= 22 && p.credits >= 60 && sim.canPlace(id, 'derrick', best.x, best.z, best.id).ok) sim.exec({ t: 'build', p: id, type: 'derrick', x: best.x, z: best.z, node: best.id });
           else sim.exec({ t: 'move', p: id, ids: [eng.id], x: best.x, z: best.z - 6 });
         }
       }
@@ -76,11 +77,14 @@ export class AIController {
       const d = BUILDINGS[type];
       if (!d.requires.every((r) => blds.some((b) => b.def === r && b.progress >= 1))) continue;
       if (type === 'techlab' && secs < 60 && this.diff !== 'hard') continue;
+      if ((type === 'dronebay' || type === 'ewtower') && secs < 140) continue;
+      if (type === 'advtech' && secs < 330) continue;
+      if (type === 'powerplant' && (cnt('powerplant') >= 5 || p.energy > 1200 || p.pE - p.pU > 14 + p.demE * 0.7 || (cnt('powerplant') >= 1 && secs < 90 && p.energy > 300))) continue;
       if (type === 'airfield' && secs < 150) continue;
       if (n >= 2 && secs < 300) continue;
       if ((type === 'turret' || type === 'sam') && secs < 150) continue;
       nextCost = d.cost;
-      if (p.credits >= d.cost) {
+      if (p.credits >= d.cost * 0.35 && (p.eff > 0.5 || type === 'powerplant')) {
         const spot = this.findSpot(sim, id, type, blds, type === 'turret' || type === 'sam' ? rally : null);
         if (spot) { sim.exec({ t: 'build', p: id, type, x: spot.x, z: spot.z }); nextCost = 0; }
       }
@@ -90,24 +94,34 @@ export class AIController {
     // ---- production
     const reserve = nextCost * cfg.reserve;
     const enemyAir = enemies.filter((e) => e.kind === 'unit' && e.air && sim.canSee(p.team, e)).length;
+    const enemyDrones = enemies.filter((e) => e.kind === 'unit' && UNITS[e.def].drone && sim.canSee(p.team, e)).length;
     const enemyArmor = enemies.filter((e) => e.kind === 'unit' && (e.armor === 'heavy' || e.armor === 'medium')).length;
-    const types = Object.keys(UNITS).filter((t) => WEIGHTS[t] > 0 && sim.canTrain(id, t));
+    // choose the highest unlocked tier of each unit type
+    const types = [];
+    for (const b of BASE_ORDER) { if (!(WEIGHTS[b] > 0)) continue; for (let t = 3; t >= 1; t--) { const uid = unitId(b, t); if (sim.canTrain(id, uid)) { types.push(uid); break; } } }
+    const lowPower = p.pE - p.pU < 6;
     const engQueued = this.queued(blds, 'engineer');
     if (engineers.length + engQueued < (derricks < wantDerricks ? 1 : 0) && p.credits > 500) sim.train(id, 'engineer');
     for (let tries = 0; tries < 5 && types.length; tries++) {
-      let total = 0; const ws = types.map((t) => { let w = WEIGHTS[t]; if (enemyAir > 2 && (t === 'aa' || t === 'manpads')) w *= 3.5; if (enemyAir === 0 && (t === 'aa' || t === 'manpads')) w *= 0.3; if (enemyArmor > 4 && (t === 'at' || t === 'heli')) w *= 1.8; if (t === 'uav' && units.some((u) => u.def === 'uav')) w = 0; total += w; return w; });
+      if (p.eff < 0.6 && tries > 0) break;
+      let total = 0; const ws = types.map((tid) => { const t = UNITS[tid].base; let w = WEIGHTS[t]; if (lowPower && UNITS[tid].upkeep) w = 0; if (t === 'ewdog' && units.filter((u) => UNITS[u.def].base === 'ewdog').length >= 4) w = 0; if ((t === 'ewtruck' || t === 'ewplane') && units.some((u) => UNITS[u.def].base === t)) w = 0; if (t === 'repair' && units.filter((u) => UNITS[u.def].base === 'repair').length >= 3) w = 0; if (enemyDrones > 3 && (t === 'ewdog' || t === 'ewtruck')) w *= 3; if (enemyAir > 2 && (t === 'aa' || t === 'manpads')) w *= 3.5; if (enemyAir === 0 && (t === 'aa' || t === 'manpads')) w *= 0.3; if (enemyArmor > 4 && (t === 'at' || t === 'heli')) w *= 1.8; if (t === 'uav' && units.some((u) => u.def === 'uav')) w = 0; total += w; return w; });
+      if (total <= 0) break;
       let r = sim.rng.next() * total, pick = types[0];
       for (let i = 0; i < types.length; i++) { r -= ws[i]; if (r <= 0) { pick = types[i]; break; } }
       const d = UNITS[pick];
       const prod = sim.producerFor(id, d);
       if (!prod || prod.queue.length >= 2) continue;
-      if (p.credits < d.cost + reserve) break;
+      if (p.credits < d.cost * 0.3 + reserve * 0.5) break;
       sim.train(id, pick);
     }
 
     // ---- army
-    const army = units.filter((u) => UNITS[u.def].weapons.length > 0);
+    const army = units.filter((u) => UNITS[u.def].weapons.length > 0 && !UNITS[u.def].strike);
+    const strikers = units.filter((u) => UNITS[u.def].strike && u.order.t === 'idle');
+    const support = units.filter((u) => UNITS[u.def].weapons.length === 0 && !UNITS[u.def].builder && !UNITS[u.def].air && (UNITS[u.def].heal || UNITS[u.def].ew || UNITS[u.def].escort));
     const value = army.reduce((s, u) => s + UNITS[u.def].cost, 0);
+    // deep strike drones fly one-way at known enemy structures
+    for (const u of strikers) { const b = this.nearestKnownBuilding(sim, p, enemies, u.x, u.z); if (b) sim.exec({ t: 'attackground', p: id, ids: [u.id], x: b.x, z: b.z }); }
     // defense
     let threat = null;
     for (const e of enemies) {
@@ -126,7 +140,7 @@ export class AIController {
       const need = cfg.base + this.wave * cfg.step;
       if (secs > cfg.grace && value >= Math.min(need, 11000)) {
         this.attacking = true; this.launched = value; this.target = tgt;
-        sim.exec({ t: 'attackmove', p: id, ids: army.map((u) => u.id), x: tgt.x, z: tgt.z });
+        sim.exec({ t: 'attackmove', p: id, ids: army.concat(support).map((u) => u.id), x: tgt.x, z: tgt.z });
       }
     } else {
       const idle = army.filter((u) => u.order.t === 'idle');
@@ -142,7 +156,7 @@ export class AIController {
     }
     // ballistic missiles: bombard known enemy structures
     for (const u of units) {
-      if (u.def !== 'tel' || (u.order.t !== 'idle')) continue;
+      if (UNITS[u.def].base !== 'tel' || (u.order.t !== 'idle')) continue;
       const b = this.nearestKnownBuilding(sim, p, enemies, u.x, u.z);
       if (b) sim.exec({ t: 'attackground', p: id, ids: [u.id], x: b.x, z: b.z });
     }
