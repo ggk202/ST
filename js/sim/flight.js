@@ -111,6 +111,8 @@ export const FlightOps = {
         this.fwAttack(u, d, o.x, o.z, true, strike);
         break;
       }
+      case 'lift': this.fwLift(u, d, o); break;
+      case 'drop': this.fwDrop(u, d, o); break;
       default: this.fwLoiter(u, d); break;
     }
   },

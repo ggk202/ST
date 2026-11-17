@@ -49,7 +49,7 @@ export class AirfieldGfx {
   }
   build(b, rwLen) {
     const sim = this.sim, g = b.afd, r0 = AF.rw0, hw = AF.rwHalf, P = new Paint(sim, b), apr = b.mods.apron, pairs = 1 + apr + 1;   // apron pairs: 2 stands each (base + upgrades)
-    const uEnd = r0 + rwLen, aprU1 = 10 + 18 + 12 * apr;
+    const uEnd = r0 + rwLen, aprU1 = AF.apU[1 + apr];
     // --- runway
     P.quad(r0 - 2, uEnd, -hw, hw, ASPH, 0.2, 2.6, 0.03);
     P.quad(r0 - 6, r0 - 2, -3, 3, ASPH2, 0.2);                                                    // runway-to-apron connector
@@ -61,7 +61,7 @@ export class AirfieldGfx {
     P.quad(r0 + AF.hold - 0.3, r0 + AF.hold + 0.3, -hw, hw, YEL, 0.25, 4);                           // hold / arming line
     for (const e of [uEnd - 0.6]) for (const s of [-1, 1]) P.quad(e, e + 0.7, s * 1.6 - 0.3, s * 1.6 + 0.3, GRN, 0.3, 4);
     // --- apron + lanes
-    P.quad(10, aprU1, AF.apV0, AF.apV1, CONC, 0.2, 3, 0.04);
+    P.quad(AF.apU[0], aprU1, AF.apV0, AF.apV1, CONC, 0.2, 3, 0.04);
     P.quad(AF.conn - 2.4, AF.conn + 2.4, -hw, AF.lane + 2.4, CONC2, 0.22, 3);                         // connector taxiway
     for (const lane of [AF.apV0 - 0.5, AF.lane]) P.quad(AF.conn, aprU1 - 4, lane - 0.14, lane + 0.14, YEL, 0.26, 4);
     P.quad(AF.conn - 0.14, AF.conn + 0.14, 0, AF.lane, YEL, 0.26, 4);
@@ -69,8 +69,8 @@ export class AirfieldGfx {
     const n = sim.afStandCount(b);
     for (let i = 0; i < 6; i++) {
       const us = AF.standU0 + AF.standDU * (i >> 1), vs = AF.rowV[i & 1], built = i < n;
-      if (!built) { P.rectLine(us - 5.4, us + 5.4, vs - 5.4, vs + 5.4, 0.18, 0x55595e, 0.22); continue; }       // planned bays shown as faint outlines
-      P.rectLine(us - 5.4, us + 5.4, vs - 5.4, vs + 5.4, 0.22, WHITE, 0.26); P.quad(us - 0.2, us + 0.2, vs - 3, vs + 3, WHITE, 0.26, 4);
+      if (!built) { P.rectLine(us - AF.standHalf, us + AF.standHalf, vs - AF.standHalf, vs + AF.standHalf, 0.18, 0x55595e, 0.22); continue; }       // planned bays shown as faint outlines
+      P.rectLine(us - AF.standHalf, us + AF.standHalf, vs - AF.standHalf, vs + AF.standHalf, 0.22, WHITE, 0.26); P.quad(us - 0.2, us + 0.2, vs - 8, vs + 8, WHITE, 0.26, 4);
     }
     this.group.add(P.mesh());
     // --- structures
@@ -79,10 +79,10 @@ export class AirfieldGfx {
       m.root.position.set(p.x, y, p.z); m.root.scale.setScalar(sc); m.root.rotation.y = Math.atan2(face * g.px, face * g.pz); this.group.add(m.root);
       m.root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     };
-    for (let p = 0; p < pairs; p++) place('afhangar', AF.standU0 + AF.standDU * p, 33.2, -1);
-    place('afdepot', 13.4, 25.5, -1, 0.62);                       // level I: ammunition yard
-    if (b.mods.depot >= 1) place('afbunker', 13.4, 30.2, -1, 0.5);  // level II: earth-covered magazine
-    if (b.mods.depot >= 2) place('afbunker', 13.4, 34.4, -1, 0.5);  // level III: heavy ordnance magazine
+    for (let p = 0; p < pairs; p++) place('afhangar', AF.standU0 + AF.standDU * p, AF.rowV[1] + 14, -1, 1.7);
+    place('afdepot', 17, 44, -1, 0.9);                       // level I: ammunition yard
+    if (b.mods.depot >= 1) place('afbunker', 17, 51, -1, 0.7);  // level II: earth-covered magazine
+    if (b.mods.depot >= 2) place('afbunker', 17, 57, -1, 0.7);  // level III: heavy ordnance magazine
   }
 }
 

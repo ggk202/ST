@@ -113,6 +113,36 @@ function bomber(b) {
   b.box(0.2, 1.4, 0.2, 0, -2.0, 6.0, METAL); b.wheel(0.4, 0.3, 0.0, -2.8, 6.0); b.box(0.12, 0.2, 0.12, 0, 1.6, -9.4, T);
 }
 
+function airlifter(b) {   // high-wing four-engine strategic airlifter, T-tail, rear cargo ramp
+  b.cyl(3.0, 28, 0, 0, -1, GREY, [PI / 2, 0, 0]); b.cone(3.0, 6.0, 0, -0.1, 16, GREY, [PI / 2, 0, 0]); b.cone(0.7, 1.4, 0, -0.1, 19.4, DARK2, [PI / 2, 0, 0]); b.cone(2.9, 9.0, 0, 1.0, -19.5, GREY, [-PI / 2, 0, 0]);
+  b.sph(1.7, 0, 2.0, 12.0, GLASS, 0.5, 1.9); b.box(2.4, 0.08, 3.4, 0, 3.05, 12.0, DARK2); for (let i = 0; i < 4; i++) b.box(0.08, 0.7, 0.08, -0.9 + i * 0.6, 2.6, 13.8, DARK2);   // flight deck
+  b.box(4.2, 0.12, 6.0, 0, -2.95, -13.5, DARK2); H.boltLine(b, -1.7, -2.97, -17, -1.7, -2.97, -10.5, 7, 0.08); H.boltLine(b, 1.7, -2.97, -17, 1.7, -2.97, -10.5, 7, 0.08);   // rear ramp
+  for (let i = 0; i < 6; i++) b.box(6.1, 0.12, 0.2, 0, 0.6, 8 - i * 3.6, 0x8d949b);                                                                                       // fuselage frames
+  b.box(4.4, 0.8, 11.0, 0, 3.1, -1.0, 0xb5bcc4); H.vent(b, 0, 3.6, -3.0, 1.6, 1.8, 5); H.antenna(b, 0, 3.6, 5.0, 0.8); H.antenna(b, 0, 3.6, -8.0, 0.6);
+  for (const s of [-1, 1]) {
+    b.box(15, 0.55, 7.0, s * 10.0, 2.7, -1.0, METAL, [0, s * 0.2, 0]); b.box(9.0, 0.42, 4.6, s * 22.0, 2.6, -3.9, GREY, [0, s * 0.2, 0]); b.box(0.25, 0.3, 0.6, s * 26.2, 2.6, -3.4, s < 0 ? 0xff3a2e : 0x3aff6a); b.box(6.0, 0.14, 1.4, s * 9.0, 3.0, -2.6, PNL, [0, s * 0.2, 0]);
+    for (const ex of [9.0, 17.5]) { const z = ex > 12 ? -1.2 : 1.2; b.box(0.5, 1.5, 3.0, s * ex, 1.9, z, DARK2); b.cyl(1.15, 5.0, s * ex, 1.0, z + 0.8, 0x30353a, [PI / 2, 0, 0]); b.cyl(1.0, 0.4, s * ex, 1.0, z + 3.4, BLACK, [PI / 2, 0, 0]); b.cyl(0.9, 0.5, s * ex, 1.0, z - 1.8, 0x6a4a3a, [PI / 2, 0, 0]); }
+    b.box(1.8, 2.4, 10.0, s * 3.6, -2.4, -1.0, 0x4a5058); b.box(0.35, 1.1, 0.35, s * 3.8, -3.4, -4.2, METAL); b.box(0.35, 1.1, 0.35, s * 3.8, -3.4, 1.8, METAL); for (const z of [-5.2, -3.2, 0.8, 2.8]) b.wheel(0.8, 0.6, s * 3.8, -4.0, z);   // main gear pods
+    b.box(8.0, 0.35, 3.2, s * 8.2, 11.3, -19.6, METAL);                                                                                                                    // T-tail stabiliser
+  }
+  b.box(0.5, 9.5, 5.6, 0, 6.8, -19.0, GREY); b.box(0.52, 1.6, 3.2, 0, 11.0, -19.4, T); b.box(0.16, 0.5, 0.5, 0, 11.9, -19.6, 0xd0d6dc);
+  b.box(0.3, 1.6, 0.3, 0, -3.0, 12.0, METAL); b.wheel(0.6, 0.45, -0.4, -3.9, 12.0); b.wheel(0.6, 0.45, 0.4, -3.9, 12.0);
+}
+function strategic(b) {   // big swept-wing strategic bomber, eight engines in four pods, long bomb bay
+  b.cyl(1.9, 22, 0, 0, -1, GREY, [PI / 2, 0, 0]); b.cone(1.9, 6.0, 0, -0.1, 10.0, GREY, [PI / 2, 0, 0]); b.cone(0.5, 1.4, 0, -0.1, 13.0, DARK2, [PI / 2, 0, 0]); b.cone(1.8, 6.0, 0, 0.3, -15.0, GREY, [-PI / 2, 0, 0]);
+  b.sph(1.0, 0, 1.55, 6.5, GLASS, 0.55, 2.0); b.box(1.5, 0.06, 3.0, 0, 2.0, 6.5, DARK2); for (let i = 0; i < 3; i++) b.box(0.06, 0.5, 0.06, -0.5 + i * 0.5, 1.75, 7.7, DARK2);
+  b.box(2.8, 0.5, 9.0, 0, -1.85, -1.0, 0x4a5058); for (let i = 0; i < 8; i++) b.box(2.9, 0.04, 0.12, 0, -2.12, -5.2 + i * 1.2, DARK2); H.boltLine(b, -1.1, -2.13, -5.5, -1.1, -2.13, 3.5, 9, 0.07); H.boltLine(b, 1.1, -2.13, -5.5, 1.1, -2.13, 3.5, 9, 0.07);   // bomb bay
+  b.box(3.0, 0.5, 8.0, 0, 1.9, -1.0, 0xb5bcc4); H.vent(b, 0, 2.2, -2.0, 1.6, 1.8, 5); H.antenna(b, 0, 2.2, 3.0, 0.8); b.sph6(0.3, 0, -2.0, 8.0, 0x1d2630);
+  for (const s of [-1, 1]) {
+    b.box(8.5, 0.4, 7.4, s * 6.8, 0.3, -1.5, METAL, [0, s * 0.5, 0]); b.box(9.0, 0.32, 5.4, s * 14.6, 0.25, -6.3, GREY, [0, s * 0.5, 0]); b.box(5.0, 0.26, 3.2, s * 21.0, 0.2, -9.4, METAL, [0, s * 0.5, 0]); b.box(0.22, 0.3, 0.6, s * 23.2, 0.2, -9.0, s < 0 ? 0xff3a2e : 0x3aff6a);
+    b.box(6.0, 0.12, 1.4, s * 6.0, 0.62, -2.0, PNL, [0, s * 0.5, 0]); H.boltLine(b, s * 2.5, 0.58, -0.5, s * 15.0, 0.5, -6.0, 10, 0.07);
+    for (const [ex, z] of [[4.6, 1.2], [8.6, -1.2], [12.6, -3.6], [16.6, -6.0]]) { b.cyl(0.8, 4.0, s * ex, -0.75, z, 0x30353a, [PI / 2, 0, 0]); b.cyl(0.64, 0.3, s * ex, -0.75, z + 2.0, BLACK, [PI / 2, 0, 0]); b.cyl(0.58, 0.4, s * ex, -0.75, z - 2.1, 0x6a4a3a, [PI / 2, 0, 0]); b.box(0.2, 1.0, 1.8, s * ex, -0.2, z, DARK2); }
+    b.box(0.22, 4.6, 3.6, s * 1.0, 3.0, -14.0, GREY, [0, 0, s * 0.14]); b.box(0.24, 1.2, 2.6, s * 1.15, 5.0, -14.1, T, [0, 0, s * 0.14]); b.box(5.4, 0.22, 2.2, s * 3.6, 0.9, -14.2, METAL);
+    b.box(0.34, 1.6, 0.34, s * 2.8, -2.3, -2.6, METAL); b.box(0.5, 0.2, 1.6, s * 2.8, -3.0, -2.6, DARK2); for (const z of [-3.4, -1.8]) b.wheel(0.55, 0.36, s * 2.8, -3.5, z);
+  }
+  b.box(0.22, 1.5, 0.22, 0, -2.3, 8.0, METAL); b.wheel(0.45, 0.32, 0, -3.1, 8.0);
+}
+
 // ---- ground support props & airfield structures (not units) ----
 function crew(b) {
   b.box(0.22, 0.8, 0.26, -0.13, 0.4, 0, DARK2); b.box(0.22, 0.8, 0.26, 0.13, 0.4, 0, DARK2); b.box(0.26, 0.12, 0.38, -0.13, 0.04, 0.05, BLACK); b.box(0.26, 0.12, 0.38, 0.13, 0.04, 0.05, BLACK);
@@ -151,9 +181,11 @@ export const HARD = {
   vtol: [[2.2, -0.32, 0.2], [3.0, -0.32, -0.3], [3.8, -0.22, -0.7], [4.6, -0.17, -1.0]],
   ewplane: [[3.6, -0.35, -0.5], [4.2, -0.35, -0.9]],
   fighter: [[1.3, -0.5, -0.2], [2.0, -0.42, -0.4], [2.8, -0.38, -0.7], [3.6, -0.3, -1.0]],
+  strategic: [[3.0, -0.6, 1.0], [3.0, -0.6, -1.6], [6.5, -0.5, -0.2], [6.5, -0.5, -2.4], [12.0, -0.4, -3.6], [12.0, -0.4, -5.6]],
+  airlifter: [],
   bomber: [[2.4, -0.55, 0.9], [2.4, -0.55, -1.4], [5.5, -0.5, 0.2], [5.5, -0.5, -2.0], [9.0, -0.4, -0.9], [9.0, -0.4, -2.9]],
 };
-export const HARD_CENTER = { uav: [0, -0.55, 0.5], ewplane: [0, -0.85, 1.4], fighter: [0, -0.95, 0.2], vtol: [0, -0.7, 0.6], heli: [0, -0.6, 1.2], bomber: [0, -1.7, 2.0] };
+export const HARD_CENTER = { uav: [0, -0.55, 0.5], ewplane: [0, -0.85, 1.4], fighter: [0, -0.95, 0.2], vtol: [0, -0.7, 0.6], heli: [0, -0.6, 1.2], bomber: [0, -1.7, 2.0], strategic: [0, -2.0, 2.0], airlifter: [0, 0, 0] };
 
-export const AIR = { uav, heli, vtol, ewplane, fighter, bomber };
+export const AIR = { uav, heli, vtol, ewplane, fighter, bomber, strategic, airlifter };
 export const PROPS_MODELS = { crew, cart, afhangar, afbunker, afdepot };

@@ -2,7 +2,8 @@
 export const TICK_RATE = 20;
 export const DT = 1 / TICK_RATE;
 export const CELL = 4;
-export const UNIT_CAP = 150;
+export const UNIT_CAP = 320;
+const UNIT_COST_K = 0.65, UNIT_TIME_K = 0.5;   // mass production: cheaper and faster units
 export const PLAYER_COLORS = [0x3b82f6, 0xef4444, 0x22c55e, 0xf59e0b];
 export const PLAYER_COLOR_NAMES = ['Blue', 'Red', 'Green', 'Amber'];
 export const ROMAN = ['', 'I', 'II', 'III'];
@@ -105,6 +106,20 @@ const BASE = {
       { id: 'buster', name: 'Bunker Busters', desc: 'Four massive bombs. Needs the Heavy Runway and a Level III depot.', cost: 900, prep: 20, dp: 3, rw: 3, mods: { speed: 0.9 }, vis: [['heavy', 2]], weapons: [W({ type: 'blast', range: 14, dmg: 1200, reload: 3, kind: 'shell', speed: 35, splash: 9, spread: 0.03, ammo: 4 })] },
       { id: 'cruise', name: 'Cruise Missiles', desc: 'Six stand-off cruise missiles with 150 range. Needs the Heavy Runway and a Level III depot.', cost: 1000, prep: 22, dp: 3, rw: 3, vis: [['cruise', 3]], weapons: [W({ type: 'he', range: 150, min: 30, dmg: 420, reload: 2.5, kind: 'missile', speed: 75, splash: 7, ammo: 6 })] },
     ] },
+  strategic: { name: 'Strategic Bomber', desc: 'Giant long-range bomber carrying the largest bombs in the arsenal. Needs the Heavy Runway.', from: 'airfield', rwy: 3, techLv: 1, cost: 4200, time: 60, hp: 1200, speed: 20, armor: 'air', radius: 5.5, vision: 60, air: true, fw: true, turn: 0.27, accel: 3, alt: 34,
+    stdName: 'Heavy Bombs', stdDesc: 'Ten 1-tonne bombs. Wrecks structures and armor columns.', stdPrep: 14, stdVis: [['heavy', 2]],
+    weapons: [W({ type: 'blast', range: 14, dmg: 1100, reload: 1.2, kind: 'shell', speed: 35, splash: 12, spread: 0.04, ammo: 10 })],
+    lo: [
+      { id: 'saturate', name: 'Area Saturation', desc: 'Forty-eight medium bombs dropped in one long run.', cost: 500, prep: 16, dp: 2, vis: [['bomb', 5]], weapons: [W({ type: 'he', range: 14, dmg: 240, reload: 0.22, kind: 'shell', speed: 32, splash: 8, spread: 0.12, ammo: 48 })] },
+      { id: 'mega', name: 'Mega Bomb', desc: 'Two colossal 10-tonne bombs. Levels anything in a huge radius. Needs a Level III depot.', cost: 1400, prep: 30, dp: 3, mods: { speed: 0.9 }, vis: [['heavy', 3]], weapons: [W({ type: 'blast', range: 14, dmg: 3600, reload: 5, kind: 'shell', speed: 38, splash: 24, spread: 0.02, ammo: 2 })] },
+      { id: 'cruise', name: 'Cruise Salvo', desc: 'Ten stand-off cruise missiles with 170 range. Needs a Level III depot.', cost: 1500, prep: 28, dp: 3, vis: [['cruise', 4]], weapons: [W({ type: 'he', range: 170, min: 30, dmg: 520, reload: 2.0, kind: 'missile', speed: 78, splash: 8, ammo: 10 })] },
+    ] },
+  airlifter: { name: 'Heavy Transport', desc: 'Huge airlifter. Load troops and vehicles, then fly them to another airfield or airdrop light units anywhere. Needs the Long Runway.', from: 'airfield', rwy: 2, techLv: 1, cost: 2800, time: 44, hp: 1000, speed: 17, armor: 'air', radius: 6.5, vision: 50, air: true, fw: true, turn: 0.25, accel: 3, alt: 26, cargo: true, weapons: [],
+    stdName: 'Mixed Cargo', stdDesc: 'Capacity 40: troops, light and heavy vehicles.', stdPrep: 4, stdVis: [], cap: 40,
+    lo: [
+      { id: 'troops', name: 'Troop Carrier', desc: 'Capacity 80, infantry, drones and light vehicles only (all airdrop-capable).', cost: 100, prep: 5, vis: [], weapons: [], cap: 80, only: 'para' },
+      { id: 'hauler', name: 'Vehicle Hauler', desc: 'Capacity 60 for tanks and heavy vehicles. Needs the Heavy Runway.', cost: 200, prep: 8, rw: 3, mods: { speed: 0.9 }, vis: [], weapons: [], cap: 60 },
+    ] },
   ewplane: { name: 'EW Aircraft', desc: 'Airborne jammer. Blinds enemy radar and protects aircraft from missile locks. Drains energy.', from: 'airfield', rwy: 1, techLv: 1, cost: 1300, time: 26, hp: 300, speed: 18, armor: 'air', radius: 2.6, vision: 70, air: true, fw: true, turn: 0.45, accel: 4, alt: 26,
     ew: { radius: 70 }, upkeep: 9, weapons: [],
     stdName: 'Escort Jammer', stdDesc: 'Standard jamming pods.', stdPrep: 4, stdVis: [['jam', 1]],
@@ -161,9 +176,9 @@ for (const [key, b] of Object.entries(BASE)) {
     d.techLv = Math.max(b.techLv || 0, tier - 1);
     d.hp = Math.round(b.hp * t.hp); d.speed = +(b.speed * (b.speed > 0 ? t.speed : 1)).toFixed(2);
     d.vision = Math.round(b.vision * t.vision);
-    d.cost = Math.round(b.cost * t.cost / 5) * 5;
-    d.energy = Math.round(b.cost * (ENERGY_SHARE[b.from] || 0.5) * t.cost / 5) * 5;
-    d.time = +(b.time * t.time).toFixed(1);
+    d.cost = Math.round(b.cost * UNIT_COST_K * t.cost / 5) * 5;
+    d.energy = Math.round(b.cost * UNIT_COST_K * (ENERGY_SHARE[b.from] || 0.5) * t.cost / 5) * 5;
+    d.time = +Math.max(2, b.time * UNIT_TIME_K * t.time).toFixed(1);
     d.weapons = b.weapons.map((w) => scaleW(w, t, tier));
     if (b.ew) d.ew = { radius: Math.round(b.ew.radius * t.range), power: tier };
     if (b.heal) d.heal = { radius: b.heal.radius, rate: +(b.heal.rate * t.dmg).toFixed(1) };
@@ -173,9 +188,10 @@ for (const [key, b] of Object.entries(BASE)) {
     d.hasSec = d.weapons.some((w) => w.sec); d.secRange = d.weapons.reduce((m, w) => (w.sec ? Math.max(m, w.range) : m), 0);
     if (b.aps) d.aps = { n: b.aps.n + tier - 1, range: b.aps.range };
     d.timeTicks = Math.round(d.time * TICK_RATE);
+    d.slots = d.armor === 'inf' ? 1 : Math.max(2, Math.round(d.radius * d.radius / 1.8)); d.para = !d.air && d.slots <= 2;   // cargo space used / airdrop-compatible
     if (b.from === 'airfield') {
       d.rwy = b.rwy || 0;
-      d.loadouts = [{ id: 'std', name: b.stdName, desc: b.stdDesc, cost: 0, prep: b.stdPrep, vis: b.stdVis, mods: {}, weapons: d.weapons }].concat((b.lo || []).map((l) => Object.assign({}, l, { weapons: l.weapons.map((w) => scaleW(w, t, tier)) })));
+      d.loadouts = [{ id: 'std', name: b.stdName, desc: b.stdDesc, cost: 0, prep: b.stdPrep, vis: b.stdVis, mods: {}, weapons: d.weapons, cap: b.cap, only: b.only }].concat((b.lo || []).map((l) => Object.assign({}, l, { weapons: l.weapons.map((w) => scaleW(w, t, tier)) })));
       d.loadouts.forEach((l, i) => {
         l.idx = i; l.mods = l.mods || {}; l.dp = l.dp || 1; l.rw = l.rw !== undefined ? l.rw : d.rwy;
         l.cost = Math.round(l.cost * t.cost / 5) * 5; l.energy = Math.round(l.cost * 0.5 / 5) * 5; l.prepTicks = Math.round(l.prep * TICK_RATE); wStats(l);
@@ -190,9 +206,9 @@ for (const [key, b] of Object.entries(BASE)) {
 }
 
 export const BUILDINGS = {
-  hq: { name: 'Command Center', desc: 'Your base. Lose it and every production building and you are eliminated.', cost: 0, energy: 0, time: 1, size: 4, hp: 3000, armor: 'struct', vision: 56, income: 6, incomeE: 12, capM: 4000, capE: 3000, produces: 'hq', weapons: [] },
-  derrick: { name: 'Oil Derrick', desc: 'Generates metal. Must be built on an oil field. Raises metal storage.', cost: 250, energy: 0, time: 18, size: 2, hp: 600, armor: 'struct', vision: 24, income: 12, capM: 400, requires: ['hq'], oil: true, weapons: [] },
-  powerplant: { name: 'Power Plant', desc: 'Generates energy. Raises energy storage.', cost: 250, energy: 0, time: 16, size: 2, hp: 700, armor: 'struct', vision: 28, incomeE: 22, capE: 500, requires: ['hq'], weapons: [] },
+  hq: { name: 'Command Center', desc: 'Your base. Lose it and every production building and you are eliminated.', cost: 0, energy: 0, time: 1, size: 4, hp: 3000, armor: 'struct', vision: 56, income: 14, incomeE: 24, capM: 8000, capE: 6000, produces: 'hq', weapons: [] },
+  derrick: { name: 'Oil Derrick', desc: 'Generates metal. Must be built on an oil field. Raises metal storage.', cost: 250, energy: 0, time: 18, size: 2, hp: 600, armor: 'struct', vision: 24, income: 26, capM: 800, requires: ['hq'], oil: true, weapons: [] },
+  powerplant: { name: 'Power Plant', desc: 'Generates energy. Raises energy storage.', cost: 250, energy: 0, time: 16, size: 2, hp: 700, armor: 'struct', vision: 28, incomeE: 48, capE: 1000, requires: ['hq'], weapons: [] },
   barracks: { name: 'Barracks', desc: 'Trains infantry.', cost: 350, energy: 140, time: 20, size: 3, hp: 1000, armor: 'struct', vision: 36, requires: ['hq'], produces: 'barracks', weapons: [] },
   factory: { name: 'War Factory', desc: 'Builds vehicles.', cost: 600, energy: 300, time: 30, size: 4, hp: 1400, armor: 'struct', vision: 36, requires: ['barracks'], produces: 'factory', weapons: [] },
   dronebay: { name: 'Drone Bay', desc: 'Builds combat robots, EW dogs and air drones.', cost: 650, energy: 520, time: 28, size: 4, hp: 1200, armor: 'struct', vision: 36, requires: ['factory'], produces: 'dronebay', weapons: [] },
@@ -209,19 +225,19 @@ export const BUILDINGS = {
 // ---- Airfield layout & modules. Local frame: u along the runway (away from the terminal), v toward the apron side.
 export const AF = {
   rw0: 14,                 // runway starts this far (u) from the airfield centre
-  rwLen: [0, 38, 58, 80],  // usable runway length by runway level (1 = base)
-  rwHalf: 6,               // half width
-  hold: 8,                 // arming / take-off hold point, distance past the threshold
+  rwLen: [0, 50, 76, 104], // usable runway length by runway level (1 = base)
+  rwHalf: 8,               // half width
+  hold: 10,                 // arming / take-off hold point, distance past the threshold
   stands: [0, 2, 4, 6],    // parking & arming stands by apron level
-  standU0: 22, standDU: 12, rowV: [13.5, 25.5], lane: 19.5, conn: 12, apV0: 8, apV1: 36,
+  standU0: 40, standDU: 28, rowV: [24, 52], lane: 38, conn: 12, apV0: 10, apV1: 72, standHalf: 13, apU: [10, 56, 84, 112],
   taxi: 9,                 // taxi speed
   selectTimeout: 60,       // seconds an aircraft waits on the runway for a loadout choice
   maxLevel: 3,
 };
 export const AF_MODULES = {
   runway: { name: 'Runway', short: 'RWY', levels: [
-    { name: 'Long Runway', cost: 550, energy: 200, time: 24, desc: 'Extends the runway to ' + AF.rwLen[2] + ' m. Required for the Heavy Bomber.' },
-    { name: 'Heavy Runway', cost: 1000, energy: 400, time: 32, desc: 'Extends the runway to ' + AF.rwLen[3] + ' m. Required for the heaviest loadouts.' } ] },
+    { name: 'Long Runway', cost: 550, energy: 200, time: 24, desc: 'Extends the runway to ' + AF.rwLen[2] + ' m. Required for the Heavy Bomber and the Heavy Transport.' },
+    { name: 'Heavy Runway', cost: 1000, energy: 400, time: 32, desc: 'Extends the runway to ' + AF.rwLen[3] + ' m. Required for the Strategic Bomber and the heaviest loadouts.' } ] },
   apron: { name: 'Apron & Hangars', short: 'APR', levels: [
     { name: 'Hangar Bay I', cost: 450, energy: 150, time: 20, desc: 'Four aircraft stands (two more) and a hangar.' },
     { name: 'Hangar Bay II', cost: 700, energy: 250, time: 26, desc: 'Six aircraft stands and a second hangar.' } ] },

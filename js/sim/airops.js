@@ -23,9 +23,9 @@ export const AirOps = {
   afLevelRects(x, z, ax, sd) {
     const R = (u0, u1, v0, v1) => this.afRect(x, z, ax, sd, u0, u1, v0, v1), r0 = AF.rw0, L = AF.rwLen, hw = AF.rwHalf;
     return {
-      base: [R(r0 - 2, r0 + L[1], -hw, hw), R(10, 28, AF.apV0, AF.apV1)],
+      base: [R(r0 - 2, r0 + L[1], -hw, hw), R(AF.apU[0], AF.apU[1], AF.apV0, AF.apV1)],
       runway: [[R(r0 + L[1], r0 + L[2], -hw, hw)], [R(r0 + L[2], r0 + L[3], -hw, hw)]],
-      apron: [[R(28, 40, AF.apV0, AF.apV1)], [R(40, 52, AF.apV0, AF.apV1)]],
+      apron: [[R(AF.apU[1], AF.apU[2], AF.apV0, AF.apV1)], [R(AF.apU[2], AF.apU[3], AF.apV0, AF.apV1)]],
     };
   },
   // paved strips only need dry, not-too-steep ground (the pavement is draped over the terrain)
@@ -105,7 +105,7 @@ export const AirOps = {
     this.players[b.owner].units++;
     u.af = b.id; u.stand = si; b.stands[si] = u.id; u.ap = 'wait'; u.h = 0; u.ph = 0; u.air = false; u.rdy = false; u.lo = -1; u.t = 0; u.wp = null; u.wi = 0; u.rally = b.rally ? { x: b.rally.x, z: b.rally.z } : null;
     u.spd = 0; u.roll = 0; u.pit = 0; u.fin = 0; u.ga = 0; u.lift = false;
-    u.resume = null; u.eqN = 0; u.eqT = 0; u.atRw = false; u.ed = null; u.am = null;
+    u.resume = null; if (UNITS[type].cargo) { u.cargo = []; u.unl = 0; } u.eqN = 0; u.eqT = 0; u.atRw = false; u.ed = null; u.am = null;
     this.afFace(b, u, 0, -1);
     return u;
   },
@@ -114,12 +114,12 @@ export const AirOps = {
   // ---------- loadouts ----------
   afAllowed(b, lo) { return lo.dp <= this.afDepotLevel(b) && lo.rw <= this.afRunLevel(b); },
   afSelect(u, idx) {
-    const b = this.afOf(u); if (!b || (u.ap !== 'select' && u.ap !== 'stand')) return false;
+    const b = this.afOf(u); if (!b || (u.ap !== 'select' && u.ap !== 'stand') || (u.cargo && u.cargo.length)) return false;
     const d = UNITS[u.def], lo = d.loadouts && d.loadouts[idx]; if (!lo || !this.afAllowed(b, lo)) return false;
     const p = this.players[u.owner];
     if (lo.cost > 0 && (p.credits < lo.cost || p.energy < lo.energy)) { this.ev({ e: 'afdeny', owner: u.owner, id: u.id }); return false; }
     p.credits -= lo.cost; p.energy -= lo.energy;
-    u.atRw = u.ap === 'select'; u.lo = idx; u.eqT = 0; u.eqN = Math.max(10, Math.round(lo.prepTicks / (1 + 0.3 * b.mods.depot))); u.ap = 'equip';
+    u.atRw = u.ap === 'select' && !d.cargo; u.lo = idx; u.eqT = 0; u.eqN = Math.max(10, Math.round(lo.prepTicks / (1 + 0.3 * b.mods.depot))); u.ap = 'equip';
     b.last[d.base] = idx;
     return true;
   },
@@ -180,7 +180,7 @@ export const AirOps = {
   afCancelUpgrade(b) { if (!b.up) return; const p = this.players[b.owner]; p.credits += b.up.sm; p.energy += b.up.se; b.up = null; },
   afUpgradeTick(b, p) {
     const up = b.up; if (!up) return;
-    const lv = AF_MODULES[up.key].levels[b.mods[up.key]], adv = Math.min(up.left, p.eff), fr = adv / up.total;
+    const lv = AF_MODULES[up.key].levels[b.mods[up.key]], adv = Math.min(up.left, p.eff * (b.eb || 1)), fr = adv / up.total;
     up.left -= adv; up.sm += lv.cost * fr; up.se += lv.energy * fr; p.spentM += lv.cost * fr; p.spentE += lv.energy * fr;
     if (up.left <= 0) { b.mods[up.key]++; b.up = null; this.ev({ e: 'afmod', id: b.id, owner: b.owner, key: up.key, lv: b.mods[up.key] }); }
   },
@@ -210,6 +210,7 @@ export const AirOps = {
     switch (u.ap) {
       case 'wait': {
         if (vert) { if (u.rdy) { u.ap = 'takeoff'; u.t = 0; } else { u.ap = 'select'; u.t = 0; } break; }
+        if (!u.rdy && D.cargo) { u.ap = 'select'; u.t = 0; break; }   // transports choose their configuration at the stand
         if (b.rwy === 0 && b.land === 0) {
           b.rwy = u.id; if (u.stand >= 0) { b.stands[u.stand] = 0; }
           u.wp = this.afTaxiOut(b, u.stand); u.wi = 0; u.ap = 'taxiOut'; u.stand = -1;
@@ -268,7 +269,7 @@ export const AirOps = {
         }
         // fixed-wing: hold until the runway is clear and nobody is taking off, then intercept the extended centreline and glide in.
         // The approach normally comes in over the far end; if that side is too close to the map edge it comes from the other end instead.
-        const A0 = d.alt / FL.glide, Rr = d.speed * 0.55 / d.turn, g = b.afd;
+        const Rr = d.speed * 0.55 / d.turn, A0 = Math.max(d.alt / FL.glide, 7 * Rr), g = b.afd;   // slow-turning heavies need a long final
         if (!u.fin) {
           const f = (b.rwy === 0 && b.land === 0) ? this.afFreeStand(b) : -1;
           if (f >= 0) {
@@ -282,7 +283,7 @@ export const AirOps = {
         }
         const sg = u.lsg, A = u.lA, tu = sg > 0 ? AF.rw0 + L - 6 : AF.rw0 + 6, fr = this.afFrame(b, u, sg, tu);
         u.t++;
-        if (u.t > 90 * TICK_RATE) { b.land = 0; u.fin = 0; u.t = 0; break; }   // never block the runway forever
+        if (u.t > 90 * TICK_RATE) { b.land = 0; u.fin = 0; u.t = 0; if (u.stand >= 0 && b.stands[u.stand] === u.id) b.stands[u.stand] = 0; u.stand = -1; break; }   // never block the runway forever
         const along = -sg * (u.dirx * g.dx + u.dirz * g.dz), sF = A + 15;
         if (!u.ga && Math.abs(fr.l) < 8 + 0.06 * fr.s && along > 0.96 && fr.s <= sF + 25 && fr.s > 10) { u.ap = 'land'; u.fin = 2; u.t = 0; break; }
         let tp;
@@ -319,7 +320,8 @@ export const AirOps = {
       case 'taxiIn': {
         const done = this.afFollow(u, AF.taxi);
         if (u.wi >= 1 && b.land === u.id) b.land = 0;
-        if (done) { u.ap = 'rearm'; u.eqT = 0; u.eqN = Math.max(10, Math.round(lo.prepTicks * 0.7 / (1 + 0.3 * b.mods.depot))); this.afFace(b, u, 0, -1); }
+        if (done) {
+          if (u.unl && u.cargo && u.cargo.length) { this.unloadCargo(u, b); u.unl = 0; } u.ap = 'rearm'; u.eqT = 0; u.eqN = Math.max(10, Math.round(lo.prepTicks * 0.7 / (1 + 0.3 * b.mods.depot))); this.afFace(b, u, 0, -1); }
         break;
       }
       case 'rearm': {

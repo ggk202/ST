@@ -19,7 +19,7 @@ const STORE = {
   jam: (b) => { b.cyl(0.3, 1.8, 0, 0, 0, 0x8a9096, [PI / 2, 0, 0]); b.cone(0.3, 0.5, 0, 0, 1.15, WHITE, [PI / 2, 0, 0]); b.cone(0.28, 0.4, 0, 0, -1.1, DARK2, [-PI / 2, 0, 0]); b.cyl(0.31, 0.16, 0, 0, 0.2, ORANGE, [PI / 2, 0, 0]); b.box(0.06, 0.4, 0.5, 0, 0.35, -0.4, GREY); b.box(0.1, 0.3, 0.5, 0, 0.4, 0, DARK2); },
   optics: (b) => { b.sph(0.34, 0, 0, 0, 0x2b3035); b.sph6(0.18, 0, -0.1, 0.28, 0x1c3850); b.box(0.5, 0.2, 0.5, 0, 0.3, 0, DARK2); },
 };
-const STORE_SCALE = { bomber: 1.7, fighter: 1.0, heli: 1.0, vtol: 1.0, uav: 0.8, ewplane: 1.1 };
+const STORE_SCALE = { bomber: 1.7, strategic: 2.3, airlifter: 1, fighter: 1.0, heli: 1.0, vtol: 1.0, uav: 0.8, ewplane: 1.1 };
 const geoCache = new Map();
 function storeGeo(kind, team) {
   const key = kind + team; let g = geoCache.get(key);

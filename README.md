@@ -60,6 +60,7 @@ Use the Move / Attack-Move / Stop / Fire-at-ground buttons. To build: choose a s
 | Arrow keys (W A S D when nothing is selected, or with Shift), screen edge | Pan |
 | Wheel, + / −, Z / X | Zoom |
 | A / M / S / F | Attack-move / Move / Stop / Fire at ground |
+| T / J / U (transport selected) | Airlift / Airdrop / Unload |
 | B / I / V / Y / D, Tab | Structures / Infantry / Vehicles / Aircraft / Drones tab |
 | T | Cycle unit tier (Mk I / II / III) in the build panel |
 | 1–9, Shift+1–9 (or Ctrl/⌘) | Recall / assign control group |
@@ -94,9 +95,11 @@ js/fx.js            particles, tracers, procedural sound
 js/input.js         mouse / touch / keyboard + orders
 js/ui.js            HUD, minimap, build menu
 js/sim/             deterministic simulation (no DOM / three.js)
-  defs.js map.js path.js sim.js ai.js util.js
+  defs.js map.js path.js sim.js ai.js util.js flight.js airops.js cargo.js
 tests/sim-test.mjs  headless AI-vs-AI, determinism and map-connectivity test
 tests/mech-test.mjs drones / EW / EMP / tiers / streaming-economy mechanics test
+tests/air-test.mjs  airfields, loadouts and sorties
+tests/cargo-test.mjs transport, airlift, airdrop, engineer boost
 ```
 
 Run the simulation tests with `node tests/sim-test.mjs` and `node tests/mech-test.mjs`.
@@ -117,7 +120,26 @@ All of this is render-side only; the deterministic sim is untouched, so lockstep
 Aircraft run a full sortie cycle: **built → taxi to the runway (only if it is free and nobody is landing) → pick a loadout → ground crew arms it → take off → fly → return to base when out of ammo → land → taxi in → rearm**. Helicopters and VTOLs skip the runway and are armed on their stand.
 
 - **Loadouts**: every aircraft has role-based loadouts (cost, energy, prep time, ammo, stat mods). You have 60 s to choose on the runway, otherwise the last/standard loadout is used. The AI and airfields with *auto-arm* pick instantly. Heavy loadouts need a longer runway and a higher depot level.
-- **Modular airfield**: select an airfield to extend it with a *Long/Heavy Runway* (38 → 58 → 80), *Hangar Bays* (2 → 4 → 6 stands) and *Depot* levels (faster crews, heavier stores). Extensions are limited by the terrain; the placement ghost previews runway and apron.
-- **New aircraft**: Fighter (air superiority / strike) and Heavy Bomber (needs runway L2+).
+- **Modular airfield**: select an airfield to extend it with a *Long/Heavy Runway* (50 → 76 → 104 m), *Hangar Bays* (2 → 4 → 6 large stands, 26 m each) and *Depot* levels (faster crews, heavier stores). Extensions are limited by the terrain; the placement ghost previews runway and apron.
+- **New aircraft**: Fighter (air superiority / strike), Heavy Bomber (needs the Long Runway), **Strategic Bomber** (Heavy Runway; 10 × 1 t bombs, area saturation, 10 t *Mega Bomb*, long-range cruise salvo) and the **Heavy Transport** (Long Runway).
+- **Arming dialog**: the loadout picker only opens when you click a parked / waiting aircraft (or press `L`), never on its own.
 - **Hotkeys**: `H` return to base, `L` open the loadout picker.
 - **Tests**: `node tests/air-test.mjs` covers layout, upgrades, the full sortie cycle, runway locking, bingo/RTB, loadout locks, AI, selling and determinism.
+
+## Air transport: airlift and airdrop
+
+- Build a **Heavy Transport**. It waits on its stand (no runway needed) until you pick a configuration: *Mixed Cargo* (40 slots), *Troop Carrier* (80 slots, infantry / drones / light vehicles only) or *Vehicle Hauler* (60 slots, Heavy Runway).
+- **Load**: select ground units and right-click the parked transport. Infantry and drones take 1 slot, light vehicles 2, tanks 3–5, big launchers 4+.
+- **Airlift**: select the loaded transport, press `T` (or *Airlift…*) and click another of your airfields (its runway must be long enough). The transport flies, lands, taxis to a stand and unloads there, and is re-homed at the destination.
+- **Airdrop**: press `J` (or *Airdrop…*) and click a drop zone. Parachute-capable units (infantry, drones and light vehicles) are dropped around the point and descend under canopies for a few seconds, heavier cargo stays aboard. The transport then returns to the nearest suitable airfield.
+- `U` unloads a parked transport. Cargo is lost if the transport is shot down.
+
+## Economy and production
+
+Units are about a third cheaper and build twice as fast; income, oil, power and storage are roughly doubled and the unit cap is 320. **Engineers speed buildings up**: every engineer standing next to a structure adds +50 % (up to 6) to construction, unit production, airfield upgrades and the resources it draws.
+
+## Maps, combat and graphics (recent)
+
+Maps are four times larger with open ground; oil derricks are always visible (world beacons + minimap). Damage is more realistic (a guided anti-tank missile can kill a tank in one or two hits), aircraft fly with real turn radii, stall speeds, runway approaches and go-arounds. Tanks carry a top MG and coax that fire at infantry while the main gun engages armor, and have limited-ammo APS. Graphics: modelled projectiles, explosion lighting, bomb craters, vehicle dust trails, afterburners, contrails and rotor wash.
+
+Tests: `node tests/cargo-test.mjs` covers the transport, boarding, airlift, airdrop, the strategic bomber gate and the engineer boost.

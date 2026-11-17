@@ -75,9 +75,10 @@ console.log('  phases: ' + seen.join(' -> '));
 ok(seen.includes('land') && seen.includes('taxiIn') && seen.includes('rearm'), 'landing cycle phases visited');
 
 // --- VTOL / heli skip the runway
+until(s, () => af.rwy === 0 && u.ap === 'fly', 1500);   // the re-armed fighter resumes its patrol first
 run(s, 1, [{ t: 'train', p: 0, type: 'heli' }]);
 let h = null; until(s, () => { h = s.ents.find((e) => e.def === 'heli' && !e.dead); return !!h; }, 1500);
-until(s, () => h.ap === 'select', 200); ok(h.ap === 'select' && af.rwy === 0, 'helicopter arms on its stand without using the runway');
+until(s, () => h.ap === 'select', 200);  ok(h.ap === 'select' && af.rwy === 0, 'helicopter arms on its stand without using the runway');
 run(s, 1, [{ t: 'loadout', p: 0, ids: [h.id], lo: 1 }]); until(s, () => h.ap === 'fly', 800); ok(h.ap === 'fly' && h.air, 'helicopter lifts off vertically');
 
 // --- bomber: heavy loadouts need depot + heavy runway

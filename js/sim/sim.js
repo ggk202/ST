@@ -2,6 +2,7 @@
 import { DT, CELL, DMG, dmgMult, UNITS, BUILDINGS, DEFS, UNIT_CAP, AF_MODULES } from './defs.js';
 import { AirOps, GROUND_PHASES } from './airops.js';
 import { FlightOps } from './flight.js';
+import { CargoOps } from './cargo.js';
 import { RNG, clamp } from './util.js';
 import { generateMap } from './map.js';
 import { Pathfinder } from './path.js';
@@ -203,6 +204,10 @@ export class Sim {
       case 'upgrade': for (const b of this.own(c.ids, c.p)) if (b.kind === 'building' && b.afd) { this.afStartUpgrade(b, c.key); break; } break;
       case 'cancelup': for (const b of this.own(c.ids, c.p)) if (b.kind === 'building' && b.afd) this.afCancelUpgrade(b); break;
       case 'afauto': for (const b of this.own(c.ids, c.p)) if (b.kind === 'building' && b.afd) b.auto = !!c.v; break;
+      case 'board': this.cmdBoard(this.own(c.ids, c.p), c.tid); break;
+      case 'lift': this.cmdLift(this.own(c.ids, c.p), c.bid); break;
+      case 'drop': this.cmdDrop(this.own(c.ids, c.p), c.x, c.z); break;
+      case 'unload': this.cmdUnload(this.own(c.ids, c.p)); break;
       case 'rtb': for (const u of this.own(c.ids, c.p)) if (u.kind === 'unit' && u.ap === 'fly' && UNITS[u.def].loadouts) this.startRtb(u, false); break;
       case 'resign': this.eliminate(p); break;
       case 'takeover': if (!p.ai) { p.ai = c.diff || 'normal'; this.ais[p.id] = new AIController(p.id, p.ai); } break;
@@ -302,7 +307,7 @@ export class Sim {
     this.economyApply();
     // cleanup
     let w = 0;
-    for (let i = 0; i < list.length; i++) { const e = list[i]; if (!e.dead) list[w++] = e; else this.byId.delete(e.id); }
+    for (let i = 0; i < list.length; i++) { const e = list[i]; if (!e.dead && !e.boarded) list[w++] = e; else this.byId.delete(e.id); }
     list.length = w;
     if (this.tick % 4 === 0) this.updateVision();
     this.checkElimination();
@@ -317,10 +322,11 @@ export class Sim {
     for (const b of this.ents) {
       if (b.dead || b.kind !== 'building') continue;
       const p = P[b.owner];
-      if (b.progress < 1) { const d = BUILDINGS[b.def]; p.demM += d.cost / d.time; p.demE += d.energy / d.time; continue; }
+      const eb = b.eb || 1;
+      if (b.progress < 1) { const d = BUILDINGS[b.def]; p.demM += d.cost / d.time * eb; p.demE += d.energy / d.time * eb; continue; }
       if (b.def === 'techlab') p.tl1 = true; else if (b.def === 'advtech') p.tl2 = true;
-      if (b.queue.length && !b.stun && b.queue[0].left > 0) { const ud = UNITS[b.queue[0].type]; p.demM += ud.cost / ud.time; p.demE += ud.energy / ud.time; }
-      if (b.up) { const lv = AF_MODULES[b.up.key].levels[b.mods[b.up.key]]; p.demM += lv.cost / lv.time; p.demE += lv.energy / lv.time; }
+      if (b.queue.length && !b.stun && b.queue[0].left > 0) { const ud = UNITS[b.queue[0].type]; p.demM += ud.cost / ud.time * eb; p.demE += ud.energy / ud.time * eb; }
+      if (b.up) { const lv = AF_MODULES[b.up.key].levels[b.mods[b.up.key]]; p.demM += lv.cost / lv.time * eb; p.demE += lv.energy / lv.time * eb; }
     }
     for (const p of P) {
       p.tech = p.tl2 ? 2 : p.tl1 ? 1 : 0;
@@ -377,12 +383,28 @@ export class Sim {
     }
   }
 
+  // friendly engineers close to a building speed up its construction, production and upgrades (+50% each, up to 6)
+  engScan(b) {
+    const gw = this.gw, R = b.size * CELL / 2 + 32, r2 = R * R;
+    const gx0 = clamp(Math.floor((b.x - R) / GRID), 0, gw - 1), gx1 = clamp(Math.floor((b.x + R) / GRID), 0, gw - 1);
+    const gz0 = clamp(Math.floor((b.z - R) / GRID), 0, gw - 1), gz1 = clamp(Math.floor((b.z + R) / GRID), 0, gw - 1);
+    let n = 0;
+    for (let gz = gz0; gz <= gz1; gz++) for (let gx = gx0; gx <= gx1; gx++) {
+      for (let i = this.head[gz * gw + gx]; i !== -1; i = this.next[i]) {
+        const e = this.ents[i];
+        if (e.dead || e.kind !== 'unit' || e.owner !== b.owner || !DEFS[e.def].builder || e.stun > 0) continue;
+        const dx = e.x - b.x, dz = e.z - b.z; if (dx * dx + dz * dz <= r2) n++;
+      }
+    }
+    b.en = n; b.eb = 1 + 0.5 * Math.min(n, 6);
+  }
   updateBuilding(b) {
     const d = BUILDINGS[b.def], p = this.players[b.owner];
     b.px = b.x; b.pz = b.z;
     if (b.stun > 0) b.stun--;
+    if (b.eb === undefined || ((this.tick + b.id) % 10) === 0) this.engScan(b);
     if (b.progress < 1) {
-      const dp = DT / d.time * (d.energy > 0 ? p.eff : p.effM);
+      const dp = DT / d.time * (d.energy > 0 ? p.eff : p.effM) * b.eb;
       b.progress += dp; b.sm += d.cost * dp; b.se += d.energy * dp; p.spentM += d.cost * dp; p.spentE += d.energy * dp;
       b.hp = Math.min(b.maxhp, b.hp + b.maxhp * 0.9 * dp);
       if (b.progress >= 1) { b.progress = 1; b.hp = Math.min(b.maxhp, b.hp); this.ev({ e: 'built', id: b.id, owner: b.owner, def: b.def, x: b.x, z: b.z }); }
@@ -393,7 +415,7 @@ export class Sim {
     if (b.queue.length && !b.stun) {
       const it = b.queue[0], ud = UNITS[it.type];
       if (it.left > 0) {
-        const adv = Math.min(it.left, p.eff), fr = adv / ud.timeTicks;
+        const adv = Math.min(it.left, p.eff * b.eb), fr = adv / ud.timeTicks;
         it.left -= adv; it.sm += ud.cost * fr; it.se += ud.energy * fr; p.spentM += ud.cost * fr; p.spentE += ud.energy * fr;
       }
       const si = ud.from === 'airfield' ? (b.afd ? this.afFreeStand(b) : -1) : 0;
@@ -436,6 +458,8 @@ export class Sim {
   updateUnit(u) {
     const d = u.ed || UNITS[u.def], map = this.map;
     u.px = u.x; u.pz = u.z;
+    if (u.boarded) return;
+    if (u.chute > 0) { u.chute--; u.moving = false; u.vx = 0; u.vz = 0; return; }
     if (u.stun > 0) { u.stun--; u.moving = false; u.vx = 0; u.vz = 0; return; }
     const cdr = (d.drone && u.jam) ? Math.max(0.3, 1 - 0.2 * u.jam) : 1;
     for (let k = 0; k < u.cd.length; k++) if (u.cd[k] > 0) u.cd[k] = Math.max(0, u.cd[k] - cdr);
@@ -475,6 +499,7 @@ export class Sim {
     let moved = false;
     switch (o.t) {
       case 'move': if (this.goTo(u, d, o.x, o.z, 2.2)) this.finishOrder(u); else moved = true; break;
+      case 'board': moved = this.boardTick(u, d); break;
       case 'attackmove':
         if (tg) { if (this.inRange(u, d, tg)) { this.faceTo(u, tg.x, tg.z); } else { this.chaseTarget(u, d, tg); moved = true; } }
         else if (this.goTo(u, d, o.x, o.z, 2.5)) this.finishOrder(u); else moved = true;
@@ -790,7 +815,7 @@ export class Sim {
     if (e.dead) return;
     e.dead = true; e.hp = 0;
     const p = this.players[e.owner];
-    if (e.kind === 'unit') { p.units--; if (e.ap !== undefined) this.afForget(e); }
+    if (e.kind === 'unit') { p.units--; if (e.ap !== undefined) this.afForget(e); if (e.cargo && e.cargo.length) this.loseCargo(e); }
     else {
       if (e.afd) {
         this.afRelease(e); this.afCancelUpgrade(e);
@@ -887,4 +912,4 @@ export class Sim {
   }
 }
 
-Object.assign(Sim.prototype, AirOps, FlightOps);
+Object.assign(Sim.prototype, AirOps, FlightOps, CargoOps);

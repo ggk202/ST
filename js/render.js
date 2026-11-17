@@ -4,6 +4,7 @@ import { buildProjModels, projKind } from './projectile-gfx.js';
 import * as THREE from 'three';
 import { CELL, DEFS, PLAYER_COLORS, UNITS } from './sim/defs.js';
 import { GROUND_PHASES } from './sim/airops.js';
+const CANOPY_GEO = new THREE.SphereGeometry(3.4, 12, 6, 0, Math.PI * 2, 0, 1.25), CANOPY_MAT = new THREE.MeshStandardMaterial({ color: 0xd8d2b0, roughness: 0.9, side: THREE.DoubleSide });
 import { AirfieldGfx } from './airfield-gfx.js';
 import { updateStores, CrewPool } from './aircraft-gfx.js';
 import { makeModel, modelMaterial } from './models.js';
@@ -391,7 +392,7 @@ export class Renderer {
         const vy = e.h !== undefined ? (e.h - e.ph) * d.alt / 0.05 : 0;
         fx.afterburn(x - dx * r * 1.9, y, z - dz * r * 1.9, dx, dz, vy, spd, k, r * (base === 'carrier' || base === 'empcarrier' ? 0.7 : 0.9), base === 'fighter' ? r * 0.28 : 0);
       }
-      if ((jet || base === 'bomber' || base === 'ewplane' || base === 'uav') && v.fxC <= 0 && y - gy > d.alt * 0.8 && spd > d.speed * 0.65) { v.fxC = 0.085; fx.contrail(x - dx * d.radius * 2.2, y, z - dz * d.radius * 2.2, d.radius * 0.6); }
+      if ((jet || base === 'bomber' || base === 'strategic' || base === 'airlifter' || base === 'ewplane' || base === 'uav') && v.fxC <= 0 && y - gy > d.alt * 0.8 && spd > d.speed * 0.65) { v.fxC = 0.085; fx.contrail(x - dx * d.radius * 2.2, y, z - dz * d.radius * 2.2, d.radius * 0.6); }
       if ((base === 'heli' || base === 'vtol' || base === 'fpv') && y - gy < 9 && v.fxC <= 0 && (e.h === undefined || e.h > 0.02)) { v.fxC = 0.06; const sand = gy < 1.6; fx.rotorWash(x, gy, z, d.radius * (base === 'fpv' ? 1.2 : 2.2), sand ? 0.78 : 0.5, sand ? 0.7 : 0.44, sand ? 0.52 : 0.32); }
       return;
     }
@@ -427,6 +428,11 @@ export class Renderer {
         const hh = e.h === undefined ? 1 : e.ph + (e.h - e.ph) * alpha, g0 = Math.max(0, y);
         y = g0 + (v.gOff || 0) * (1 - hh) + (d.alt + Math.sin(this.time * 1.6 + e.id) * 0.5) * hh;
       }
+      if (e.chute > 0) {   // paradropped: descend under a canopy
+        y += Math.min(70, e.chute * 0.45);
+        if (!v.canopy) { const m = new THREE.Mesh(CANOPY_GEO, CANOPY_MAT); m.position.y = 4.2; m.castShadow = false; o.add(m); v.canopy = m; }
+        v.canopy.visible = true;
+      } else if (v.canopy && v.canopy.visible) v.canopy.visible = false;
       o.position.set(x, y, z);
       // view-frustum + distance driven level of detail
       this._sph.center.set(x, y + 1, z); this._sph.radius = e.kind === 'building' ? e.size * CELL * 0.9 + 8 : Math.max(5, e.radius * 2.6) + (d.air ? 4 : 0);
