@@ -61,6 +61,7 @@ Use the Move / Attack-Move / Stop / Fire-at-ground buttons. To build: choose a s
 | Wheel, + / −, Z / X | Zoom |
 | A / M / S / F | Attack-move / Move / Stop / Fire at ground |
 | T / J / U (transport selected) | Airlift / Airdrop / Unload |
+| O | Sensor overlay (radars, jammers, radar contacts) |
 | B / I / V / Y / D, Tab | Structures / Infantry / Vehicles / Aircraft / Drones tab |
 | T | Cycle unit tier (Mk I / II / III) in the build panel |
 | 1–9, Shift+1–9 (or Ctrl/⌘) | Recall / assign control group |
@@ -100,6 +101,7 @@ tests/sim-test.mjs  headless AI-vs-AI, determinism and map-connectivity test
 tests/mech-test.mjs drones / EW / EMP / tiers / streaming-economy mechanics test
 tests/air-test.mjs  airfields, loadouts and sorties
 tests/cargo-test.mjs transport, airlift, airdrop, engineer boost
+tests/radar-test.mjs radar / ECM / APS / SAM vs cruise missiles / spy drone / building tiers
 ```
 
 Run the simulation tests with `node tests/sim-test.mjs` and `node tests/mech-test.mjs`.
@@ -143,3 +145,15 @@ Units are about a third cheaper and build twice as fast; income, oil, power and 
 Maps are four times larger with open ground; oil derricks are always visible (world beacons + minimap). Damage is more realistic (a guided anti-tank missile can kill a tank in one or two hits), aircraft fly with real turn radii, stall speeds, runway approaches and go-arounds. Tanks carry a top MG and coax that fire at infantry while the main gun engages armor, and have limited-ammo APS. Graphics: modelled projectiles, explosion lighting, bomb craters, vehicle dust trails, afterburners, contrails and rotor wash.
 
 Tests: `node tests/cargo-test.mjs` covers the transport, boarding, airlift, airdrop, the strategic bomber gate and the engineer boost.
+
+## Radar, electronic warfare and the sensor overlay
+
+- **Radar emitters**: *Ground Radar* (170 m air search), *AWACS* (200 m, airborne), SAM sites (95), Mobile AA (65), and fighters / VTOLs (forward 120° cone, 85 / 60). Radar needs energy, parked aircraft don't emit.
+- **Detection** uses the radar equation: range scales with the fourth root of the target's radar cross-section (large transports and bombers are seen from further away, UAVs and helicopters from much closer, the stealth drone barely at all). Low flyers are partly masked from ground radars. Everything your team's radars hold is shared as a *contact*; SAMs and radar/missile weapons can fire on contacts, guns still need visual range.
+- **Jamming**: enemy EW over a radar shrinks its range; EW covering the target (escort jammers) shrinks the detection range of enemy radars; inside the *burn-through* range (30 %) the radar always wins.
+- **Stealth Spy Drone** (Long Runway): ultra-high-altitude, huge vision, out of reach of every weapon, so it **cannot be shot down**. Only jammers blind it (EW towers, trucks, aircraft, with double reach against it).
+- **AWACS** large radar plane with a rotating dome; shares the air picture and lets SAMs and fighters engage beyond visual range.
+- **Sensor overlay** (`O` or the SENSORS button): shows your radar and jammer coverage (jammed radars show their reduced and nominal range), forward-looking aircraft radar search cones with a sweeping beam, enemy emitters you can see, radar contacts as unidentified *BOGEY* blips with speed and size class, and which of your aircraft are being jammed.
+- **APS** now hard-kills guided anti-tank missiles, unguided rockets and attacking drones (not kinetic tank rounds, bombs, artillery or cruise missiles). **SAM sites and AA vehicles can intercept some cruise missiles.**
+- **Tiered derricks and power plants**: select one and press *Upgrade* for Mk II (×1.9 output and storage) and Mk III (×3).
+- **Huge map** size (560 × 560) in the lobby. Unexplored terrain is now much brighter.

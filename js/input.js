@@ -347,6 +347,7 @@ export class Controls {
       if (code === 'KeyL') { stop(); const par = this.selUnits().find((u) => u.ap === 'stand' || u.ap === 'select'); if (par) { this.g.hud.loTarget = par.id; this.g.hud.loHide.delete(par.id); this.g.hud.loSig = ''; } return; }
     }
     if (this.selBlds().length && !hasUnits && code === 'KeyF') { stop(); this.setMode({ t: 'rally' }); return; }
+    if (!mod && code === 'KeyO') { stop(); this.g.sensor.toggle(); return; }
     if (!mod) {
       if (code === 'KeyB') this.g.hud.setTab('str'); else if (code === 'KeyI') this.g.hud.setTab('inf'); else if (code === 'KeyV') this.g.hud.setTab('veh'); else if (code === 'KeyY') this.g.hud.setTab('air'); else if (code === 'KeyD' && !e.ctrlKey && !e.metaKey) this.g.hud.setTab('drn'); else if (code === 'KeyT' && this.g.hud.tab !== 'str') this.g.hud.setTier(this.g.hud.tier % 3 + 1);
     }

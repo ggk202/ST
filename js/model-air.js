@@ -143,6 +143,33 @@ function strategic(b) {   // big swept-wing strategic bomber, eight engines in f
   b.box(0.22, 1.5, 0.22, 0, -2.3, 8.0, METAL); b.wheel(0.45, 0.32, 0, -3.1, 8.0);
 }
 
+function awacs(b) {   // four-jet early-warning aircraft with a rotating radome on twin pylons
+  b.cyl(2.2, 22, 0, 0, -1, 0xcfd5db, [PI / 2, 0, 0]); b.cone(2.2, 4.5, 0, -0.1, 12.2, 0xcfd5db, [PI / 2, 0, 0]); b.cone(0.6, 1.0, 0, -0.1, 14.7, DARK2, [PI / 2, 0, 0]); b.cone(2.1, 7.0, 0, 0.6, -15.0, 0xcfd5db, [-PI / 2, 0, 0]);
+  b.sph(1.2, 0, 1.55, 9.2, GLASS, 0.5, 1.9); b.box(1.8, 0.06, 2.6, 0, 2.2, 9.2, DARK2); for (let i = 0; i < 3; i++) b.box(0.06, 0.6, 0.06, -0.5 + i * 0.5, 1.9, 10.4, DARK2);
+  b.box(0.9, 0.12, 14.0, 0, -2.25, -1.0, DARK2); for (let i = 0; i < 6; i++) b.box(4.4, 0.1, 0.12, 0, 0.9, 7.0 - i * 3.0, 0xaab2ba);
+  for (const s of [-1, 1]) {
+    b.box(9.5, 0.45, 5.4, s * 6.6, 0.9, -0.8, METAL, [0, s * 0.22, 0]); b.box(6.0, 0.35, 3.6, s * 14.6, 0.8, -3.0, GREY, [0, s * 0.22, 0]); b.box(0.22, 0.28, 0.5, s * 17.8, 0.8, -2.6, s < 0 ? 0xff3a2e : 0x3aff6a);
+    for (const ex of [5.4, 10.6]) { const z = ex > 8 ? -0.2 : 1.0; b.cyl(0.9, 3.8, s * ex, -0.35, z, 0x30353a, [PI / 2, 0, 0]); b.cyl(0.72, 0.3, s * ex, -0.35, z + 1.9, BLACK, [PI / 2, 0, 0]); b.cyl(0.64, 0.4, s * ex, -0.35, z - 2.0, 0x6a4a3a, [PI / 2, 0, 0]); b.box(0.24, 1.0, 1.8, s * ex, 0.2, z, DARK2); }
+    b.box(0.3, 3.6, 3.0, s * 1.0, 3.2, -14.6, GREY, [0, 0, s * 0.1]); b.box(5.0, 0.22, 2.0, s * 3.4, 0.8, -14.8, METAL);
+    b.box(1.6, 2.0, 7.0, s * 2.8, -1.7, -1.0, 0x4a5058); b.wheel(0.6, 0.42, s * 2.8, -2.8, -0.5); b.wheel(0.6, 0.42, s * 2.8, -2.8, -2.0);
+  }
+  b.box(0.2, 1.4, 0.2, 0, -2.0, 8.0, METAL); b.wheel(0.42, 0.3, 0, -2.8, 8.0);
+  b.box(0.35, 2.6, 0.7, -0.9, 3.0, -2.5, GREY, [0, 0, 0.1]); b.box(0.35, 2.6, 0.7, 0.9, 3.0, -2.5, GREY, [0, 0, -0.1]);   // radome pylons
+  b.g('rotor').at(0, 5.0, -2.5);
+  b.cyl(3.7, 0.9, 0, 5.0, -2.5, 0xe8ecef); b.cyl(3.5, 0.3, 0, 5.55, -2.5, 0xd0d6dc); b.cyl(3.5, 0.3, 0, 4.45, -2.5, 0xd0d6dc); b.box(7.2, 0.3, 0.12, 0, 5.0, -2.5, ORANGE); b.box(0.2, 0.3, 0.9, 3.4, 5.0, -2.5, T);
+}
+function spydrone(b) {   // huge tailless flying wing with a dorsal intake and a satcom dome
+  b.cyl(1.5, 12, 0, 0, 0, 0x3a4048, [PI / 2, 0, 0]); b.cone(1.5, 6.0, 0, -0.05, 9.0, 0x3a4048, [PI / 2, 0, 0]); b.cone(1.2, 5.0, 0, 0.1, -8.5, 0x353a40, [-PI / 2, 0, 0]);
+  b.sph(0.9, 0, 0.9, 6.0, 0x2a2f34, 0.6, 1.8); b.sph(1.0, 0, 1.6, -1.0, WHITE, 0.8, 1.2); b.cyl(0.9, 0.5, 0, 1.5, 1.8, 0x23282e, [PI / 2, 0, 0]);
+  b.box(2.0, 0.6, 3.6, 0, 1.3, -3.0, 0x2c3238); b.cone(1.0, 1.4, 0, 1.3, -5.3, BLACK, [-PI / 2, 0, 0]);
+  for (const s of [-1, 1]) {
+    b.box(11.0, 0.35, 7.0, s * 6.8, 0.0, -1.2, 0x3d434a, [0, s * 0.12, 0]); b.box(9.0, 0.28, 5.0, s * 16.2, 0.0, -3.4, 0x353a40, [0, s * 0.12, 0]); b.box(6.0, 0.22, 3.0, s * 24.0, 0.05, -4.8, 0x3d434a, [0, s * 0.12, 0]); b.box(0.2, 0.26, 0.5, s * 26.8, 0.05, -4.4, s < 0 ? 0xff3a2e : 0x3aff6a);
+    H.boltLine(b, s * 2.0, 0.22, -0.5, s * 24.0, 0.2, -4.0, 12, 0.08); b.box(0.2, 1.8, 2.2, s * 2.4, 1.4, -6.2, 0x353a40, [0, 0, s * 0.45]);
+    b.box(0.3, 1.1, 0.3, s * 1.6, -1.0, 2.0, METAL); b.wheel(0.5, 0.34, s * 1.6, -1.6, 2.0);
+  }
+  b.box(0.2, 1.0, 0.2, 0, -0.9, 7.0, METAL); b.wheel(0.36, 0.26, 0, -1.4, 7.0);
+}
+
 // ---- ground support props & airfield structures (not units) ----
 function crew(b) {
   b.box(0.22, 0.8, 0.26, -0.13, 0.4, 0, DARK2); b.box(0.22, 0.8, 0.26, 0.13, 0.4, 0, DARK2); b.box(0.26, 0.12, 0.38, -0.13, 0.04, 0.05, BLACK); b.box(0.26, 0.12, 0.38, 0.13, 0.04, 0.05, BLACK);
@@ -182,10 +209,10 @@ export const HARD = {
   ewplane: [[3.6, -0.35, -0.5], [4.2, -0.35, -0.9]],
   fighter: [[1.3, -0.5, -0.2], [2.0, -0.42, -0.4], [2.8, -0.38, -0.7], [3.6, -0.3, -1.0]],
   strategic: [[3.0, -0.6, 1.0], [3.0, -0.6, -1.6], [6.5, -0.5, -0.2], [6.5, -0.5, -2.4], [12.0, -0.4, -3.6], [12.0, -0.4, -5.6]],
-  airlifter: [],
+  airlifter: [], awacs: [], spydrone: [],
   bomber: [[2.4, -0.55, 0.9], [2.4, -0.55, -1.4], [5.5, -0.5, 0.2], [5.5, -0.5, -2.0], [9.0, -0.4, -0.9], [9.0, -0.4, -2.9]],
 };
-export const HARD_CENTER = { uav: [0, -0.55, 0.5], ewplane: [0, -0.85, 1.4], fighter: [0, -0.95, 0.2], vtol: [0, -0.7, 0.6], heli: [0, -0.6, 1.2], bomber: [0, -1.7, 2.0], strategic: [0, -2.0, 2.0], airlifter: [0, 0, 0] };
+export const HARD_CENTER = { uav: [0, -0.55, 0.5], ewplane: [0, -0.85, 1.4], fighter: [0, -0.95, 0.2], vtol: [0, -0.7, 0.6], heli: [0, -0.6, 1.2], bomber: [0, -1.7, 2.0], strategic: [0, -2.0, 2.0], airlifter: [0, 0, 0], awacs: [0, 0, 0], spydrone: [0, 0, 0] };
 
-export const AIR = { uav, heli, vtol, ewplane, fighter, bomber, strategic, airlifter };
+export const AIR = { uav, heli, vtol, ewplane, fighter, bomber, strategic, airlifter, awacs, spydrone };
 export const PROPS_MODELS = { crew, cart, afhangar, afbunker, afdepot };

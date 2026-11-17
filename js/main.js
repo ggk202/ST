@@ -103,7 +103,7 @@ class App {
     if (this.net && this.net.code) $('codeText').textContent = this.net.code;
     const lock = (id) => { for (const b of $(id).children) b.disabled = ro; };
     this.seg('segType', [{ v: 'island', label: 'Island' }, { v: 'highlands', label: 'Mountain valley' }, { v: 'random', label: 'Random' }], L.map.type, (v) => { L.map.type = v; this.pushLobby(); }); lock('segType');
-    this.seg('segSize', [{ v: 'small', label: 'Small' }, { v: 'medium', label: 'Medium' }, { v: 'large', label: 'Large' }], L.map.size, (v) => { L.map.size = v; this.pushLobby(); }); lock('segSize');
+    this.seg('segSize', [{ v: 'small', label: 'Small' }, { v: 'medium', label: 'Medium' }, { v: 'large', label: 'Large' }, { v: 'xl', label: 'Huge' }], L.map.size, (v) => { L.map.size = v; this.pushLobby(); }); lock('segSize');
     $('seedInput').value = L.map.seed; $('seedInput').disabled = ro; $('btnReseed').disabled = ro;
     $('btnStart').classList.toggle('hidden', ro);
     const box = $('slots'); box.innerHTML = '';

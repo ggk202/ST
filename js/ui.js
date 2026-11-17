@@ -1,8 +1,8 @@
 // HUD: top bar, minimap, selection panel, build/production panel, toasts.
-import { UNITS, BUILDINGS, BUILD_ORDER, BASE_ORDER, BASE_UNITS, DEFS, UNIT_CAP, PLAYER_COLORS, unitId, ROMAN, AF, AF_MODULES, AF_KEYS, TICK_RATE } from './sim/defs.js';
+import { UNITS, BUILDINGS, BUILD_ORDER, BASE_ORDER, BASE_UNITS, DEFS, UNIT_CAP, PLAYER_COLORS, unitId, ROMAN, AF, AF_MODULES, AF_KEYS, TICK_RATE, BTIER } from './sim/defs.js';
 import { sfx } from './fx.js';
 
-const ABBR = { rifleman: 'RIF', at: 'AT', manpads: 'MAN', engineer: 'ENG', scout: 'SCT', ifv: 'IFV', mbt: 'MBT', aa: 'FLK', sph: 'SPH', heavy: 'HVY', mlrs: 'MRL', tel: 'BMS', uav: 'UAV', heli: 'HEL', vtol: 'VTL', ewtruck: 'EWT', ewplane: 'EWA', robot: 'BOT', ewdog: 'EWD', sapper: 'CRW', repair: 'RPR', walker: 'WLK', fpv: 'FPV', fighter: 'FTR', bomber: 'BMB', strategic: 'SBM', airlifter: 'AIR', wingman: 'WNG', carrier: 'DSD', empcarrier: 'EMP', powerplant: 'PWR', dronebay: 'DRN', advtech: 'LB2', ewtower: 'EWS', derrick: 'OIL', barracks: 'BAR', factory: 'FAC', airfield: 'AIR', techlab: 'LAB', turret: 'GUN', sam: 'SAM', hq: 'HQ' };
+const ABBR = { rifleman: 'RIF', at: 'AT', manpads: 'MAN', engineer: 'ENG', scout: 'SCT', ifv: 'IFV', mbt: 'MBT', aa: 'FLK', sph: 'SPH', heavy: 'HVY', mlrs: 'MRL', tel: 'BMS', uav: 'UAV', heli: 'HEL', vtol: 'VTL', ewtruck: 'EWT', ewplane: 'EWA', robot: 'BOT', ewdog: 'EWD', sapper: 'CRW', repair: 'RPR', walker: 'WLK', fpv: 'FPV', fighter: 'FTR', bomber: 'BMB', strategic: 'SBM', airlifter: 'AIR', awacs: 'AWX', spydrone: 'SPY', radar: 'RAD', wingman: 'WNG', carrier: 'DSD', empcarrier: 'EMP', powerplant: 'PWR', dronebay: 'DRN', advtech: 'LB2', ewtower: 'EWS', derrick: 'OIL', barracks: 'BAR', factory: 'FAC', airfield: 'AIR', techlab: 'LAB', turret: 'GUN', sam: 'SAM', hq: 'HQ' };
 const TABS = [
   { id: 'str', label: 'Build', key: 'B', cls: 'str' },
   { id: 'inf', label: 'Infantry', key: 'I', cls: 'inf', from: ['barracks', 'hq'] },
@@ -38,6 +38,7 @@ export class HUD {
     this.on('btnBox', () => { const c = this.c; c.touchBox = !c.touchBox; $('btnBox').classList.toggle('on', c.touchBox); this.toast(c.touchBox ? 'Box select ON: drag to select' : 'Box select OFF: drag pans', 'info'); });
     this.on('btnArmy', () => this.c.selectArmy());
     this.on('btnIdle', () => { if (!this.c.selectIdleEngineers()) this.g.jumpAlert(); });
+    this.on('btnSensor', () => this.g.sensor.toggle());
     this.on('btnHome', () => this.g.jumpHome());
     this.on('btnDesel', () => { this.c.cancelMode(); this.g.setSel([]); });
     this.on('btnPlaceOk', () => this.c.confirmPlace(false));
@@ -81,6 +82,7 @@ export class HUD {
       } else if (e.e === 'built' && e.owner === L) { this.toast(DEFS[e.def].name + ' complete', 'info'); sfx('ui', 0.8); this.refreshItems(); }
       else if (e.e === 'trained' && e.owner === L) { if (now - this.lastReady > 1.2) { this.lastReady = now; this.toast(DEFS[e.def].name + ' ready', 'info'); } }
       else if (e.e === 'afmod' && e.owner === L) { this.toast(AF_MODULES[e.key].levels[e.lv - 1].name + ' complete', 'info'); sfx('ui', 0.8); this.afSig = ''; this.refreshItems(); }
+      else if (e.e === 'bupg' && e.owner === L) { this.toast(DEFS[e.def || 'derrick'] ? 'Upgrade complete: Mk ' + BTIER.roman[e.tier] : 'Upgrade complete', 'info'); sfx('ui', 0.7); }
       else if (e.e === 'cargomsg' && e.owner === L) { this.toast(e.msg, 'warn'); sfx('ui', 0.5); }
       else if (e.e === 'airdrop' && e.owner === L) this.toast('Airdrop: ' + e.n + ' unit' + (e.n > 1 ? 's' : '') + ' deployed', 'info');
       else if (e.e === 'unload' && e.owner === L) this.toast('Cargo unloaded (' + e.n + ' units)', 'info');
@@ -206,7 +208,7 @@ export class HUD {
   groupByDef(ents) { const m = new Map(); for (const e of ents) m.set(e.def, (m.get(e.def) || 0) + 1); return m; }
   renderSel(force) {
     const ents = this.c ? this.c.selEnts() : [];
-    const sig = ents.map((e) => e.id + (e.ap || '')).join(',') + '|' + this.c?.mode.t;
+    const sig = ents.map((e) => e.id + (e.ap || '') + (e.tier > 1 ? 't' + e.tier : '') + (e.tu ? 'u' : '')).join(',') + '|' + this.c?.mode.t;
     if (!force && sig === this.selSig) { this.updateSelDynamic(ents); return; }
     this.selSig = sig;
     const box = this.el.selInfo; box.innerHTML = '';
@@ -245,6 +247,7 @@ export class HUD {
       if (e.cargo) { const lo = e.ed && e.ed.lo; s += ' · cargo ' + this.sim.cargoUsed(e) + '/' + (lo && lo.cap ? lo.cap : 0) + (e.cargo.length ? ' (' + e.cargo.length + ' units)' : ''); }
       if (e.apsN !== undefined && d.aps) s += ' · APS ' + e.apsN + '/' + d.aps.n;
       if (e.kind !== 'building' && e.lo >= 0 && d.loadouts) { s += ' · ' + d.loadouts[e.lo].name; if (e.am && e.ed) { let t = 0, l = 0; e.ed.weapons.forEach((w, i) => { if (w.ammo > 0) { t += w.ammo; l += Math.max(0, e.am[i]); } }); if (t) s += ' (' + l + '/' + t + ' rounds)'; } }
+      if (e.kind === 'building' && BTIER.steps[e.def]) s += ' · Mk ' + BTIER.roman[e.tier || 1] + (e.tu ? ' · upgrading to Mk ' + BTIER.roman[e.tier + 1] + ' ' + Math.round((1 - e.tu.left / e.tu.total) * 100) + '%' : '');
       if (e.kind === 'building' && e.afd) s += ' · runway ' + this.sim.afRunLen(e) + ' m · ' + this.sim.afStandCount(e) + ' stands';
       if (e.kind !== 'building' && (!e.ap || e.ap === 'fly') && e.order) s += ' · ' + ({ idle: 'idle', move: 'moving', attackmove: 'attack-moving', attack: 'attacking', attackground: 'firing at ground', lift: 'airlifting', drop: 'flying to drop zone', board: 'boarding' }[e.order.t] || '');
       this.selLine.textContent = s;
@@ -272,6 +275,10 @@ export class HUD {
       if (units.some((u) => UNITS[u.def].weapons.some((w) => w.ground && w.kind !== 'hit'))) add('Fire at ground', 'F', 'forcefire', () => c.setMode(c.mode.t === 'forcefire' ? { t: 'normal' } : { t: 'forcefire' }));
     } else if (blds.length) {
       if (blds.some((b) => BUILDINGS[b.def].produces)) add('Set rally point', 'F', 'rally', () => c.setMode(c.mode.t === 'rally' ? { t: 'normal' } : { t: 'rally' }));
+      const upg = blds.filter((b) => BTIER.steps[b.def] && b.progress >= 1);
+      if (upg.some((b) => b.tu)) add('Cancel upgrade', '', null, () => this.g.cmd({ t: 'cancelbupg', ids: upg.filter((b) => b.tu).map((b) => b.id) }));
+      const nxt = upg.filter((b) => !this.sim.bldUpBlock(b));
+      if (nxt.length) { const b0 = nxt[0], st = BTIER.steps[b0.def][b0.tier - 1]; add('Upgrade to Mk ' + BTIER.roman[b0.tier + 1] + (nxt.length > 1 ? ' ×' + nxt.length : '') + ' (⛏' + st.cost * nxt.length + (st.energy ? ' ⚡' + st.energy * nxt.length : '') + ')', '', null, () => this.g.cmd({ t: 'bupg', ids: nxt.map((b) => b.id) })); }
       if (blds.some((b) => b.def !== 'hq')) add('Sell', '', null, () => { if (confirm('Sell selected structure(s) for a 50% refund?')) c.sell(); }, 'danger');
     }
     this.modeChanged();

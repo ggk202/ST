@@ -6,8 +6,8 @@ const DIFF = {
   normal: { interval: 20, base: 2400, step: 800, grace: 150, reserve: 1.0 },
   hard:   { interval: 12, base: 1800, step: 650, grace: 100, reserve: 1.0 },
 };
-const PLAN = [['barracks', 1], ['powerplant', 8], ['factory', 1], ['techlab', 1], ['turret', 1], ['dronebay', 1], ['airfield', 1], ['sam', 1], ['ewtower', 1], ['advtech', 1], ['turret', 2], ['factory', 2], ['sam', 2], ['barracks', 2], ['dronebay', 2], ['turret', 4], ['airfield', 2]];
-const WEIGHTS = { rifleman: 2, at: 1.6, manpads: 0.8, scout: 0.5, ifv: 2.5, mbt: 3.5, aa: 0.8, sph: 1.2, heavy: 2.5, mlrs: 1.4, tel: 0.25, uav: 0.15, heli: 2, vtol: 1.4, fighter: 1.3, bomber: 0.9, strategic: 0.6, engineer: 0,
+const PLAN = [['barracks', 1], ['powerplant', 8], ['factory', 1], ['techlab', 1], ['turret', 1], ['dronebay', 1], ['airfield', 1], ['sam', 1], ['radar', 1], ['ewtower', 1], ['advtech', 1], ['turret', 2], ['factory', 2], ['sam', 2], ['barracks', 2], ['dronebay', 2], ['turret', 4], ['airfield', 2]];
+const WEIGHTS = { rifleman: 2, at: 1.6, manpads: 0.8, scout: 0.5, ifv: 2.5, mbt: 3.5, aa: 0.8, sph: 1.2, heavy: 2.5, mlrs: 1.4, tel: 0.25, uav: 0.15, heli: 2, vtol: 1.4, fighter: 1.3, bomber: 0.9, strategic: 0.6, awacs: 0.3, spydrone: 0.15, engineer: 0,
   ewtruck: 0.35, ewplane: 0.3, robot: 2.5, ewdog: 0.9, sapper: 0.8, repair: 0.5, walker: 2, fpv: 1.2, wingman: 1.3, carrier: 0.9, empcarrier: 0.3 };
 const hyp = (a, b) => Math.sqrt(a * a + b * b);
 const DIRS = [[1, 0], [0.7, 0.7], [0, 1], [-0.7, 0.7], [-1, 0], [-0.7, -0.7], [0, -1], [0.7, -0.7]];
@@ -103,6 +103,9 @@ export class AIController {
       }
       break;
     }
+
+    // ---- tiered derricks / power plants
+    if (secs > 240 && p.credits > 900) for (const b of blds) if ((b.def === 'derrick' || b.def === 'powerplant') && !sim.bldUpBlock(b)) { sim.exec({ t: 'bupg', p: id, ids: [b.id] }); break; }
 
     // ---- production
     const reserve = nextCost * cfg.reserve;

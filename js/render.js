@@ -4,6 +4,7 @@ import { buildProjModels, projKind } from './projectile-gfx.js';
 import * as THREE from 'three';
 import { CELL, DEFS, PLAYER_COLORS, UNITS } from './sim/defs.js';
 import { GROUND_PHASES } from './sim/airops.js';
+const PIP_GEO = new THREE.OctahedronGeometry(0.5), PIP_MAT = new THREE.MeshBasicMaterial({ color: 0xffd24a });
 const CANOPY_GEO = new THREE.SphereGeometry(3.4, 12, 6, 0, Math.PI * 2, 0, 1.25), CANOPY_MAT = new THREE.MeshStandardMaterial({ color: 0xd8d2b0, roughness: 0.9, side: THREE.DoubleSide });
 import { AirfieldGfx } from './airfield-gfx.js';
 import { updateStores, CrewPool } from './aircraft-gfx.js';
@@ -177,14 +178,14 @@ export class Renderer {
     const sim = this.sim, n = sim.map.n, w = n + 1;
     const vis = sim.vis[this.team], ex = sim.expl[this.team];
     const cs = new Float32Array(n * n);
-    for (let c = 0; c < n * n; c++) cs[c] = vis[c] ? 1 : ex[c] ? 0.5 : 0.04;
+    for (let c = 0; c < n * n; c++) cs[c] = vis[c] ? 1 : ex[c] ? 0.68 : 0.24;
     const col = this.colAttr.array, base = this.baseCol;
     for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) {
       let s = 0, k = 0;
       for (let dj = -1; dj <= 0; dj++) for (let di = -1; di <= 0; di++) {
         const x = i + di, z = j + dj; if (x < 0 || z < 0 || x >= n || z >= n) continue; s += cs[z * n + x]; k++;
       }
-      const sh = k ? s / k : 0.04, q = (j * w + i) * 3;
+      const sh = k ? s / k : 0.24, q = (j * w + i) * 3;
       col[q] = base[q] * sh; col[q + 1] = base[q + 1] * sh; col[q + 2] = base[q + 2] * sh;
       this.fogShade[j * w + i] = sh;
     }
@@ -320,7 +321,7 @@ export class Renderer {
   visibleToLocal(e) {
     if (e.team === this.team || e.def === 'derrick') return true;
     const c = this.sim.map.cellOf(e.x, e.z);
-    return c >= 0 && this.sim.vis[this.team][c] === 1;
+    return (c >= 0 && this.sim.vis[this.team][c] === 1) || (e.air && this.sim.contact[this.team].has(e.id));
   }
   // pick the entity under a screen point; minPx widens hit area for touch
   pickEntity(sx, sy, minPx = 10, filter) {
@@ -404,6 +405,13 @@ export class Renderer {
     }
     if (v.fxC <= 0 && (e.armor === 'medium' || e.armor === 'heavy')) { v.fxC = 0.22; fx.smoke.emit(x - dx * d.radius , gy + d.radius * 0.9, z - dz * d.radius, -dx * 1.2, 1.2, -dz * 1.2, 1.1, 0.45, 0.14, 0.14, 0.15, 0.32, 1.4, 0.8); }
   }
+  // little gold pips on top of upgraded derricks / power plants
+  tierMarks(v, e) {
+    v.tierN = e.tier; if (v.tierG) { v.obj.remove(v.tierG); }
+    const g = new THREE.Group(), h = (v.maxY || 8) + 1.4;
+    for (let i = 0; i < e.tier - 1; i++) { const m = new THREE.Mesh(PIP_GEO, PIP_MAT); m.position.set((i - (e.tier - 2) / 2) * 1.1, h, 0); g.add(m); }
+    v.obj.add(g); v.tierG = g;
+  }
   removeView(id, v) {
     this.scene.remove(v.obj); if (v.mat) v.mat.dispose(); if (v.afg) v.afg.dispose();
     if (v.ring) { this.scene.remove(v.ring); this.scene.remove(v.ring2); v.ring.geometry.dispose(); v.ring.material.dispose(); v.ring2.material.dispose(); }
@@ -476,6 +484,7 @@ export class Renderer {
         } else if (d.base === 'heli' || d.base === 'uav') { if (v.rotor) { if (d.base === 'heli') v.rotor.rotation.y += dt * 40; else v.rotor.rotation.z += dt * 50; } if (v.rotor2) v.rotor2.rotation.x += dt * 40; }
       } else {
         o.rotation.y = 0;
+        if ((e.tier || 1) !== (v.tierN || 1)) this.tierMarks(v, e);
         if (this.gfx) {
           const u = v.mat.userData.u; u.uBuildH.value = e.progress < 1 ? e.progress * v.maxY : 1e5; u.uDmg.value = clamp((0.6 - e.hp / e.maxhp) / 0.6, 0, 1); u.uStun.value = e.stun > 0 ? 1 : 0;
         } else if (e.progress < 1) o.scale.set(1, 0.12 + 0.88 * e.progress, 1); else if (o.scale.y !== 1) o.scale.set(1, 1, 1);
@@ -488,7 +497,7 @@ export class Renderer {
         if (e.progress >= 1 && v.rotor) {
           if (e.stun > 0) { /* frozen by EMP */ }
           else if (d.base === 'derrick') v.rotor.rotation.x = Math.sin(this.time * 1.6 + e.id) * 0.16;
-          else v.rotor.rotation.y += dt * (d.base === 'airfield' ? 2.5 : d.base === 'ewtower' ? 5 : d.base === 'powerplant' ? 6 : 1.3);
+          else v.rotor.rotation.y += dt * (d.base === 'airfield' ? 2.5 : d.base === 'ewtower' ? 5 : d.base === 'radar' ? 1.6 : d.base === 'powerplant' ? 6 : 1.3);
         }
       }
     }

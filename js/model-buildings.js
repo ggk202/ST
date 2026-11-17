@@ -178,4 +178,11 @@ function sam(b) {
   b.box(0.2, 1.8, 0.2, -1.5, 3.0, 0.5, METAL); H.antenna(b, 1.3, 2.9, 1.0, 1.2); b.sph6(0.2, -1.2, 3.1, 1.2, DARK2); b.sph6(0.1, -1.2, 3.15, 1.35, GLASS); H.panel(b, 0.8, 2.75, 0.8, 0.6, 0.6); b.box(0.2, 0.3, 0.3, 1.1, 2.9, -1.5, ORANGE);
 }
 
-export const BUILDINGS = { hq, derrick, barracks, factory, airfield, techlab, powerplant, dronebay, advtech, ewtower, turret, sam };
+function radar(b) {   // ground air-search radar: operations shelter, pedestal and a big rotating dish
+  slab(b, 6, 6, 0.4); b.box(2.4, 1.5, 2.2, 1.5, 1.15, -1.6, OD2); b.box(2.5, 0.15, 2.3, 1.5, 1.95, -1.6, T); door(b, 1.5, 1.0, -0.47, 0.8, 1.3); acUnit(b, 1.5, 2.0, -1.6, 0.9, 0.8); b.cyl(0.4, 1.0, -2.2, 0.9, 1.9, 0x4a5a3a);
+  b.cyl(0.9, 3.4, -0.3, 2.1, 0.8, METAL); b.cyl(1.1, 0.3, -0.3, 0.55, 0.8, DARK2); b.cyl6(0.5, 1.2, -0.3, 4.4, 0.8, DARK2); for (const a of [0, 1, 2, 3]) b.box(0.12, 2.2, 0.12, -0.3 + Math.cos(a * 1.571) * 0.8, 1.8, 0.8 + Math.sin(a * 1.571) * 0.8, METAL, [Math.sin(a * 1.571) * 0.3, 0, -Math.cos(a * 1.571) * 0.3]);
+  b.g('rotor').at(-0.3, 5.2, 0.8);
+  b.box(6.8, 3.0, 0.3, -0.3, 6.4, 0.8, 0xe8ecef); b.box(7.0, 0.22, 0.4, -0.3, 7.95, 0.8, 0xd0d6dc); b.box(7.0, 0.22, 0.4, -0.3, 4.85, 0.8, 0xd0d6dc); b.box(0.22, 3.2, 0.4, 3.2, 6.4, 0.8, 0xd0d6dc); b.box(0.22, 3.2, 0.4, -3.8, 6.4, 0.8, 0xd0d6dc);
+  for (let i = 0; i < 5; i++) b.box(6.4, 0.08, 0.12, -0.3, 5.2 + i * 0.6, 1.0, 0xaab2ba); b.box(0.5, 0.5, 0.9, -0.3, 6.4, -0.2, DARK2); b.sph6(0.16, -0.3, 8.2, 0.8, RED); b.box(0.9, 0.12, 0.12, -0.3, 6.4, -0.6, METAL);
+}
+export const BUILDINGS = { hq, derrick, barracks, factory, airfield, techlab, powerplant, dronebay, advtech, ewtower, turret, sam, radar };

@@ -2,7 +2,7 @@
 import { CELL } from './defs.js';
 import { RNG, clamp, lerp, smoothstep, fbm, dist } from './util.js';
 
-export const MAP_SIZES = { small: 192, medium: 288, large: 400 };
+export const MAP_SIZES = { small: 192, medium: 288, large: 400, xl: 560 };
 export const MAP_TYPES = ['island', 'highlands'];
 export const SEA_LEVEL = 0;
 

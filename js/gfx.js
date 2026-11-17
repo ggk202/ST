@@ -507,7 +507,7 @@ export function animateUnit(v, e, d, dt, time, speed, firing, lod = 0, ground = 
     else if (/^prop/.test(k)) mesh.rotation.y += dt * 90 * pf;
     else if (k === 'rotor' && pr) { if (base === 'heli') mesh.rotation.y += dt * 40 * (idle ? 0.06 : 1); else mesh.rotation.z += dt * 50 * pf; }
     else if (k === 'rotor2' && base === 'heli') mesh.rotation.x += dt * 40 * (idle ? 0.06 : 1);
-    else if (k === 'rotor' && (base === 'ewdog' || base === 'ewtruck' || base === 'ewplane')) mesh.rotation.y += dt * 4;
+    else if (k === 'rotor' && (base === 'ewdog' || base === 'ewtruck' || base === 'ewplane' || base === 'awacs')) mesh.rotation.y += dt * (base === 'awacs' ? 2 : 4);
     else if (k === 'rotor' && base === 'fpv') mesh.rotation.y += dt * 60;
   }
   animateBody(v, e, d, dt, speed, time, firing);

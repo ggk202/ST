@@ -52,7 +52,7 @@ const BASE = {
     weapons: [W({ type: 'bullet', range: 28, dmg: 12, reload: 0.5, air: true, sec: true }), W({ type: 'ap', range: 36, dmg: 460, reload: 8, kind: 'missile', speed: 42 })] },
   mbt: { name: 'Medium Tank', desc: 'Main battle tank.', from: 'factory', cost: 800, time: 20, hp: 680, speed: 7.5, armor: 'medium', radius: 2.5, vision: 42, aps: { n: 3, range: 16 },
     weapons: [W({ type: 'ap', range: 40, dmg: 330, reload: 4, kind: 'shell', speed: 90, splash: 1.5 }), W({ type: 'bullet', range: 26, dmg: 14, reload: 0.4, sec: true })] },
-  aa: { name: 'Mobile AA', desc: 'Radar-guided flak vehicle. Shreds aircraft and drones.', from: 'factory', cost: 650, time: 16, hp: 380, speed: 8, armor: 'light', radius: 2.2, vision: 50,
+  aa: { name: 'Mobile AA', desc: 'Radar-guided flak vehicle with its own search radar. Shreds aircraft and drones.', radar: { range: 65 }, from: 'factory', cost: 650, time: 16, hp: 380, speed: 8, armor: 'light', radius: 2.2, vision: 50,
     weapons: [W({ type: 'aa', range: 52, dmg: 16, reload: 0.25, ground: false, air: true, radar: true })] },
   sph: { name: 'Self-Prop. Howitzer', desc: 'Long-range artillery. Needs spotters.', from: 'factory', cost: 900, time: 22, hp: 260, speed: 6, armor: 'light', radius: 2.5, vision: 36,
     weapons: [W({ type: 'he', range: 130, min: 30, dmg: 320, reload: 7, kind: 'shell', speed: 55, splash: 8, arc: 0.5, spread: 0.035 })] },
@@ -67,13 +67,13 @@ const BASE = {
   // ---- aircraft (Airfield) ----
   // rwy = runway level needed (0 = vertical take-off: uses its apron stand). lo = optional loadouts besides the standard one.
   // Loadout fields: cost, prep (ground-crew seconds), dp (munitions depot level), rw (runway level), mods (vision/speed/hp/ewm/upk multipliers), vis (stores shown on the wings).
-  uav: { name: 'UAV Drone', desc: 'Unarmed recon drone with huge vision.', from: 'airfield', rwy: 1, cost: 300, time: 14, hp: 80, speed: 20, armor: 'air', radius: 1.5, vision: 90, air: true, fw: true, turn: 0.8, accel: 6, alt: 28, drone: true, weapons: [],
+  uav: { name: 'UAV Drone', rcs: 0.45, desc: 'Unarmed recon drone with huge vision.', from: 'airfield', rwy: 1, cost: 300, time: 14, hp: 80, speed: 20, armor: 'air', radius: 1.5, vision: 90, air: true, fw: true, turn: 0.8, accel: 6, alt: 28, drone: true, weapons: [],
     stdName: 'Recon Suite', stdDesc: 'Standard EO/IR sensor ball.', stdPrep: 2, stdVis: [],
     lo: [
       { id: 'optics', name: 'Long-Range Optics', desc: '+40% vision radius, 10% slower.', cost: 80, prep: 4, mods: { vision: 1.4, speed: 0.9 }, vis: [['optics', 1]], weapons: [] },
       { id: 'rack', name: 'Micro-Munition Rack', desc: 'Three small guided bombs for opportunistic strikes.', cost: 160, prep: 6, vis: [['bomb', 2]], weapons: [W({ type: 'he', range: 8, dmg: 150, reload: 1.0, kind: 'shell', speed: 35, splash: 3, spread: 0.05, ammo: 3 })] },
     ] },
-  heli: { name: 'Attack Helicopter', desc: 'Anti-armor missiles from the air. Vertical take-off from an apron stand.', from: 'airfield', rwy: 0, cost: 1200, time: 28, hp: 380, speed: 16, armor: 'air', radius: 2.5, vision: 52, air: true, accel: 7, alt: 14,
+  heli: { name: 'Attack Helicopter', rcs: 0.7, desc: 'Anti-armor missiles from the air. Vertical take-off from an apron stand.', from: 'airfield', rwy: 0, cost: 1200, time: 28, hp: 380, speed: 16, armor: 'air', radius: 2.5, vision: 52, air: true, accel: 7, alt: 14,
     stdName: 'Anti-Armor ATGM', stdDesc: 'Eight radar-quiet tank-killer missiles.', stdPrep: 4, stdVis: [['atgm', 4]],
     weapons: [W({ type: 'ap', range: 40, dmg: 460, reload: 3.1, kind: 'missile', speed: 55, ammo: 8 })],
     lo: [
@@ -82,7 +82,7 @@ const BASE = {
       { id: 'gunship', name: 'Heavy Gunship', desc: 'Chin cannon plus six missiles. Tougher airframe, slower.', cost: 260, prep: 8, dp: 2, mods: { hp: 1.15, speed: 0.92 }, vis: [['atgm', 3], ['rocket', 1]], weapons: [W({ type: 'bullet', range: 30, dmg: 14, reload: 0.18, air: true, ammo: 140 }), W({ type: 'ap', range: 40, dmg: 460, reload: 3.5, kind: 'missile', speed: 55, ammo: 6 })] },
       { id: 'barrage', name: 'Missile Barrage', desc: 'Fourteen heavy anti-armor missiles at a rapid rate of fire.', cost: 320, prep: 10, dp: 2, vis: [['atgm', 7]], weapons: [W({ type: 'ap', range: 44, dmg: 460, reload: 1.5, kind: 'missile', speed: 60, ammo: 14 })] },
     ] },
-  vtol: { name: 'VTOL Strike Fighter', desc: 'Bombs ground, radar missiles for air. Vertical take-off from an apron stand.', from: 'airfield', rwy: 0, techLv: 1, cost: 1600, time: 36, hp: 320, speed: 30, armor: 'air', radius: 2.5, vision: 60, air: true, accel: 10, alt: 24,
+  vtol: { name: 'VTOL Strike Fighter', radar: { range: 60, arc: 0.5 }, rcs: 0.8, desc: 'Bombs ground, radar missiles for air. Vertical take-off from an apron stand.', from: 'airfield', rwy: 0, techLv: 1, cost: 1600, time: 36, hp: 320, speed: 30, armor: 'air', radius: 2.5, vision: 60, air: true, accel: 10, alt: 24,
     stdName: 'Strike Package', stdDesc: 'Six bombs and two radar missiles.', stdPrep: 5, stdVis: [['bomb', 3], ['aam', 1]],
     weapons: [W({ type: 'he', range: 26, dmg: 420, reload: 5, kind: 'shell', speed: 45, splash: 6, spread: 0.1, ammo: 6 }), W({ type: 'aa', range: 60, dmg: 380, reload: 3, kind: 'missile', speed: 70, ground: false, air: true, radar: true, ammo: 2 })],
     lo: [
@@ -90,7 +90,7 @@ const BASE = {
       { id: 'air', name: 'Air Superiority', desc: 'Six radar-guided missiles and a gun pod.', cost: 200, prep: 6, vis: [['aam', 3]], weapons: [W({ type: 'aa', range: 62, dmg: 380, reload: 2, kind: 'missile', speed: 72, ground: false, air: true, radar: true, ammo: 6 }), W({ type: 'bullet', range: 22, dmg: 9, reload: 0.15, air: true, ammo: 100 })] },
       { id: 'heavy', name: 'Heavy Ordnance', desc: 'Two huge bombs. Devastating against structures; slower with the load.', cost: 520, prep: 14, dp: 3, mods: { speed: 0.85 }, vis: [['heavy', 1]], weapons: [W({ type: 'blast', range: 24, dmg: 900, reload: 5, kind: 'shell', speed: 45, splash: 9, spread: 0.08, ammo: 2 }), W({ type: 'aa', range: 55, dmg: 380, reload: 3, kind: 'missile', speed: 70, ground: false, air: true, ammo: 2 })] },
     ] },
-  fighter: { name: 'Air Superiority Fighter', desc: 'Fast jet. Needs a runway. Radar missiles and cannon; swap loadouts for strike roles.', from: 'airfield', rwy: 1, techLv: 1, cost: 1400, time: 30, hp: 260, speed: 38, armor: 'air', radius: 2.2, vision: 62, air: true, fw: true, turn: 1.0, accel: 14, alt: 28,
+  fighter: { name: 'Air Superiority Fighter', radar: { range: 85, arc: 0.5 }, rcs: 0.9, desc: 'Fast jet with a forward-looking radar. Needs a runway. Radar missiles and cannon; swap loadouts for strike roles.', from: 'airfield', rwy: 1, techLv: 1, cost: 1400, time: 30, hp: 260, speed: 38, armor: 'air', radius: 2.2, vision: 62, air: true, fw: true, turn: 1.0, accel: 14, alt: 28,
     stdName: 'Air Superiority', stdDesc: 'Six radar missiles and a cannon.', stdPrep: 5, stdVis: [['aam', 3]],
     weapons: [W({ type: 'aa', range: 62, dmg: 380, reload: 2.8, kind: 'missile', speed: 75, ground: false, air: true, radar: true, ammo: 6 }), W({ type: 'bullet', range: 22, dmg: 10, reload: 0.12, air: true, ammo: 200 })],
     lo: [
@@ -98,7 +98,7 @@ const BASE = {
       { id: 'strike', name: 'Strike Fighter', desc: 'Six heavy bombs and a cannon for ground attack.', cost: 260, prep: 8, dp: 2, vis: [['bomb', 3]], weapons: [W({ type: 'he', range: 22, dmg: 400, reload: 1.5, kind: 'shell', speed: 50, splash: 6, spread: 0.08, ammo: 6 }), W({ type: 'bullet', range: 22, dmg: 10, reload: 0.12, air: true, ammo: 200 })] },
       { id: 'intercept', name: 'Fast Interceptor', desc: 'Four long-range missiles, no cannon, 15% faster.', cost: 200, prep: 5, mods: { speed: 1.15 }, vis: [['aam', 2]], weapons: [W({ type: 'aa', range: 70, dmg: 380, reload: 2, kind: 'missile', speed: 80, ground: false, air: true, radar: true, ammo: 4 })] },
     ] },
-  bomber: { name: 'Heavy Bomber', desc: 'Large aircraft that needs an extended runway. Carries the heaviest loads; heavy loadouts need a bigger depot.', from: 'airfield', rwy: 2, techLv: 1, cost: 2400, time: 44, hp: 700, speed: 22, armor: 'air', radius: 4.2, vision: 58, air: true, fw: true, turn: 0.32, accel: 3.5, alt: 30,
+  bomber: { name: 'Heavy Bomber', rcs: 1.8, desc: 'Large aircraft that needs an extended runway. Carries the heaviest loads; heavy loadouts need a bigger depot.', from: 'airfield', rwy: 2, techLv: 1, cost: 2400, time: 44, hp: 700, speed: 22, armor: 'air', radius: 4.2, vision: 58, air: true, fw: true, turn: 0.32, accel: 3.5, alt: 30,
     stdName: 'Carpet Bombing', stdDesc: 'Thirty light bombs for area saturation.', stdPrep: 8, stdVis: [['bomb', 4]],
     weapons: [W({ type: 'he', range: 12, dmg: 160, reload: 0.35, kind: 'shell', speed: 30, splash: 7, spread: 0.12, ammo: 30 })],
     lo: [
@@ -106,7 +106,7 @@ const BASE = {
       { id: 'buster', name: 'Bunker Busters', desc: 'Four massive bombs. Needs the Heavy Runway and a Level III depot.', cost: 900, prep: 20, dp: 3, rw: 3, mods: { speed: 0.9 }, vis: [['heavy', 2]], weapons: [W({ type: 'blast', range: 14, dmg: 1200, reload: 3, kind: 'shell', speed: 35, splash: 9, spread: 0.03, ammo: 4 })] },
       { id: 'cruise', name: 'Cruise Missiles', desc: 'Six stand-off cruise missiles with 150 range. Needs the Heavy Runway and a Level III depot.', cost: 1000, prep: 22, dp: 3, rw: 3, vis: [['cruise', 3]], weapons: [W({ type: 'he', range: 150, min: 30, dmg: 420, reload: 2.5, kind: 'missile', speed: 75, splash: 7, ammo: 6 })] },
     ] },
-  strategic: { name: 'Strategic Bomber', desc: 'Giant long-range bomber carrying the largest bombs in the arsenal. Needs the Heavy Runway.', from: 'airfield', rwy: 3, techLv: 1, cost: 4200, time: 60, hp: 1200, speed: 20, armor: 'air', radius: 5.5, vision: 60, air: true, fw: true, turn: 0.27, accel: 3, alt: 34,
+  strategic: { name: 'Strategic Bomber', rcs: 1.5, desc: 'Giant long-range bomber carrying the largest bombs in the arsenal. Needs the Heavy Runway.', from: 'airfield', rwy: 3, techLv: 1, cost: 4200, time: 60, hp: 1200, speed: 20, armor: 'air', radius: 5.5, vision: 60, air: true, fw: true, turn: 0.27, accel: 3, alt: 34,
     stdName: 'Heavy Bombs', stdDesc: 'Ten 1-tonne bombs. Wrecks structures and armor columns.', stdPrep: 14, stdVis: [['heavy', 2]],
     weapons: [W({ type: 'blast', range: 14, dmg: 1100, reload: 1.2, kind: 'shell', speed: 35, splash: 12, spread: 0.04, ammo: 10 })],
     lo: [
@@ -114,11 +114,22 @@ const BASE = {
       { id: 'mega', name: 'Mega Bomb', desc: 'Two colossal 10-tonne bombs. Levels anything in a huge radius. Needs a Level III depot.', cost: 1400, prep: 30, dp: 3, mods: { speed: 0.9 }, vis: [['heavy', 3]], weapons: [W({ type: 'blast', range: 14, dmg: 3600, reload: 5, kind: 'shell', speed: 38, splash: 24, spread: 0.02, ammo: 2 })] },
       { id: 'cruise', name: 'Cruise Salvo', desc: 'Ten stand-off cruise missiles with 170 range. Needs a Level III depot.', cost: 1500, prep: 28, dp: 3, vis: [['cruise', 4]], weapons: [W({ type: 'he', range: 170, min: 30, dmg: 520, reload: 2.0, kind: 'missile', speed: 78, splash: 8, ammo: 10 })] },
     ] },
-  airlifter: { name: 'Heavy Transport', desc: 'Huge airlifter. Load troops and vehicles, then fly them to another airfield or airdrop light units anywhere. Needs the Long Runway.', from: 'airfield', rwy: 2, techLv: 1, cost: 2800, time: 44, hp: 1000, speed: 17, armor: 'air', radius: 6.5, vision: 50, air: true, fw: true, turn: 0.25, accel: 3, alt: 26, cargo: true, weapons: [],
+  airlifter: { name: 'Heavy Transport', rcs: 2.6, desc: 'Huge airlifter. Load troops and vehicles, then fly them to another airfield or airdrop light units anywhere. Needs the Long Runway.', from: 'airfield', rwy: 2, techLv: 1, cost: 2800, time: 44, hp: 1000, speed: 17, armor: 'air', radius: 6.5, vision: 50, air: true, fw: true, turn: 0.25, accel: 3, alt: 26, cargo: true, weapons: [],
     stdName: 'Mixed Cargo', stdDesc: 'Capacity 40: troops, light and heavy vehicles.', stdPrep: 4, stdVis: [], cap: 40,
     lo: [
       { id: 'troops', name: 'Troop Carrier', desc: 'Capacity 80, infantry, drones and light vehicles only (all airdrop-capable).', cost: 100, prep: 5, vis: [], weapons: [], cap: 80, only: 'para' },
       { id: 'hauler', name: 'Vehicle Hauler', desc: 'Capacity 60 for tanks and heavy vehicles. Needs the Heavy Runway.', cost: 200, prep: 8, rw: 3, mods: { speed: 0.9 }, vis: [], weapons: [], cap: 60 },
+    ] },
+  awacs: { name: 'AWACS', desc: 'Large airborne early-warning radar plane. Detects enemy aircraft far beyond visual range and shares the picture with all your air defenses. Drains energy. Needs the Long Runway.', from: 'airfield', rwy: 2, techLv: 1, cost: 2600, time: 40, hp: 650, speed: 15, armor: 'air', radius: 5.5, vision: 70, air: true, fw: true, turn: 0.3, accel: 3, alt: 30, rcs: 2.4, radar: { range: 200 }, upkeep: 10, weapons: [],
+    stdName: 'Surveillance Radar', stdDesc: 'Standard long-range air search.', stdPrep: 5, stdVis: [],
+    lo: [
+      { id: 'longrange', name: 'Extended Range Array', desc: '+25% radar range, 10% slower, more energy.', cost: 150, prep: 7, mods: { rng: 1.25, speed: 0.9, upk: 1.3 }, vis: [], weapons: [] },
+      { id: 'hard', name: 'Hardened Airframe', desc: 'Armour: +40% hit points, -10% radar range.', cost: 140, prep: 6, mods: { hp: 1.4, rng: 0.9 }, vis: [], weapons: [] },
+    ] },
+  spydrone: { name: 'Stealth Spy Drone', desc: 'Huge ultra-high-altitude stealth drone with enormous vision. Out of reach of every weapon and nearly invisible to radar, so it cannot be shot down: only electronic jamming (EW towers, trucks, aircraft; double reach against it) blinds it. Needs the Long Runway.', from: 'airfield', rwy: 2, techLv: 1, cost: 1900, time: 34, hp: 400, speed: 24, armor: 'air', radius: 5.0, vision: 150, air: true, fw: true, turn: 0.35, accel: 4, alt: 70, rcs: 0.04, drone: true, spy: true, untouchable: true, weapons: [],
+    stdName: 'Wide-Area Survey', stdDesc: 'Standard high-resolution survey sensors.', stdPrep: 5, stdVis: [],
+    lo: [
+      { id: 'deep', name: 'Deep-Look Optics', desc: '+30% vision radius, 10% slower.', cost: 200, prep: 7, mods: { vision: 1.3, speed: 0.9 }, vis: [['optics', 1]], weapons: [] },
     ] },
   ewplane: { name: 'EW Aircraft', desc: 'Airborne jammer. Blinds enemy radar and protects aircraft from missile locks. Drains energy.', from: 'airfield', rwy: 1, techLv: 1, cost: 1300, time: 26, hp: 300, speed: 18, armor: 'air', radius: 2.6, vision: 70, air: true, fw: true, turn: 0.45, accel: 4, alt: 26,
     ew: { radius: 70 }, upkeep: 9, weapons: [],
@@ -188,6 +199,8 @@ for (const [key, b] of Object.entries(BASE)) {
     d.hasSec = d.weapons.some((w) => w.sec); d.secRange = d.weapons.reduce((m, w) => (w.sec ? Math.max(m, w.range) : m), 0);
     if (b.aps) d.aps = { n: b.aps.n + tier - 1, range: b.aps.range };
     d.timeTicks = Math.round(d.time * TICK_RATE);
+    if (b.radar) d.radar = { range: Math.round(b.radar.range * (1 + 0.1 * (tier - 1))), arc: b.radar.arc };
+    d.rcs = b.rcs || (b.air || b.from === 'airfield' ? 1 : 0);
     d.slots = d.armor === 'inf' ? 1 : Math.max(2, Math.round(d.radius * d.radius / 1.8)); d.para = !d.air && d.slots <= 2;   // cargo space used / airdrop-compatible
     if (b.from === 'airfield') {
       d.rwy = b.rwy || 0;
@@ -197,7 +210,7 @@ for (const [key, b] of Object.entries(BASE)) {
         l.cost = Math.round(l.cost * t.cost / 5) * 5; l.energy = Math.round(l.cost * 0.5 / 5) * 5; l.prepTicks = Math.round(l.prep * TICK_RATE); wStats(l);
         const m = l.mods;
         l.ed = Object.assign({}, d, { weapons: l.weapons, maxRange: l.maxRange, hitsGround: l.hitsGround, hitsAir: l.hitsAir, vision: Math.round(d.vision * (m.vision || 1)), speed: +(d.speed * (m.speed || 1)).toFixed(2), hp: Math.round(d.hp * (m.hp || 1)),
-          ew: d.ew ? { radius: Math.round(d.ew.radius * (m.ewm || 1)), power: d.ew.power } : undefined, upkeep: d.upkeep ? +(d.upkeep * (m.upk || 1)).toFixed(1) : undefined, lo: l });
+          ew: d.ew ? { radius: Math.round(d.ew.radius * (m.ewm || 1)), power: d.ew.power } : undefined, radar: d.radar ? { range: Math.round(d.radar.range * (m.rng || 1)), arc: d.radar.arc } : undefined, upkeep: d.upkeep ? +(d.upkeep * (m.upk || 1)).toFixed(1) : undefined, lo: l });
       });
     }
     UNITS[d.id] = d;
@@ -217,8 +230,9 @@ export const BUILDINGS = {
   advtech: { name: 'Advanced Tech Lab', desc: 'Unlocks Mk III units.', cost: 1300, energy: 900, time: 40, size: 3, hp: 1100, armor: 'struct', vision: 36, requires: ['techlab'], weapons: [] },
   turret: { name: 'Gun Turret', desc: 'Defends against ground units.', cost: 300, energy: 120, time: 15, size: 1, hp: 900, armor: 'struct', vision: 52, requires: ['barracks'],
     weapons: [W({ type: 'bullet', range: 40, dmg: 14, reload: 0.35, sec: true }), W({ type: 'ap', range: 46, dmg: 300, reload: 4, kind: 'shell', speed: 90 })] },
-  sam: { name: 'SAM Site', desc: 'Radar-guided defense against aircraft and drones.', cost: 350, energy: 200, time: 15, size: 2, hp: 600, armor: 'struct', vision: 60, requires: ['barracks'],
+  sam: { name: 'SAM Site', desc: 'Radar-guided defense against aircraft, drones and some cruise missiles. Has its own fire-control radar.', radar: { range: 95 }, cost: 350, energy: 200, time: 15, size: 2, hp: 600, armor: 'struct', vision: 60, requires: ['barracks'],
     weapons: [W({ type: 'aa', range: 75, dmg: 380, reload: 3.6, kind: 'missile', speed: 75, ground: false, air: true, radar: true })] },
+  radar: { name: 'Ground Radar', desc: 'Long-range air-search radar. Detects aircraft far beyond visual range for your whole team; low flyers are harder to see. Drains energy.', cost: 500, energy: 300, time: 20, size: 2, hp: 600, armor: 'struct', vision: 44, requires: ['factory'], radar: { range: 170 }, upkeep: 5, weapons: [] },
   ewtower: { name: 'EW Tower', desc: 'Static jammer: degrades enemy drones, aircraft radar and missile locks in a wide area. Drains energy.', cost: 450, energy: 350, time: 18, size: 2, hp: 500, armor: 'struct', vision: 40, requires: ['techlab'], ew: { radius: 62, power: 2 }, upkeep: 6, weapons: [] },
 };
 
@@ -247,7 +261,9 @@ export const AF_MODULES = {
 };
 export const AF_KEYS = Object.keys(AF_MODULES);
 
-export const BUILD_ORDER = ['derrick', 'powerplant', 'barracks', 'factory', 'dronebay', 'airfield', 'techlab', 'advtech', 'turret', 'sam', 'ewtower'];
+export const BUILD_ORDER = ['derrick', 'powerplant', 'barracks', 'factory', 'dronebay', 'airfield', 'techlab', 'advtech', 'turret', 'sam', 'radar', 'ewtower'];
+// building tiers (derricks and power plants): output / storage multiplier by tier and the upgrade steps
+export const BTIER = { mult: [1, 1.9, 3.0], max: 3, steps: { derrick: [{ cost: 300, energy: 0, time: 16 }, { cost: 650, energy: 150, time: 24 }], powerplant: [{ cost: 300, energy: 0, time: 16 }, { cost: 650, energy: 0, time: 24 }] }, roman: ['', 'I', 'II', 'III'] };
 export const PRODUCER_KINDS = ['hq', 'barracks', 'factory', 'airfield', 'dronebay'];
 export const STORAGE_BASE = { m: 0, e: 0 };
 

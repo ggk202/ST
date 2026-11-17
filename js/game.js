@@ -3,6 +3,7 @@ import { Sim } from './sim/sim.js';
 import { Renderer } from './render.js';
 import { Controls } from './input.js';
 import { HUD } from './ui.js';
+import { SensorOverlay } from './overlay.js';
 import { TURN_TICKS } from './net.js';
 import { DT } from './sim/defs.js';
 import { initAudio, setVolume } from './fx.js';
@@ -19,6 +20,7 @@ export class Game {
     this.simAcc = 0; this.tickInTurn = 0; this.curTurn = null; this.alpha = 0; this.running = false; this.ended = false; this.leftEarly = false;
     this.controls = new Controls(this);
     this.hud = new HUD(this);
+    this.sensor = new SensorOverlay(this);
     ls.onDesync = () => { this.desync = true; this.toast('Desync detected – game states differ!', 'warn'); };
     this.onResize = () => this.resize();
     window.addEventListener('resize', this.onResize); window.addEventListener('orientationchange', this.onResize);
@@ -100,6 +102,7 @@ export class Game {
     this.renderer.render(dt, this.paused ? 1 : this.alpha);
     const o = this.octx; o.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.controls.draw(o, this.renderer.W, this.renderer.H);
+    if (this.sensor.on) this.sensor.draw(o, this.renderer.W, this.renderer.H, this.renderer.time);
     this.hud.update(dt);
     if ((this.sim.over || !this.sim.players[this.local].alive) && !this.ended) { this.ended = true; this.app.gameOver(this); }
   }

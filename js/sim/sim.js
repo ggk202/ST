@@ -1,5 +1,5 @@
 // Deterministic RTS simulation. Runs identically on every client (lockstep multiplayer).
-import { DT, CELL, DMG, dmgMult, UNITS, BUILDINGS, DEFS, UNIT_CAP, AF_MODULES } from './defs.js';
+import { DT, CELL, DMG, dmgMult, UNITS, BUILDINGS, DEFS, UNIT_CAP, AF_MODULES, BTIER } from './defs.js';
 import { AirOps, GROUND_PHASES } from './airops.js';
 import { FlightOps } from './flight.js';
 import { CargoOps } from './cargo.js';
@@ -30,6 +30,8 @@ export class Sim {
     this.nextPid = 0;
     this.pathQ = [];
     this.jammers = [];
+    this.radars = [];                                   // active radar emitters (overlay + detection)
+    this.contact = [0, 1, 2, 3].map(() => new Set());   // per team: enemy aircraft currently held by radar
     this.over = false;
     this.winner = -1;
     const slots = cfg.slots;
@@ -80,7 +82,7 @@ export class Sim {
     };
     if (d.aps) { e.apsN = d.aps.n; e.apsCd = 0; }
     if (d.kind === 'unit') { e.order = { t: 'idle' }; e.path = null; e.pi = 0; e.stuck = 0; e.repath = 0; e.pending = false; e.pt = null; e.moving = false; }
-    else { e.progress = 1; e.sm = 0; e.se = 0; e.queue = []; e.rally = null; e.size = d.size; e.cx0 = 0; e.cz0 = 0; e.node = -1; }
+    else { e.progress = 1; e.sm = 0; e.se = 0; e.tier = 1; e.tu = null; e.queue = []; e.rally = null; e.size = d.size; e.cx0 = 0; e.cz0 = 0; e.node = -1; }
     this.ents.push(e); this.byId.set(e.id, e);
     return e;
   }
@@ -179,7 +181,7 @@ export class Sim {
       case 'attackground': this.cmdMove(this.own(c.ids, c.p), c.x, c.z, 'attackground'); break;
       case 'attack': {
         const tg = this.byId.get(c.tid);
-        if (!tg || tg.dead || tg.team === p.team) return;
+        if (!tg || tg.dead || tg.team === p.team || DEFS[tg.def].untouchable) return;
         for (const u of this.own(c.ids, c.p)) {
           if (u.kind !== 'unit') continue;
           const d = u.ed || DEFS[u.def];
@@ -209,6 +211,8 @@ export class Sim {
       case 'drop': this.cmdDrop(this.own(c.ids, c.p), c.x, c.z); break;
       case 'unload': this.cmdUnload(this.own(c.ids, c.p)); break;
       case 'rtb': for (const u of this.own(c.ids, c.p)) if (u.kind === 'unit' && u.ap === 'fly' && UNITS[u.def].loadouts) this.startRtb(u, false); break;
+      case 'bupg': for (const b of this.own(c.ids, c.p)) if (b.kind === 'building') this.bldStartUp(b); break;
+      case 'cancelbupg': for (const b of this.own(c.ids, c.p)) if (b.kind === 'building' && b.tu) { p.credits += b.tu.sm; p.energy += b.tu.se; b.tu = null; } break;
       case 'resign': this.eliminate(p); break;
       case 'takeover': if (!p.ai) { p.ai = c.diff || 'normal'; this.ais[p.id] = new AIController(p.id, p.ai); } break;
       default: break;
@@ -289,6 +293,7 @@ export class Sim {
     this.buildGrid();
     this.economyPrepass();
     this.buildEW();
+    if (this.tick % 4 === 1) this.updateRadar();
     for (let i = 0; i < PATHS_PER_TICK && this.pathQ.length; i++) {
       const u = this.byId.get(this.pathQ.shift());
       if (!u || u.dead || !u.pending) continue;
@@ -326,6 +331,7 @@ export class Sim {
       if (b.progress < 1) { const d = BUILDINGS[b.def]; p.demM += d.cost / d.time * eb; p.demE += d.energy / d.time * eb; continue; }
       if (b.def === 'techlab') p.tl1 = true; else if (b.def === 'advtech') p.tl2 = true;
       if (b.queue.length && !b.stun && b.queue[0].left > 0) { const ud = UNITS[b.queue[0].type]; p.demM += ud.cost / ud.time * eb; p.demE += ud.energy / ud.time * eb; }
+      if (b.tu) { const st = BTIER.steps[b.def][b.tier - 1]; p.demM += st.cost / st.time * eb; p.demE += st.energy / st.time * eb; }
       if (b.up) { const lv = AF_MODULES[b.up.key].levels[b.mods[b.up.key]]; p.demM += lv.cost / lv.time * eb; p.demE += lv.energy / lv.time * eb; }
     }
     for (const p of P) {
@@ -346,6 +352,21 @@ export class Sim {
       p.pM = incM; p.pE = p.incE; p.pU = p.upkeep; p.income = incM;
     }
   }
+  // ---------- building tiers ----------
+  bldUpBlock(b) {
+    const st = BTIER.steps[b.def]; if (!st || b.progress < 1) return 'Cannot be upgraded';
+    if (b.tu) return 'Upgrade in progress'; if ((b.tier || 1) >= BTIER.max) return 'Fully upgraded';
+    return '';
+  }
+  bldStartUp(b) {
+    if (this.bldUpBlock(b)) return false;
+    const st = BTIER.steps[b.def][b.tier - 1]; b.tu = { left: Math.round(st.time * 20), total: Math.round(st.time * 20), sm: 0, se: 0 }; return true;
+  }
+  bldUpTick(b, p) {
+    const u = b.tu, st = BTIER.steps[b.def][b.tier - 1], adv = Math.min(u.left, p.eff * (b.eb || 1)), fr = adv / u.total;
+    u.left -= adv; u.sm += st.cost * fr; u.se += st.energy * fr; p.spentM += st.cost * fr; p.spentE += st.energy * fr;
+    if (u.left <= 0) { b.tier++; b.tu = null; this.ev({ e: 'bupg', id: b.id, owner: b.owner, tier: b.tier, x: b.x, z: b.z }); }
+  }
   // ---------- electronic warfare ----------
   buildEW() {
     const J = this.jammers; J.length = 0;
@@ -355,18 +376,52 @@ export class Sim {
       if (e.kind === 'building' && e.progress < 1) continue;
       if (e.ap && GROUND_PHASES.has(e.ap)) continue;
       if (e.stun > 0 || !this.players[e.owner].ewOn) continue;
-      J.push({ x: e.x, z: e.z, r2: d.ew.radius * d.ew.radius, team: e.team, power: d.ew.power || 1 });
+      J.push({ id: e.id, x: e.x, z: e.z, r: d.ew.radius, r2: d.ew.radius * d.ew.radius, team: e.team, power: d.ew.power || 1, air: !!e.air });
     }
     for (const e of this.ents) {
       if (e.dead) continue;
       let jam = 0, cover = 0;
       for (let i = 0; i < J.length; i++) {
         const j = J[i], dx = e.x - j.x, dz = e.z - j.z;
-        if (dx * dx + dz * dz <= j.r2) { if (j.team !== e.team) { if (j.power > jam) jam = j.power; } else if (j.power > cover) cover = j.power; }
+        const rr = (e.air && DEFS[e.def].spy) ? j.r2 * 4 : j.r2;   // a spy drone at the edge of space is jammed from twice as far away
+        if (dx * dx + dz * dz <= rr) { if (j.team !== e.team) { if (j.power > jam) jam = j.power; } else if (j.power > cover) cover = j.power; }
       }
       e.jam = jam; e.cover = cover;
     }
   }
+  // ---------- radar ----------
+  // Each emitter has a nominal range, optionally a forward cone, and is degraded by enemy jamming over the emitter itself.
+  // A contact is held when the target is inside range * rcs^(1/4) (the radar equation); low flyers are masked from ground radars;
+  // jamming that covers the target shrinks the range, but inside the burn-through range (30%) the radar always wins.
+  updateRadar() {
+    const S = this.radars; S.length = 0;
+    for (const c of this.contact) c.clear();
+    for (const e of this.ents) {
+      if (e.dead) continue;
+      const d = e.ed || DEFS[e.def]; if (!d.radar) continue;
+      if (e.kind === 'building' && e.progress < 1) continue;
+      if (e.ap && GROUND_PHASES.has(e.ap)) continue;
+      if (e.stun > 0 || !this.players[e.owner].ewOn) continue;
+      const jam = e.jam || 0, r = d.radar.range * Math.max(0.25, 1 - 0.15 * jam);
+      S.push({ id: e.id, x: e.x, z: e.z, team: e.team, r, r0: d.radar.range, arc: d.radar.arc === undefined ? -1 : d.radar.arc, dx: e.dirx || 0, dz: e.dirz || 0, air: !!e.air, jam, kind: e.kind });
+    }
+    if (!S.length) return;
+    for (const t of this.ents) {
+      if (t.dead || !t.air || t.kind !== 'unit') continue;
+      const td = DEFS[t.def], q = Math.sqrt(Math.sqrt(td.rcs || 1)), cover = t.cover || 0;
+      const hz = 0.65 + 0.35 * Math.min(1, (td.alt || 20) / 28);
+      for (let i = 0; i < S.length; i++) {
+        const s = S[i]; if (s.team === t.team || this.contact[s.team].has(t.id)) continue;
+        const dx = t.x - s.x, dz = t.z - s.z, d2 = dx * dx + dz * dz, eff = s.r * q * (s.air ? 1 : hz);
+        const R = Math.max(eff * Math.max(0.2, 1 - 0.2 * cover), eff * 0.3);
+        if (d2 > R * R) continue;
+        if (s.arc > -1) { const dd = Math.sqrt(d2) || 1; if ((s.dx * dx + s.dz * dz) / dd < s.arc) continue; }
+        this.contact[s.team].add(t.id);
+      }
+    }
+  }
+  // true if the target is held by radar (not necessarily visible)
+  tracked(team, e) { return !!e.air && this.contact[team].has(e.id); }
   wCan(w, tg) { if (tg.air ? !w.air : !w.ground) return false; if (w.drone && !DEFS[tg.def].drone) return false; return true; }
   wRange(e, w) { if (e.jam && (w.radar || (e.air && w.kind === 'missile'))) return w.range * (1 - 0.14 * e.jam); return w.range; }
   aiHandicap(p) { return p.ai === 'easy' ? 0.8 : p.ai === 'hard' ? 1.25 : 1; }
@@ -410,7 +465,9 @@ export class Sim {
       if (b.progress >= 1) { b.progress = 1; b.hp = Math.min(b.maxhp, b.hp); this.ev({ e: 'built', id: b.id, owner: b.owner, def: b.def, x: b.x, z: b.z }); }
       return;
     }
-    p.incM += d.income; p.incE += d.incomeE; p.capM += d.capM || 0; p.capE += d.capE || 0;
+    const tm = BTIER.mult[(b.tier || 1) - 1];
+    p.incM += d.income * tm; p.incE += d.incomeE * tm; p.capM += (d.capM || 0) * tm; p.capE += (d.capE || 0) * tm;
+    if (b.tu) this.bldUpTick(b, p);
     if (d.upkeep && !b.stun) p.upkeep += d.upkeep;
     if (b.queue.length && !b.stun) {
       const it = b.queue[0], ud = UNITS[it.type];
@@ -599,20 +656,22 @@ export class Sim {
   }
 
   // ---------- targeting & weapons ----------
-  canSee(team, e) { const c = this.map.cellOf(e.x, e.z); return c >= 0 && this.vis[team][c] === 1; }
+  seen(team, e) { const c = this.map.cellOf(e.x, e.z); return c >= 0 && this.vis[team][c] === 1; }
+  canSee(team, e) { return this.seen(team, e) || (e.air && this.contact[team].has(e.id)); }
   acquire(u, d, radius, filt) {
     const vis = this.vis[u.team], map = this.map;
     let best = null, bs = 1e18;
     const consider = (e) => {
-      if (e.dead || e.team === u.team) return;
+      if (e.dead || e.team === u.team || DEFS[e.def].untouchable) return;
       if (e.air ? !d.hitsAir : !d.hitsGround) return;
       if (filt && !filt(e)) return;
       const dx = e.x - u.x, dz = e.z - u.z, dd = Math.sqrt(dx * dx + dz * dz);
       if (dd > radius + e.radius * 0.5) return;
       const c = map.cellOf(e.x, e.z);
-      if (c < 0 || vis[c] !== 1) return;
+      const sight = c >= 0 && vis[c] === 1;
+      if (!sight && !(e.air && this.contact[u.team].has(e.id))) return;   // radar tracks only support radar/missile weapons
       let usable = false;
-      for (let k = 0; k < d.weapons.length; k++) { const w = d.weapons[k]; if ((w.sec && !filt) || (!w.sec && filt)) continue; if (this.wCan(w, e) && dd >= w.min && !(u.am && u.am[k] === 0)) { usable = true; break; } }
+      for (let k = 0; k < d.weapons.length; k++) { const w = d.weapons[k]; if ((w.sec && !filt) || (!w.sec && filt)) continue; if (!sight && !(w.radar || w.kind === 'missile')) continue; if (this.wCan(w, e) && dd >= w.min && !(u.am && u.am[k] === 0)) { usable = true; break; } }
       if (!usable) return;
       const ed = DEFS[e.def];
       const armed = ed.weapons.length > 0;
@@ -665,7 +724,7 @@ export class Sim {
       if (e.am && e.am[k] > 0) e.am[k]--;
       e.flash = 3;
       const mx = e.x + (e.dirx || 0) * e.radius * 0.8, mz = e.z + (e.dirz || 0) * e.radius * 0.8;
-      if (w.kind === 'boom') { this.detonate(e, w, ay); return; }
+      if (w.kind === 'boom') { if (T && T.kind === 'unit' && T.apsN > 0 && this.apsDrone(T, e)) { this.kill(e, false); return; } this.detonate(e, w, ay); return; }
       if (w.kind === 'hit') {
         const miss = e.jam && DEFS[e.def].drone && this.rng.next() < 0.14 * e.jam;
         if (!miss) this.damage(T, w.dmg * dmgMult(w.type, T.armor, DEFS[T.def].drone), e);
@@ -684,7 +743,7 @@ export class Sim {
           id: ++this.nextPid, k: w.kind, w: w.type, big: w.splash >= 10, x: mx, y: sy, z: mz, sx: mx, sy, sz: mz,
           tx: hx, ty: (tid && w.kind === 'missile') ? ay : this.map.hAt(hx, hz) + (T && T.air && w.kind === 'shell' ? 0 : 0.5), tz: hz,
           tid, speed: w.speed, dmg: w.dmg, dtype: w.type, splash: w.splash, owner: e.owner, team: e.team, src: e.id,
-          arc: arcH, t: 0, dur: flight, life: Math.ceil(10 / DT), aa: !w.ground, name: e.def, fx: w.fx, fa: !!e.air,
+          arc: arcH, t: 0, dur: flight, life: Math.ceil(10 / DT), aa: !w.ground, name: e.def, fx: w.fx, fa: !!e.air, cz: w.kind === 'missile' && w.ground && w.range >= 100,
         });
         this.ev({ e: 'launch', w: w.kind, big: w.splash >= 10, x: mx, y: sy, z: mz });
       }
@@ -747,19 +806,13 @@ export class Sim {
         const t = Math.min(1, p.t);
         p.x = p.sx + (p.tx - p.sx) * t; p.z = p.sz + (p.tz - p.sz) * t;
         p.y = p.sy + (p.ty - p.sy) * t + p.arc * 4 * t * (1 - t);
-        if (p.t >= 1) { this.impact(p); done = true; }
+        if (p.fx === 'rocket' && p.tid && p.t > 0.45 && this.apsIntercept(p, this.byId.get(p.tid), 0.8)) done = true;   // unguided rockets / RPGs can be hard-killed
+        if (p.t >= 1 && !done) { this.impact(p); done = true; }
       } else {
         let tg = p.tid ? this.byId.get(p.tid) : null;
         if (tg && !tg.dead && tg.cover > 0 && this.rng.next() < 0.05 * tg.cover) { p.tid = 0; tg = null; this.ev({ e: 'decoy', x: p.x, y: p.y, z: p.z }); }
-        if (tg && !tg.dead && tg.apsN > 0 && tg.apsCd <= 0 && p.dtype === 'ap' && !p.aa) {   // active protection: hard-kill incoming guided missiles
-          const ax = p.x - tg.x, az = p.z - tg.z, ar = DEFS[tg.def].aps.range;
-          if (ax * ax + az * az <= ar * ar) {
-            tg.apsN--; tg.apsCd = 60;
-            const hit = this.rng.next() < 0.88;
-            this.ev({ e: 'aps', x: p.x, y: p.y, z: p.z, id: tg.id, ok: hit });
-            if (hit) done = true;
-          }
-        }
+        if (tg && !tg.dead && !p.aa && !p.cz && this.apsIntercept(p, tg, 0.88)) done = true;    // guided anti-tank missiles
+        if (!done && p.cz && ((this.tick + p.id) % 4) === 0 && this.samIntercept(p)) done = true;   // SAMs vs cruise missiles
         if (!done && tg && !tg.dead) { p.tx = tg.x; p.tz = tg.z; p.ty = this.map.hAt(tg.x, tg.z) + (tg.air ? DEFS[tg.def].alt : 1.2); }
         if (!done) {
           const dx = p.tx - p.x, dy = p.ty - p.y, dz = p.tz - p.z, dd = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -773,6 +826,43 @@ export class Sim {
       if (!done) ps[w++] = p;
     }
     ps.length = w;
+  }
+  // active protection: hard-kills incoming guided missiles and unguided rockets (not kinetic tank rounds, bombs, artillery or cruise missiles)
+  apsIntercept(p, tg, pk) {
+    if (!tg || tg.dead || !(tg.apsN > 0) || tg.apsCd > 0 || p.aa) return false;
+    const ar = DEFS[tg.def].aps.range, ax = p.x - tg.x, az = p.z - tg.z;
+    if (ax * ax + az * az > ar * ar) return false;
+    tg.apsN--; tg.apsCd = 60;
+    const hit = this.rng.next() < pk;
+    this.ev({ e: 'aps', x: p.x, y: p.y, z: p.z, id: tg.id, ok: hit });
+    return hit;
+  }
+  // a drone about to detonate on a protected vehicle can be shot down by its APS
+  apsDrone(tg, drone) {
+    if (!tg || tg.dead || !(tg.apsN > 0) || tg.apsCd > 0 || !DEFS[tg.def].aps) return false;
+    tg.apsN--; tg.apsCd = 60;
+    const hit = this.rng.next() < 0.7;
+    this.ev({ e: 'aps', x: drone.x, y: this.map.hAt(drone.x, drone.z) + 1.5, z: drone.z, id: tg.id, ok: hit });
+    return hit;
+  }
+  // SAM sites / AA vehicles try to shoot down cruise missiles that fly into their coverage
+  samIntercept(p) {
+    for (const e of this.ents) {
+      if (e.dead || e.team === p.team || e.stun > 0 || (e.kind === 'building' && e.progress < 1)) continue;
+      const d = e.ed || DEFS[e.def]; if (!d.hitsAir) continue;
+      for (let k = 0; k < d.weapons.length; k++) {
+        const w = d.weapons[k]; if (!w.air || e.cd[k] > 0 || (e.am && e.am[k] === 0)) continue;
+        const gun = w.kind !== 'missile', dx = p.x - e.x, dz = p.z - e.z, rr = Math.min(w.range * (gun ? 0.5 : 0.85), d.vision * 1.2);
+        if (dx * dx + dz * dz > rr * rr) continue;
+        e.cd[k] = Math.max(e.cd[k], w.reloadTicks); if (e.am && e.am[k] > 0) e.am[k]--;
+        const pk = (gun ? 0.12 : 0.32) * Math.max(0.2, 1 - 0.25 * (e.jam || 0));
+        const hit = this.rng.next() < pk;
+        this.ev({ e: 'intercept', sx: e.x, sz: e.z, x: p.x, y: p.y, z: p.z, ok: hit });
+        if (hit) { this.ev({ e: 'boom', x: p.x, y: p.y, z: p.z, r: 3.5, big: false, air: true }); return true; }
+        return false;
+      }
+    }
+    return false;
   }
   impact(p) {
     const src = this.byId.get(p.src);
@@ -798,7 +888,7 @@ export class Sim {
     }
   }
   damage(t, amt, src) {
-    if (t.dead || amt <= 0) return;
+    if (t.dead || amt <= 0 || (t.kind === 'unit' && DEFS[t.def].untouchable)) return;
     t.hp -= amt;
     const op = this.players[t.owner];
     if (this.tick - op.lastAlert > 80 && t.hp > 0) { op.lastAlert = this.tick; this.ev({ e: 'alert', owner: t.owner, x: t.x, z: t.z, kind: t.kind }); }
@@ -868,7 +958,8 @@ export class Sim {
       if (e.dead) continue;
       const d = e.ed || DEFS[e.def];
       if (e.kind === 'building' && e.progress <= 0) continue;
-      const vm = (e.jam && (e.air || d.drone)) ? Math.max(0.35, 1 - 0.2 * e.jam) : 1;
+      const vm = d.spy ? Math.max(0, 1 - 0.45 * (e.jam || 0)) : (e.jam && (e.air || d.drone)) ? Math.max(0.35, 1 - 0.2 * e.jam) : 1;
+      if (vm <= 0.05) continue;
       const r = d.vision * vm / CELL, cx = Math.floor(e.x / CELL), cz = Math.floor(e.z / CELL), ri = Math.ceil(r);
       const v = this.vis[e.team], ex = this.expl[e.team];
       const r2 = r * r;
@@ -906,7 +997,7 @@ export class Sim {
     const mix = (v) => { h = Math.imul(h ^ (v | 0), 16777619) >>> 0; };
     mix(this.tick); mix(this.rng.s);
     for (const p of this.players) { mix(Math.round(p.credits * 10)); mix(Math.round(p.energy * 10)); mix(p.units); }
-    for (const e of this.ents) { mix(e.id); mix(Math.round(e.x * 100)); mix(Math.round(e.z * 100)); mix(Math.round(e.hp)); if (e.h !== undefined) mix(Math.round(e.h * 100)); if (e.spd !== undefined) mix(Math.round(e.spd * 100)); if (e.apsN !== undefined) mix(e.apsN); }
+    for (const e of this.ents) { mix(e.id); mix(Math.round(e.x * 100)); mix(Math.round(e.z * 100)); mix(Math.round(e.hp)); if (e.h !== undefined) mix(Math.round(e.h * 100)); if (e.spd !== undefined) mix(Math.round(e.spd * 100)); if (e.apsN !== undefined) mix(e.apsN); if (e.tier > 1) mix(e.tier); }
     mix(this.projs.length);
     return h >>> 0;
   }
