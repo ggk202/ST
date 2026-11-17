@@ -81,6 +81,7 @@ export class Sim {
       radius: d.radius, air: !!d.air, armor: d.armor, flash: 0, jam: 0, cover: 0, stun: 0,
     };
     if (d.aps) { e.apsN = d.aps.n; e.apsCd = 0; }
+    if (d.laser) e.lcd = 0;
     if (d.kind === 'unit') { e.order = { t: 'idle' }; e.path = null; e.pi = 0; e.stuck = 0; e.repath = 0; e.pending = false; e.pt = null; e.moving = false; }
     else { e.progress = 1; e.sm = 0; e.se = 0; e.tier = 1; e.tu = null; e.queue = []; e.rally = null; e.size = d.size; e.cx0 = 0; e.cz0 = 0; e.node = -1; }
     this.ents.push(e); this.byId.set(e.id, e);
@@ -386,6 +387,7 @@ export class Sim {
         const rr = (e.air && DEFS[e.def].spy) ? j.r2 * 4 : j.r2;   // a spy drone at the edge of space is jammed from twice as far away
         if (dx * dx + dz * dz <= rr) { if (j.team !== e.team) { if (j.power > jam) jam = j.power; } else if (j.power > cover) cover = j.power; }
       }
+      if (jam && DEFS[e.def].jamRes) jam *= 1 - DEFS[e.def].jamRes;
       e.jam = jam; e.cover = cover;
     }
   }
@@ -521,6 +523,7 @@ export class Sim {
     const cdr = (d.drone && u.jam) ? Math.max(0.3, 1 - 0.2 * u.jam) : 1;
     for (let k = 0; k < u.cd.length; k++) if (u.cd[k] > 0) u.cd[k] = Math.max(0, u.cd[k] - cdr);
     if (u.flash > 0) u.flash--;
+    if (u.lcd > 0) u.lcd--;
     if (u.apsCd > 0) u.apsCd--; else if (d.aps && u.apsN < d.aps.n && ((this.tick + u.id) % 900) === 0) u.apsN++;
     if (u.ap !== undefined && u.ap !== 'fly') { this.sortie(u, d); return; }
     if (u.ap === 'fly' && u.am && ((this.tick + u.id) % 10) === 0 && this.afBingo(u)) { if (this.startRtb(u, true)) { this.sortie(u, d); return; } }
@@ -813,6 +816,7 @@ export class Sim {
         if (tg && !tg.dead && tg.cover > 0 && this.rng.next() < 0.05 * tg.cover) { p.tid = 0; tg = null; this.ev({ e: 'decoy', x: p.x, y: p.y, z: p.z }); }
         if (tg && !tg.dead && !p.aa && !p.cz && this.apsIntercept(p, tg, 0.88)) done = true;    // guided anti-tank missiles
         if (!done && p.cz && ((this.tick + p.id) % 4) === 0 && this.samIntercept(p)) done = true;   // SAMs vs cruise missiles
+        if (!done && tg && !tg.dead && !p.cz) done = this.selfDefense(p, tg);
         if (!done && tg && !tg.dead) { p.tx = tg.x; p.tz = tg.z; p.ty = this.map.hAt(tg.x, tg.z) + (tg.air ? DEFS[tg.def].alt : 1.2); }
         if (!done) {
           const dx = p.tx - p.x, dy = p.ty - p.y, dz = p.tz - p.z, dd = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -826,6 +830,20 @@ export class Sim {
       if (!done) ps[w++] = p;
     }
     ps.length = w;
+  }
+  // countermeasures carried by higher-tier units: flares / chaff / IRCM (decoy the seeker) and directed-energy lasers (aircraft)
+  selfDefense(p, tg) {
+    const d = tg.ed || DEFS[tg.def], dx = p.x - tg.x, dz = p.z - tg.z, d2 = dx * dx + dz * dz;
+    if (d.laser && tg.lcd <= 0 && d2 <= d.laser.range * d.laser.range) {
+      tg.lcd = d.laser.cd; const ok = this.rng.next() < d.laser.pk;
+      this.ev({ e: 'laser', x: tg.x, y: this.map.hAt(tg.x, tg.z) + (d.alt || 2), z: tg.z, tx: p.x, ty: p.y, tz: p.z, ok });
+      if (ok) return true;
+    }
+    if (d.ircm && !p.ir && d2 <= 45 * 45) {
+      p.ir = 1;
+      if (this.rng.next() < d.ircm * Math.max(0.4, 1 - 0.2 * (tg.jam || 0))) { p.tid = 0; this.ev({ e: 'decoy', x: p.x, y: p.y, z: p.z }); }
+    }
+    return false;
   }
   // active protection: hard-kills incoming guided missiles and unguided rockets (not kinetic tank rounds, bombs, artillery or cruise missiles)
   apsIntercept(p, tg, pk) {

@@ -161,6 +161,8 @@ export class HUD {
     const w = d.weapons[0]; if (w) s += ' · dmg ' + w.dmg + ' · range ' + w.range;
     if (d.ew) s += ' · jam r' + d.ew.radius; if (d.upkeep) s += ' · ⚡' + d.upkeep + '/s';
     if (d.drone) s += ' · DRONE';
+    if (d.aps) s += ' · APS ' + d.aps.n;
+    s += '</small>'; if (d.kit && d.kit.length) s += '<br><small style="color:#e0b84a">' + d.kit.map((k) => '◆ ' + k).join('<br>') + '</small>'; s = s.replace(/<\/small><br><small style="color:#e0b84a">/, '</small><br><small style="color:#e0b84a">'); s += '<small>';
     if (d.loadouts) s += '<br>' + (d.rwy ? 'Needs runway level ' + d.rwy : 'Vertical take-off') + ' · ' + d.loadouts.length + ' loadouts (pick on the runway)';
     return s + '</small>';
   }

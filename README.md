@@ -10,6 +10,7 @@ No build step and no server of your own.
 - **Drones**: combat robots, **EW dogs** (escort infantry, fry enemy drones with a high-power-microwave emitter), crawler bombs, repair bots, assault walkers, FPV swarms, jet wingmen, **deep-strike one-way carriers** and **EMP carriers**
 - **Electronic warfare**: EW trucks, EW aircraft, EW towers and EW dogs jam enemy drones (slower, less accurate, control loss at Mk III jamming), blind aircraft radar (shorter vision, shorter radar-missile range) and break missile locks. Jammers drain energy
 - **Three tiers per unit (Mk I / II / III)** - Tech Lab unlocks Mk II, the Advanced Tech Lab unlocks Mk III
+- **Tier equipment & looks**: higher tiers carry more kit *and* look the part. Mk II vehicles add IRCM flare/smoke launchers (30% chance to decoy a missile), add-on armor, thermal sights and gold markings; Mk III vehicles add composite appliqué, a personal EW suite (jams drones and covers friendly aircraft nearby), better IRCM (45%) and glowing cyan sensors. Mk II aircraft get chaff/flare dispensers; Mk III aircraft add a directed-energy turret that burns inbound missiles (~70% per shot, 50-tick recharge) plus conformal EW arrays. Higher-tier infantry get plates, night-vision visors and extended vision; Mk III ground drones resist jamming. Every unit's tooltip lists its kit.
 - **Streaming economy** (like *Planetary Annihilation*): metal and energy flow continuously into whatever you are building. If supply can't keep up, everything slows down proportionally. Oil Derricks make metal, Power Plants make energy
 - Fog of war, tech tree
 - Highly detailed procedural models (15k–26k vertices per tank): bolted armour, ERA, side skirts, crew hatches, remote weapon stations, APS radar panels, smoke launchers, antennae, sights and stowage on vehicles; kitted-out infantry; detailed aircraft, drones and buildings. Zoom in close to see them.
@@ -102,6 +103,7 @@ tests/mech-test.mjs drones / EW / EMP / tiers / streaming-economy mechanics test
 tests/air-test.mjs  airfields, loadouts and sorties
 tests/cargo-test.mjs transport, airlift, airdrop, engineer boost
 tests/radar-test.mjs radar / ECM / APS / SAM vs cruise missiles / spy drone / building tiers
+tests/tier-test.mjs tier equipment: IRCM decoys, directed-energy defense, personal EW, jam resistance
 ```
 
 Run the simulation tests with `node tests/sim-test.mjs` and `node tests/mech-test.mjs`.

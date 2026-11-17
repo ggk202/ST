@@ -8,6 +8,7 @@ import { GROUND } from './model-ground.js';
 import { AIR, PROPS_MODELS } from './model-air.js';
 import { DRONES } from './model-drones.js';
 import { BUILDINGS } from './model-buildings.js';
+import { tierKit } from './model-tier.js';
 
 const MODELS = { ...GROUND, ...AIR, ...DRONES, ...BUILDINGS, ...PROPS_MODELS };
 
@@ -25,6 +26,7 @@ function geoms(def, team, lod = 0) {
     const base = DEFS[def] ? DEFS[def].base : def;
     const b = new Builder(PLAYER_COLORS[team % PLAYER_COLORS.length], lod, lodScaleOf(base));
     (MODELS[base] || MODELS.rifleman)(b);
+    const dd = DEFS[def]; if (dd && dd.kind === 'unit' && dd.tier > 1) tierKit(b, base, dd.tier);
     g = b.finish(); cache.set(key, g);
   }
   return g;

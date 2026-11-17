@@ -111,6 +111,13 @@ export class Fx {
     for (let i = 0; i < 16; i++) this.fire.emit(x, y, z, this.rnd(9), this.rnd(9), this.rnd(9), 0.3, 0.3, 1, ok ? 0.85 : 0.5, ok ? 0.4 : 0.2, 1, 0, 1, 6);
     this.smoke.emit(x, y, z, 0, 0.5, 0, 0.9, 1.4, 0.7, 0.7, 0.7, 0.4, 2, 1);
   }
+  // directed-energy point defense: a thin cyan beam and a flash where the missile dies
+  laser(x, y, z, tx, ty, tz, ok) {
+    this.tracer(x, y, z, tx, ty, tz); this.tracer(x, y + 0.2, z, tx, ty, tz);
+    this.flash(tx, ty, tz, ok ? 400 : 150, 0.1);
+    for (let i = 0; i < (ok ? 14 : 5); i++) this.fire.emit(tx, ty, tz, this.rnd(8), this.rnd(8), this.rnd(8), 0.25, 0.3, 0.3, 0.9, 1, 1, 0, 1, 6);
+    if (ok) this.smoke.emit(tx, ty, tz, 0, 0.5, 0, 0.8, 1.2, 0.7, 0.7, 0.7, 0.4, 1.8, 1);
+  }
   // jet exhaust: short bright flame stream out of each nozzle (k = 0..1 throttle; >0.8 = afterburner with a blue core)
   afterburn(x, y, z, dx, dz, vy, spd, k, scale, lat) {
     const px = -dz, pz = dx, ab = k > 0.8;

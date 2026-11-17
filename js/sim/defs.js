@@ -199,6 +199,22 @@ for (const [key, b] of Object.entries(BASE)) {
     d.hasSec = d.weapons.some((w) => w.sec); d.secRange = d.weapons.reduce((m, w) => (w.sec ? Math.max(m, w.range) : m), 0);
     if (b.aps) d.aps = { n: b.aps.n + tier - 1, range: b.aps.range };
     d.timeTicks = Math.round(d.time * TICK_RATE);
+    // ---- higher tiers carry more equipment
+    d.kit = [];
+    const veh = !d.air && !d.drone && d.armor !== 'inf' && (d.armor === 'light' || d.armor === 'medium' || d.armor === 'heavy') && (b.weapons.length > 0 || b.ew);
+    if (veh) {
+      if (tier >= 2) { d.ircm = 0.3; d.kit.push('IR countermeasures: flare launchers defeat 30% of guided missiles'); }
+      if (tier >= 3) { d.ircm = 0.45; d.ew = d.ew ? { radius: Math.round(d.ew.radius * 1.2), power: d.ew.power } : { radius: 24, power: 1 }; d.upkeep = +((d.upkeep || 0) + 1.2).toFixed(1); d.kit.push('EW suite: personal jammer (24 m), flares upgraded to 45%'); }
+    } else if (d.armor === 'inf' && !d.drone) {
+      if (tier >= 2) { d.vision = Math.round(d.vision * 1.12); d.kit.push('Thermal sights: +12% vision'); }
+      if (tier >= 3) { d.vision = Math.round(d.vision * 1.12); d.kit.push('Smart optics and squad data-link: +25% vision'); }
+    } else if (d.air && !d.strike && b.hp >= 60) {
+      if (tier >= 2) { d.ircm = 0.3; d.kit.push('Chaff and flare dispensers defeat 30% of guided missiles'); }
+      if (tier >= 3) { d.ircm = 0.4; d.laser = { range: 34, pk: 0.7, cd: 50 }; d.kit.push('Directed-energy defense: laser shoots down incoming missiles (no ammo)'); }
+    } else if (d.drone && !d.air) {
+      if (tier >= 2) { d.jamRes = 0.4; d.kit.push('Hardened comms: 40% less affected by jamming'); }
+      if (tier >= 3) { d.jamRes = 0.7; d.kit.push('Shielded electronics: 70% less affected by jamming'); }
+    }
     if (b.radar) d.radar = { range: Math.round(b.radar.range * (1 + 0.1 * (tier - 1))), arc: b.radar.arc };
     d.rcs = b.rcs || (b.air || b.from === 'airfield' ? 1 : 0);
     d.slots = d.armor === 'inf' ? 1 : Math.max(2, Math.round(d.radius * d.radius / 1.8)); d.para = !d.air && d.slots <= 2;   // cargo space used / airdrop-compatible

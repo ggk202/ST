@@ -564,6 +564,8 @@ export class Renderer {
       switch (e.e) {
         case 'shot': if (e.w === 'hpm') { if (visAt(e.x, e.z) || visAt(e.tx, e.tz)) fx.zap(e.x, e.y, e.z, e.tx, e.ty, e.tz); } else if (visAt(e.x, e.z) || visAt(e.tx, e.tz)) { fx.tracer(e.x, e.y, e.z, e.tx, e.ty, e.tz); fx.muzzle(e.x, e.y, e.z, 0.5); fx.spark(e.tx, e.ty, e.tz); sfx('rifle', vol(e.x, e.z) * 0.6); } break;
         case 'launch': if (visAt(e.x, e.z)) { fx.muzzle(e.x, e.y, e.z, e.big ? 4 : e.w === 'missile' ? 1.2 : 1.8); sfx(e.w === 'missile' ? 'missile' : 'cannon', vol(e.x, e.z) * (e.big ? 1.5 : 0.8)); } break;
+        case 'laser': if (visAt(e.x, e.z)) { fx.laser(e.x, e.y, e.z, e.tx, e.ty, e.tz, e.ok); sfx('boom', vol(e.x, e.z) * 0.3); } break;
+        case 'intercept': if (visAt(e.x, e.z)) fx.tracer(e.sx, this.sim.map.hAt(e.sx, e.sz) + 3, e.sz, e.x, e.y, e.z); break;
         case 'aps': if (visAt(e.x, e.z)) { fx.aps(e.x, e.y, e.z, e.ok); sfx('boom', vol(e.x, e.z) * 0.5); } break;
         case 'decoy': if (visAt(e.x, e.z)) { fx.spark(e.x, e.y, e.z); fx.spark(e.x, e.y, e.z); } break;
         case 'boom': if (visAt(e.x, e.z)) { if (e.emp) fx.emp(e.x, e.y, e.z, e.r); else fx.boom(e.x, e.y, e.z, e.r, e.big, e.air); if (!e.air && e.y < this.sim.map.hAt(e.x, e.z) + 4) this.craters.add(e.x, e.z, Math.min(13, 1.1 + e.r * 1.05), Math.random() * 6.283); sfx(e.big ? 'big' : 'boom', vol(e.x, e.z) * (e.big ? 1.6 : 0.7)); if (e.big) this.shake = Math.max(this.shake, 2.5 * vol(e.x, e.z)); } break;
