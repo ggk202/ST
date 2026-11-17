@@ -84,7 +84,7 @@ class Builder {
 }
 
 function tracks(b, w, h, len, x, z = 0) {
-  b.box(w, h, len, x, h / 2 + 0.15, z, BLACK);
+  b.add('box', w, h, len, x, h / 2 + 0.15, z, BLACK, [0, 0, 0], [0, 0]); b.groups[b.cur][b.groups[b.cur].length - 1].aw.forEach((_, i, a) => { if (i % 3 === 2) a[i] = 2; });
   b.box(w * 0.9, 0.15, len + 0.4, x, h + 0.2, z, DARK);
 }
 
@@ -241,8 +241,7 @@ const MODELS = {
   fpv(b) {
     b.box(0.5, 0.18, 0.5, 0, 0, 0, DARK); b.box(0.2, 0.2, 0.34, 0, 0.06, 0.28, ORANGE); b.box(0.22, 0.08, 0.1, 0, 0.1, -0.2, 0xff3a2e);
     b.box(0.1, 0.05, 1.4, -0.0, -0.02, 0, 0x30343a, [0, 0.785, 0]); b.box(0.1, 0.05, 1.4, 0, -0.02, 0, 0x30343a, [0, -0.785, 0]);
-    b.g('rotor').at(0, 0.18, 0);
-    for (const x of [-0.5, 0.5]) for (const z of [-0.5, 0.5]) b.box(0.55, 0.02, 0.07, x, 0.18, z, 0x9aa0a8);
+    let k = 0; for (const x of [-0.5, 0.5]) for (const z of [-0.5, 0.5]) { b.g('prop' + (++k)).at(x, 0.2, z); b.box(0.55, 0.02, 0.07, x, 0.2, z, 0x9aa0a8); }
   },
   wingman(b) {
     b.box(0.8, 0.6, 5.2, 0, 0, 0, GREY); b.cone(0.42, 1.8, 0, 0, 3.4, GREY, [PI / 2, 0, 0]); b.box(0.5, 0.3, 1.2, 0, 0.35, 1.2, GLASS);
@@ -256,14 +255,14 @@ const MODELS = {
     b.box(0.95, 0.5, 1.6, 0, -0.2, 0, ORANGE); b.box(0.98, 0.1, 1.64, 0, 0.1, 0, T);
     b.box(5.0, 0.08, 1.2, 0, 0, -0.9, METAL); b.box(1.8, 0.08, 0.7, 0, 0.05, -1.9, METAL);
     b.box(0.08, 0.8, 0.6, 0, 0.55, -1.9, T);
-    b.g('rotor').at(0, 0.1, -2.3); b.cyl(0.55, 0.05, 0, 0.1, -2.3, 0x9aa0a8, [PI / 2, 0, 0]);
+    b.g('propz').at(0, 0.1, -2.3); b.box(1.3, 0.07, 0.05, 0, 0.1, -2.3, 0x9aa0a8); b.box(0.07, 1.3, 0.05, 0, 0.1, -2.3, 0x9aa0a8);
   },
   empcarrier(b) {
     b.box(0.9, 0.7, 4.4, 0, 0, 0, 0x3a4a5e); b.cone(0.45, 1.4, 0, 0, 2.9, 0x3a4a5e, [PI / 2, 0, 0]);
     b.sph(0.75, 0, 0.05, 0.3, 0x5ec8ff, 0.8); b.box(0.98, 0.1, 1.64, 0, 0.4, 0, T);
     b.box(5.0, 0.08, 1.2, 0, 0, -0.9, METAL); b.box(1.8, 0.08, 0.7, 0, 0.05, -1.9, METAL);
     b.box(0.08, 0.8, 0.6, 0, 0.55, -1.9, T);
-    b.g('rotor').at(0, 0.1, -2.3); b.cyl(0.55, 0.05, 0, 0.1, -2.3, 0x9aa0a8, [PI / 2, 0, 0]);
+    b.g('propz').at(0, 0.1, -2.3); b.box(1.3, 0.07, 0.05, 0, 0.1, -2.3, 0x9aa0a8); b.box(0.07, 1.3, 0.05, 0, 0.1, -2.3, 0x9aa0a8);
   },
   ewtruck(b) {
     for (const z of [-1.9, 0, 1.9]) for (const x of [-1.25, 1.25]) b.wheel(0.7, 0.5, x, 0.7, z);
@@ -390,7 +389,7 @@ function geoms(def, team) {
 export function makeModel(def, team) {
   const g = geoms(def, team), d = DEFS[def];
   const root = new THREE.Group();
-  const out = { root, turret: null, rotor: null, rotor2: null, parts: {}, hull: null, base: d ? d.base : def };
+  const out = { root, turret: null, rotor: null, rotor2: null, parts: {}, hull: null, rp: g.rp, base: d ? d.base : def };
   const hull = new THREE.Mesh(g.hull, material); hull.castShadow = true; hull.receiveShadow = false; root.add(hull); out.hull = hull;
   for (const name in g) {
     if (name === 'hull' || name === 'rp') continue;

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { CELL, DEFS, PLAYER_COLORS } from './sim/defs.js';
 import { makeModel, modelMaterial } from './models.js';
 import { Fx, sfx } from './fx.js';
+import { makeDetailTexture, makeCloudTexture, makeUniforms, patchTerrain, patchWater, makeUnitMaterial, Sky, Clouds, Scatter, animateUnit } from './gfx.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; };
@@ -14,24 +15,28 @@ export class Renderer {
     this.team = sim.players[local].team;
     const r = this.renderer = Renderer.gl || (Renderer.gl = new THREE.WebGLRenderer({ canvas, antialias: !opts.touch, powerPreference: 'high-performance' }));
     modelMaterial.needsUpdate = true;
+    this.gfx = opts.gfx === 'classic' ? 0 : opts.gfx === 'low' ? 1 : 2;     // 0 classic, 1 medium (tablet), 2 high
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, opts.touch ? 2 : 2));
     r.shadowMap.enabled = !!opts.shadows; r.shadowMap.type = THREE.PCFShadowMap;
+    r.toneMapping = this.gfx ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping; r.toneMappingExposure = 1.0;
     this.scene = new THREE.Scene();
     const sky = new THREE.Color(0x9bb6cc);
     this.scene.background = sky; this.scene.fog = new THREE.Fog(sky, 300, 1100);
+    if (this.gfx) this.initGfx();
     this.camera = new THREE.PerspectiveCamera(48, 1, 2, 3500);
     this.cam = { x: 0, z: 0, yaw: 0.0, pitch: 0.92, dist: 110, vx: 0, vz: 0 };
     this.shake = 0;
     this.views = new Map(); this.projViews = new Map();
     this.frame = 0; this.time = 0;
     this.ghost = null; this.selection = new Set();
-    this.scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x4d4a3a, 0.95));
-    const sun = this.sun = new THREE.DirectionalLight(0xfff0d0, 1.5);
+    this.scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x4d4a3a, this.gfx ? 0.75 : 0.95));
+    const sun = this.sun = new THREE.DirectionalLight(0xfff0d0, this.gfx ? 2.2 : 1.5);
     sun.castShadow = !!opts.shadows; sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.bias = -0.0006; sun.shadow.camera.near = 10; sun.shadow.camera.far = 600;
     this.scene.add(sun); this.scene.add(sun.target);
     this.buildTerrain();
     this.buildOil();
+    if (this.gfx) this.initWorldGfx();
     this.fx = new Fx(this.scene);
     this.buildSelection();
     this.buildProjectiles();
@@ -42,13 +47,35 @@ export class Renderer {
     this._ray = new THREE.Raycaster(); this._v = new THREE.Vector3(); this._ndc = new THREE.Vector2();
   }
 
+  // ---------------- graphics layer ----------------
+  initGfx() {
+    const R = Renderer;
+    if (!R.detail) { R.detail = makeDetailTexture(512); R.cloud = makeCloudTexture(256); }
+    const n = this.sim.map.n;
+    this.fogData = new Uint8Array(n * n).fill(10);
+    this.fogTex = new THREE.DataTexture(this.fogData, n, n, THREE.RedFormat, THREE.UnsignedByteType);
+    this.fogTex.minFilter = this.fogTex.magFilter = THREE.LinearFilter; this.fogTex.wrapS = this.fogTex.wrapT = THREE.ClampToEdgeWrapping; this.fogTex.needsUpdate = true;
+    this.U = makeUniforms(this.sim.map.size, this.fogTex, R.detail, R.cloud);
+    this.U.uSunDir.value.set(70, 130, 45).normalize();
+    this.skyObj = new Sky(this.U);
+    this.scene.background = null; this.scene.add(this.skyObj.mesh);
+    this.scene.fog = new THREE.Fog(new THREE.Color().setRGB(0.50, 0.66, 0.84), 260, 1250);
+    this.skyObj.buildEnvironment(this.renderer, this.scene);
+    modelMaterial.envMapIntensity = 0.55; modelMaterial.flatShading = false; modelMaterial.roughness = 0.62; modelMaterial.metalness = 0.28; modelMaterial.needsUpdate = true;
+  }
+  initWorldGfx() {
+    const map = this.sim.map, w = map.vw, bc = this.baseCol;
+    this.scatter = new Scatter(this.scene, this.sim, this.U, (x, z, out) => { const i = clamp(Math.round(x / CELL), 0, w - 1), j = clamp(Math.round(z / CELL), 0, w - 1), k = (j * w + i) * 3; out.setRGB(bc[k], bc[k + 1], bc[k + 2]); }, this.gfx === 2 ? 'high' : 'low');
+    this.clouds = new Clouds(this.scene, this.U, map.size, this.gfx === 2 ? 70 : 42);
+  }
+
   // ---------------- terrain ----------------
   buildTerrain() {
     const map = this.sim.map, n = map.n, w = map.vw;
     const pos = new Float32Array(w * w * 3), col = new Float32Array(w * w * 3), idx = [];
     this.baseCol = new Float32Array(w * w * 3);
     const C = (hex) => new THREE.Color(hex);
-    const sand = C(0xc4b685), grass = C(0x5b7d3b), grass2 = C(0x748a45), dirt = C(0x7d7a55), rock = C(0x77746d), rock2 = C(0x8b8a86), snow = C(0xe2e6ea), seabed = C(0x34596a), wet = C(0x8f8a63);
+    const sand = C(0xc4b685), grass = C(0x5b7d3b), grass2 = C(0x748a45), dirt = C(0x7d7a55), rock = C(0x77746d), rock2 = C(0x8b8a86), snow = C(0xbfc5cc), seabed = C(0x34596a), wet = C(0x8f8a63);
     const tmp = new THREE.Color();
     for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) {
       const k = j * w + i, h = map.h[k];
@@ -78,23 +105,41 @@ export class Renderer {
     this.colAttr = new THREE.BufferAttribute(col, 3); this.colAttr.setUsage(THREE.DynamicDrawUsage);
     g.setAttribute('color', this.colAttr);
     g.setIndex(idx); g.computeVertexNormals();
-    this.terrain = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }));
+    const tmat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 });
+    if (this.gfx) { tmat.envMapIntensity = 0.35; patchTerrain(tmat, this.U); }
+    this.terrain = new THREE.Mesh(g, tmat);
     this.terrain.receiveShadow = true;
     this.scene.add(this.terrain);
-    // water (half-resolution grid with vertex colors for fog of war)
-    const ws = Math.floor(n / 2) + 1, wp = new Float32Array(ws * ws * 3), wc = new Float32Array(ws * ws * 3), wi = [];
-    for (let j = 0; j < ws; j++) for (let i = 0; i < ws; i++) { const k = j * ws + i; wp[k * 3] = i * CELL * 2; wp[k * 3 + 1] = 0; wp[k * 3 + 2] = j * CELL * 2; }
-    for (let j = 0; j < ws - 1; j++) for (let i = 0; i < ws - 1; i++) { const a = j * ws + i; wi.push(a, a + ws, a + 1, a + 1, a + ws, a + ws + 1); }
-    const wg = new THREE.BufferGeometry();
-    wg.setAttribute('position', new THREE.BufferAttribute(wp, 3));
-    this.waterCol = new THREE.BufferAttribute(wc, 3); this.waterCol.setUsage(THREE.DynamicDrawUsage);
-    wg.setAttribute('color', this.waterCol); wg.setIndex(wi); wg.computeVertexNormals();
-    this.waterGeo = wg; this.ws = ws;
-    this.water = new THREE.Mesh(wg, new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: 0.8, roughness: 0.25, metalness: 0.25 }));
-    this.scene.add(this.water);
-    // outer skirt so the void is never visible
-    const sk = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.MeshBasicMaterial({ color: this.sim.map.type === 'island' ? 0x1b4f70 : 0x3a3f36 }));
-    sk.rotation.x = -Math.PI / 2; sk.position.set(map.size / 2, -0.4, map.size / 2); this.scene.add(sk);
+    // water: full-resolution grid; vertex color = fog-of-war shade, `depth` = water depth for shading and shoreline foam
+    {
+      const ws = w, wp = new Float32Array(ws * ws * 3), wc = new Float32Array(ws * ws * 3), wd = new Float32Array(ws * ws), wi = [];
+      for (let j = 0; j < ws; j++) for (let i = 0; i < ws; i++) { const k = j * ws + i; wp[k * 3] = i * CELL; wp[k * 3 + 1] = 0; wp[k * 3 + 2] = j * CELL; wd[k] = Math.max(0, -map.h[k]); }
+      for (let j = 0; j < ws - 1; j++) for (let i = 0; i < ws - 1; i++) {
+        const a = j * ws + i, hs = map.h[a] + map.h[a + 1] + map.h[a + ws] + map.h[a + ws + 1];
+        if (hs > 12) continue;   // skip tiles that are well above the waterline
+        wi.push(a, a + ws, a + 1, a + 1, a + ws, a + ws + 1);
+      }
+      const wg = new THREE.BufferGeometry();
+      wg.setAttribute('position', new THREE.BufferAttribute(wp, 3));
+      this.waterCol = new THREE.BufferAttribute(wc, 3); this.waterCol.setUsage(THREE.DynamicDrawUsage);
+      wg.setAttribute('color', this.waterCol); wg.setAttribute('depth', new THREE.BufferAttribute(wd, 1)); wg.setIndex(wi); wg.computeVertexNormals();
+      this.waterGeo = wg; this.ws = ws;
+      let wm;
+      if (this.gfx) { wm = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: 1, roughness: 0.1, metalness: 0.05, envMapIntensity: 1.1, depthWrite: false }); patchWater(wm, this.U); }
+      else wm = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, opacity: 0.8, roughness: 0.25, metalness: 0.25 });
+      this.water = new THREE.Mesh(wg, wm); this.water.renderOrder = 1;
+      this.scene.add(this.water);
+    }
+    // outer ocean / ground so the void is never visible
+    if (this.gfx && this.sim.map.type === 'island') {
+      const sg = new THREE.PlaneGeometry(7000, 7000, 1, 1); sg.rotateX(-Math.PI / 2);
+      const cnt = sg.getAttribute('position').count; sg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(cnt * 3).fill(0.45), 3)); sg.setAttribute('depth', new THREE.BufferAttribute(new Float32Array(cnt).fill(9), 1));
+      this.skirtMat = new THREE.MeshStandardMaterial({ vertexColors: true, transparent: true, roughness: 0.1, metalness: 0.05, envMapIntensity: 1.1 }); patchWater(this.skirtMat, this.U);
+      const sk = new THREE.Mesh(sg, this.skirtMat); sk.position.set(map.size / 2, -0.35, map.size / 2); this.scene.add(sk);
+    } else {
+      const sk = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.MeshBasicMaterial({ color: this.sim.map.type === 'island' ? 0x1b4f70 : 0x3a3f36 }));
+      sk.rotation.x = -Math.PI / 2; sk.position.set(map.size / 2, -0.4, map.size / 2); this.scene.add(sk);
+    }
     this.fogShade = new Float32Array(w * w);
   }
   buildOil() {
@@ -121,12 +166,10 @@ export class Renderer {
       this.fogShade[j * w + i] = sh;
     }
     this.colAttr.needsUpdate = true;
-    const ws = this.ws, wc = this.waterCol.array;
-    for (let j = 0; j < ws; j++) for (let i = 0; i < ws; i++) {
-      const sh = this.fogShade[Math.min(n, j * 2) * w + Math.min(n, i * 2)], q = (j * ws + i) * 3;
-      wc[q] = 0.16 * sh; wc[q + 1] = 0.44 * sh; wc[q + 2] = 0.62 * sh;
-    }
+    const wc = this.waterCol.array, nn = w * w;
+    for (let q = 0; q < nn; q++) { const sh = this.gfx ? this.fogShade[q] : 1; if (this.gfx) { wc[q * 3] = sh; wc[q * 3 + 1] = sh; wc[q * 3 + 2] = sh; } else { wc[q * 3] = 0.16 * this.fogShade[q]; wc[q * 3 + 1] = 0.44 * this.fogShade[q]; wc[q * 3 + 2] = 0.62 * this.fogShade[q]; } }
     this.waterCol.needsUpdate = true;
+    if (this.fogData) { const fd = this.fogData; for (let c = 0; c < n * n; c++) fd[c] = cs[c] * 255; this.fogTex.needsUpdate = true; }
     this.oilMeshes.forEach((m, idx) => { const o = this.sim.map.oil[idx]; const c = this.sim.map.cellOf(o.x, o.z); m.visible = !!ex[c]; });
   }
 
@@ -179,7 +222,7 @@ export class Renderer {
   clampCam() {
     const s = this.sim.map.size, c = this.cam;
     c.x = clamp(c.x, 0, s); c.z = clamp(c.z, 0, s);
-    c.dist = clamp(c.dist, 30, 320); c.pitch = clamp(c.pitch, 0.45, 1.3);
+    c.dist = clamp(c.dist, 30, 320); c.pitch = clamp(c.pitch, this.gfx ? 0.16 : 0.45, 1.3);
   }
   pan(right, forward) {
     const c = this.cam, s = Math.sin(c.yaw), co = Math.cos(c.yaw);
@@ -275,10 +318,28 @@ export class Renderer {
   createView(e) {
     const m = makeModel(e.def, this.sim.players[e.owner].color);
     this.scene.add(m.root);
-    const v = { ent: e, obj: m.root, turret: m.turret, rotor: m.rotor, rotor2: m.rotor2, yaw: Math.atan2(e.dirx, e.dirz), tyaw: 0, frame: 0, visible: true, built: false, flash: 0 };
+    const v = { ent: e, obj: m.root, turret: m.turret, rotor: m.rotor, rotor2: m.rotor2, parts: m.parts, hull: m.hull, rp: m.rp, yaw: Math.atan2(e.dirx, e.dirz), tyaw: 0, frame: 0, visible: true, built: false, flash: 0, mat: null, an: null, ring: null, maxY: 1 };
     m.root.rotation.order = 'YXZ';
+    if (this.gfx) {
+      const mat = makeUnitMaterial(this.U, modelMaterial); v.mat = mat;
+      m.root.traverse((o) => { if (o.isMesh) o.material = mat; });
+      mat.userData.u.uGround.value = (e.air || e.kind === 'building') ? 0 : 1;
+      if (e.kind === 'building') { m.hull.geometry.computeBoundingBox(); v.maxY = m.hull.geometry.boundingBox.max.y + 3; }
+      const d = DEFS[e.def];
+      if (d.ew) {
+        const g = new THREE.RingGeometry(0.985, 1, 72); g.rotateX(-Math.PI / 2);
+        v.ring = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x5ec8ff, transparent: true, opacity: 0.4, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending }));
+        v.ring.renderOrder = 3; v.ring.scale.set(d.ew.radius, 1, d.ew.radius); v.ring.frustumCulled = false; this.scene.add(v.ring);
+        v.ring2 = v.ring.clone(); v.ring2.material = v.ring.material.clone(); this.scene.add(v.ring2);
+      }
+    }
     this.views.set(e.id, v);
     return v;
+  }
+  removeView(id, v) {
+    this.scene.remove(v.obj); if (v.mat) v.mat.dispose();
+    if (v.ring) { this.scene.remove(v.ring); this.scene.remove(v.ring2); v.ring.geometry.dispose(); v.ring.material.dispose(); v.ring2.material.dispose(); }
+    this.views.delete(id);
   }
   syncEntities(alpha, dt) {
     const sim = this.sim, map = sim.map, f = ++this.frame;
@@ -288,6 +349,7 @@ export class Renderer {
       v.frame = f; v.ent = e;
       const vis = this.visibleToLocal(e);
       v.visible = vis; v.obj.visible = vis;
+      if (v.ring) { v.ring.visible = v.ring2.visible = vis && (e.kind === 'unit' || e.progress >= 1) && e.stun <= 0 && this.sim.players[e.owner].ewOn; }
       if (!vis) continue;
       const d = DEFS[e.def];
       const x = e.px + (e.x - e.px) * alpha, z = e.pz + (e.z - e.pz) * alpha;
@@ -310,10 +372,15 @@ export class Renderer {
           else if (e.order && e.order.t === 'attackground') aim = angDiff(Math.atan2(e.order.x - e.x, e.order.z - e.z), v.yaw);
           v.tyaw += angDiff(aim, v.tyaw) * Math.min(1, dt * 7); v.turret.rotation.y = v.tyaw;
         }
-        if (d.base === 'heli' || d.base === 'uav') { if (v.rotor) { if (d.base === 'heli') v.rotor.rotation.y += dt * 40; else v.rotor.rotation.z += dt * 50; } if (v.rotor2) v.rotor2.rotation.x += dt * 40; }
+        if (this.gfx) {
+          animateUnit(v, e, d, dt, this.time, Math.sqrt(e.vx * e.vx + e.vz * e.vz), e.flash > 0);
+          const u = v.mat.userData.u; u.uDmg.value = clamp((0.7 - e.hp / e.maxhp) / 0.7, 0, 1); u.uStun.value = e.stun > 0 ? 1 : 0;
+        } else if (d.base === 'heli' || d.base === 'uav') { if (v.rotor) { if (d.base === 'heli') v.rotor.rotation.y += dt * 40; else v.rotor.rotation.z += dt * 50; } if (v.rotor2) v.rotor2.rotation.x += dt * 40; }
       } else {
         o.rotation.y = 0;
-        if (e.progress < 1) o.scale.set(1, 0.12 + 0.88 * e.progress, 1); else if (o.scale.y !== 1) o.scale.set(1, 1, 1);
+        if (this.gfx) {
+          const u = v.mat.userData.u; u.uBuildH.value = e.progress < 1 ? e.progress * v.maxY : 1e5; u.uDmg.value = clamp((0.6 - e.hp / e.maxhp) / 0.6, 0, 1); u.uStun.value = e.stun > 0 ? 1 : 0;
+        } else if (e.progress < 1) o.scale.set(1, 0.12 + 0.88 * e.progress, 1); else if (o.scale.y !== 1) o.scale.set(1, 1, 1);
         if (v.turret) {
           let aim = 0;
           const tg = e.target ? sim.byId.get(e.target) : null;
@@ -321,12 +388,19 @@ export class Renderer {
           v.tyaw += angDiff(aim, v.tyaw) * Math.min(1, dt * 6); v.turret.rotation.y = v.tyaw;
         }
         if (e.progress >= 1 && v.rotor) {
-          if (d.base === 'derrick') v.rotor.rotation.x = Math.sin(this.time * 1.6 + e.id) * 0.16;
-          else v.rotor.rotation.y += dt * (d.base === 'airfield' ? 2.5 : 1.3);
+          if (e.stun > 0) { /* frozen by EMP */ }
+          else if (d.base === 'derrick') v.rotor.rotation.x = Math.sin(this.time * 1.6 + e.id) * 0.16;
+          else v.rotor.rotation.y += dt * (d.base === 'airfield' ? 2.5 : d.base === 'ewtower' ? 5 : d.base === 'powerplant' ? 6 : 1.3);
         }
       }
     }
-    for (const [id, v] of this.views) if (v.frame !== f) { this.scene.remove(v.obj); this.views.delete(id); }
+    for (const [id, v] of this.views) if (v.frame !== f) this.removeView(id, v);
+    for (const v of this.views.values()) if (v.ring && v.ring.visible) {
+      const e = v.ent, gy = Math.max(0, map.hAt(v.obj.position.x, v.obj.position.z)) + 0.6, R = DEFS[e.def].ew.radius, friend = e.team === this.team;
+      const ph = (this.time * 0.35 + e.id * 0.17) % 1;
+      v.ring.position.set(v.obj.position.x, gy, v.obj.position.z); v.ring.scale.set(R, 1, R); v.ring.material.color.setHex(friend ? 0x5ec8ff : 0xff5ec8); v.ring.material.opacity = friend ? 0.22 : 0.4;
+      v.ring2.position.copy(v.ring.position); v.ring2.scale.set(R * ph, 1, R * ph); v.ring2.material.color.copy(v.ring.material.color); v.ring2.material.opacity = (1 - ph) * 0.35;
+    }
     // projectiles
     const pf = f;
     for (const p of sim.projs) {
@@ -375,9 +449,10 @@ export class Renderer {
     const vol = (x, z) => { const d = Math.sqrt((x - cam.x) * (x - cam.x) + (z - cam.z) * (z - cam.z)); return clamp(1.2 - d / 260, 0, 1); };
     for (const e of evs) {
       switch (e.e) {
-        case 'shot': if (visAt(e.x, e.z) || visAt(e.tx, e.tz)) { fx.tracer(e.x, e.y, e.z, e.tx, e.ty, e.tz); fx.muzzle(e.x, e.y, e.z, 0.5); fx.spark(e.tx, e.ty, e.tz); sfx('rifle', vol(e.x, e.z) * 0.6); } break;
+        case 'shot': if (e.w === 'hpm') { if (visAt(e.x, e.z) || visAt(e.tx, e.tz)) fx.zap(e.x, e.y, e.z, e.tx, e.ty, e.tz); } else if (visAt(e.x, e.z) || visAt(e.tx, e.tz)) { fx.tracer(e.x, e.y, e.z, e.tx, e.ty, e.tz); fx.muzzle(e.x, e.y, e.z, 0.5); fx.spark(e.tx, e.ty, e.tz); sfx('rifle', vol(e.x, e.z) * 0.6); } break;
         case 'launch': if (visAt(e.x, e.z)) { fx.muzzle(e.x, e.y, e.z, e.big ? 4 : e.w === 'missile' ? 1.2 : 1.8); sfx(e.w === 'missile' ? 'missile' : 'cannon', vol(e.x, e.z) * (e.big ? 1.5 : 0.8)); } break;
-        case 'boom': if (visAt(e.x, e.z)) { fx.boom(e.x, e.y, e.z, e.r, e.big, e.air); sfx(e.big ? 'big' : 'boom', vol(e.x, e.z) * (e.big ? 1.6 : 0.7)); if (e.big) this.shake = Math.max(this.shake, 2.5 * vol(e.x, e.z)); } break;
+        case 'decoy': if (visAt(e.x, e.z)) { fx.spark(e.x, e.y, e.z); fx.spark(e.x, e.y, e.z); } break;
+        case 'boom': if (visAt(e.x, e.z)) { if (e.emp) fx.emp(e.x, e.y, e.z, e.r); else fx.boom(e.x, e.y, e.z, e.r, e.big, e.air); sfx(e.big ? 'big' : 'boom', vol(e.x, e.z) * (e.big ? 1.6 : 0.7)); if (e.big) this.shake = Math.max(this.shake, 2.5 * vol(e.x, e.z)); } break;
         case 'dead': if (!e.silent && visAt(e.x, e.z) || (!e.silent && e.owner === this.local)) {
           const bld = e.kind === 'building', r = bld ? 6 : e.air ? 3 : 3.2;
           fx.boom(e.x, e.y + (bld ? 2 : 1), e.z, r, bld, e.air);
@@ -393,6 +468,7 @@ export class Renderer {
   render(dt, alpha) {
     this.time += dt;
     this.updateCamera(dt);
+    if (this.gfx) { this.U.uTime.value = this.time; this.skyObj.mesh.position.copy(this.camera.position); if (this.scatter) this.scatter.update(this.cam); }
     this.syncEntities(alpha, dt);
     this.updateSelection();
     if (this.pingT > 0) { this.pingT -= dt; const t = Math.max(0, this.pingT / 0.6), s = 1 + (1 - t) * 4; this.pingMesh.scale.set(s, 1, s); this.pingMesh.material.opacity = t; if (this.pingT <= 0) this.pingMesh.visible = false; }
@@ -403,6 +479,9 @@ export class Renderer {
   }
   dispose() {
     this.terrain.geometry.dispose(); this.water.geometry.dispose();
+    if (this.scatter) this.scatter.dispose();
+    for (const v of this.views.values()) if (v.mat) v.mat.dispose();
+    if (this.scene.environment) { this.scene.environment.dispose(); }
     this.scene.clear();
   }
 }

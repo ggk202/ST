@@ -685,7 +685,7 @@ export class Sim {
   impact(p) {
     const src = this.byId.get(p.src);
     const big = p.big;
-    this.ev({ e: 'boom', x: p.x, y: p.y, z: p.z, r: p.splash > 0 ? p.splash : 1.5, big, air: p.aa });
+    this.ev({ e: 'boom', x: p.x, y: p.y, z: p.z, r: p.splash > 0 ? p.splash : 1.5, big, air: p.aa, emp: !!p.stun });
     if (p.splash > 0) {
       const r = p.splash;
       for (const e of this.ents) {

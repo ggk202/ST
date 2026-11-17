@@ -7,7 +7,12 @@ No build step and no server of your own.
 - Single player (1–3 AI opponents) or 2–4 player multiplayer
 - Procedural maps: **islands** (ocean border) and **mountain valleys** (mountain-ring border), three sizes
 - Combined arms: infantry, light/medium/heavy armor, IFVs, artillery, rocket artillery, ballistic missiles, helicopters, VTOL fighters, UAVs, anti-air, and defensive structures
-- Fog of war, oil-derrick economy, tech tree
+- **Drones**: combat robots, **EW dogs** (escort infantry, fry enemy drones with a high-power-microwave emitter), crawler bombs, repair bots, assault walkers, FPV swarms, jet wingmen, **deep-strike one-way carriers** and **EMP carriers**
+- **Electronic warfare**: EW trucks, EW aircraft, EW towers and EW dogs jam enemy drones (slower, less accurate, control loss at Mk III jamming), blind aircraft radar (shorter vision, shorter radar-missile range) and break missile locks. Jammers drain energy
+- **Three tiers per unit (Mk I / II / III)** - Tech Lab unlocks Mk II, the Advanced Tech Lab unlocks Mk III
+- **Streaming economy** (like *Planetary Annihilation*): metal and energy flow continuously into whatever you are building. If supply can't keep up, everything slows down proportionally. Oil Derricks make metal, Power Plants make energy
+- Fog of war, tech tree
+- Procedural shaders and textures, wind-swept grass / trees / rocks, drifting clouds with ground shadows, animated water, walk cycles, tracks and wheels, turret recoil, banking aircraft (Settings ▸ Graphics: High / Medium / Classic)
 - Touch controls for iPad plus full mouse and keyboard support
 
 ## Play it from GitHub
@@ -54,15 +59,18 @@ Use the Move / Attack-Move / Stop / Fire-at-ground buttons. To build: choose a s
 | Arrow keys (W A S D when nothing is selected, or with Shift), screen edge | Pan |
 | Wheel, + / −, Z / X | Zoom |
 | A / M / S / F | Attack-move / Move / Stop / Fire at ground |
-| B / I / V / Y, Tab | Structures / Infantry / Vehicles / Aircraft tab |
+| B / I / V / Y / D, Tab | Structures / Infantry / Vehicles / Aircraft / Drones tab |
+| T | Cycle unit tier (Mk I / II / III) in the build panel |
 | 1–9, Shift+1–9 (or Ctrl/⌘) | Recall / assign control group |
 | Ctrl/⌘+A, H, Space, Esc | Select army, jump to HQ, jump to last alert, cancel/menu |
 
 ## Tips
 
-- You are eliminated when you have lost your Command Center *and* all production buildings (Barracks, War Factory, Airfield).
-- Income comes from the Command Center and **Oil Derricks** on the dark oil fields. Train an **Engineer** to build on oil fields away from your base.
-- Barracks → War Factory → Tech Lab / Airfield. The Tech Lab unlocks heavy tanks, rocket artillery, ballistic missiles and VTOLs.
+- You are eliminated when you have lost your Command Center *and* all production buildings (Barracks, War Factory, Drone Bay, Airfield).
+- **Metal** comes from the Command Center and **Oil Derricks** on the dark oil fields (train an **Engineer** to build on distant fields). **Energy** comes from **Power Plants**. Production and construction drain both continuously - watch the "Build speed" indicator in the top bar; if it drops, build more derricks / power plants. Cancelling refunds what has been spent.
+- Barracks → War Factory → Drone Bay / Tech Lab / Airfield. The Tech Lab unlocks Mk II units, heavy tanks, rocket artillery, ballistic missiles, VTOLs, EW vehicles, deep-strike drones and the EW Tower. The Advanced Tech Lab unlocks Mk III and EMP carriers.
+- **Drones are cheap but fragile to electronic warfare.** An EW dog's HPM emitter kills drones outright but barely scratches armor; flak (Mobile AA, SAM) and jammers also shut down swarms. Jam enemy aircraft to blind their radar missiles; keep a jammer over your own aircraft to make incoming missiles lose lock.
+- Deep-strike carriers and crawler bombs are one-way: select them and use *Fire at ground* (F) or right-click an enemy structure. EMP carriers stun everything in the blast (vehicles, drones, structures).
 - Artillery and missiles need vision of the target: bring scouts, helicopters or a UAV.
 - Anti-air (MANPADS, Mobile AA, SAM Site) counters aircraft; AT teams and IFV missiles counter armor.
 
@@ -73,7 +81,8 @@ index.html          UI shell and styles
 js/main.js          menus, lobby, match start/stop
 js/game.js          one match: lockstep pacing, render loop
 js/net.js           PeerJS transport + lockstep turn system
-js/render.js        three.js scene, terrain, fog of war, picking
+js/render.js        three.js scene, terrain, fog of war, picking, entity views
+js/gfx.js           procedural textures, shader patches, sky/clouds, ground scatter, animation
 js/models.js        procedural unit/building models
 js/fx.js            particles, tracers, procedural sound
 js/input.js         mouse / touch / keyboard + orders
@@ -81,8 +90,9 @@ js/ui.js            HUD, minimap, build menu
 js/sim/             deterministic simulation (no DOM / three.js)
   defs.js map.js path.js sim.js ai.js util.js
 tests/sim-test.mjs  headless AI-vs-AI, determinism and map-connectivity test
+tests/mech-test.mjs drones / EW / EMP / tiers / streaming-economy mechanics test
 ```
 
-Run the simulation test with `node tests/sim-test.mjs`.
+Run the simulation tests with `node tests/sim-test.mjs` and `node tests/mech-test.mjs`.
 
 The simulation only uses `+ − × ÷ sqrt` (no `sin`/`cos`/`pow`), a seeded PRNG and ordered iteration so every browser computes identical results.

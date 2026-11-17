@@ -373,7 +373,7 @@ export class Controls {
       const dmg = e.hp < e.maxhp - 0.5;
       const building = e.kind === 'building';
       const constructing = building && e.progress < 1;
-      if (!selected && !dmg && !constructing) continue;
+      if (!selected && !dmg && !constructing && !(e.stun > 0)) continue;
       if (++bars > 220) break;
       const o = v.obj.position;
       r.project(o.x, o.y + (building ? 4 + e.size * 1.4 : e.air ? 3 : 3.4), o.z, p);
@@ -385,6 +385,10 @@ export class Controls {
       const own = e.team === this.team;
       ctx.fillStyle = f > 0.6 ? (own ? '#7fd34a' : '#e86a5a') : f > 0.3 ? '#e8c04a' : '#e8483a';
       ctx.fillRect(p.x - w / 2, p.y, w * f, h);
+      const dd0 = DEFS[e.def];
+      if (!building && dd0.tier > 1) { ctx.fillStyle = dd0.tier === 3 ? '#ffd24a' : '#cfd8e3'; for (let k = 0; k < dd0.tier - 1; k++) ctx.fillRect(p.x - w / 2 + k * 7, p.y - 7, 5, 4); }
+      if (e.stun > 0) { ctx.fillStyle = '#5ec8ff'; ctx.fillRect(p.x + w / 2 - 12, p.y - 8, 12, 5); }
+      else if (e.jam > 0) { ctx.fillStyle = '#ff5ec8'; ctx.fillRect(p.x + w / 2 - 12, p.y - 8, 4 * e.jam, 5); }
       if (constructing) { ctx.fillStyle = '#4aa3ff'; ctx.fillRect(p.x - w / 2, p.y + h + 2, w * clamp(e.progress, 0, 1), 3); }
       else if (building && e.owner === this.local && e.queue.length) { const it = e.queue[0], dd = UNITS[it.type]; ctx.fillStyle = '#f0b429'; ctx.fillRect(p.x - w / 2, p.y + h + 2, w * clamp(1 - it.left / dd.timeTicks, 0, 1), 3); }
     }

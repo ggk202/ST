@@ -179,6 +179,7 @@ body.touch .item { min-height:66px; } body.touch .btn { min-height:44px; }
     <div class="card hidden" id="screen-settings">
       <h2>Settings</h2>
       <div class="row"><label>Shadows</label><div class="seg" id="segShadows"></div></div>
+      <div class="row"><label>Graphics</label><div class="seg" id="segGfx"></div><span class="sub" id="gfxNote" style="margin:0"></span></div>
       <div class="row"><label>Edge scroll</label><div class="seg" id="segEdge"></div></div>
       <div class="row"><label>Volume</label><input type="range" id="volume" min="0" max="100" style="width:200px"></div>
       <div class="row"><label>Fullscreen</label><button class="btn" id="btnFull">Toggle fullscreen</button><span class="sub" style="margin:0">On iPad: Share ▸ Add to Home Screen for a full-screen app.</span></div>
@@ -187,7 +188,7 @@ body.touch .item { min-height:66px; } body.touch .btn { min-height:44px; }
 
     <div class="card hidden help" id="screen-help">
       <h2>How to Play</h2>
-      <p>Destroy every enemy Command Center and production building (Barracks, War Factory, Airfield). You earn credits from your Command Center and <b>Oil Derricks</b> (built on dark oil fields). Build a <b>Barracks → War Factory → Tech Lab / Airfield</b>, train an army and attack. Train an <b>Engineer</b> to build derricks on distant oil fields. Units beyond your vision are hidden by the fog of war – use scouts and the UAV.</p>
+      <p>Destroy every enemy Command Center and production building (Barracks, War Factory, Drone Bay, Airfield). <b>Metal</b> comes from your Command Center and <b>Oil Derricks</b> (dark oil fields); <b>energy</b> from <b>Power Plants</b>. Production <i>streams</i> resources: everything you build drains metal and energy continuously, and if either runs short all production slows down. Build <b>Barracks → War Factory → Drone Bay / Tech Lab / Airfield</b>. The Tech Lab unlocks <b>Mk II</b> units and the Advanced Tech Lab <b>Mk III</b> (use the Mk I/II/III selector or press T). <b>Drones</b> (robots, EW dogs, FPV swarms, deep-strike carriers) are cheap but vulnerable to <b>electronic warfare</b>: EW dogs, trucks, aircraft and towers slow and blind enemy drones and aircraft radar and break missile locks. Units beyond your vision are hidden by the fog of war – use scouts and the UAV.</p>
       <h3>Touch (iPad)</h3>
       <table>
         <tr><td>Tap a unit/building</td><td>Select (double-tap: all of that type on screen)</td></tr>

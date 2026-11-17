@@ -95,6 +95,17 @@ export class Fx {
     if (!air) for (let i = 0; i < Math.min(14, 4 + r); i++) { const a = Math.random() * 6.283; this.smoke.emit(x, y + 0.3, z, Math.cos(a) * r * 1.2, 0.4, Math.sin(a) * r * 1.2, 1.2, s * 0.9, 0.5, 0.42, 0.3, 0.4, s * 1.4, 1.5); }
     for (let i = 0; i < 6; i++) this.fire.emit(x, y, z, this.rnd(r * 2), 3 + Math.random() * r * 2, this.rnd(r * 2), 0.5, 0.3, 1, 0.8, 0.3, 1, 0, 0.5, 14);
   }
+  // electric blue sparks along a line (HPM emitters)
+  zap(x, y, z, tx, ty, tz) {
+    for (let i = 0; i < 5; i++) { const t = Math.random(), j = 0.6; this.fire.emit(x + (tx - x) * t + this.rnd(j), y + (ty - y) * t + this.rnd(j), z + (tz - z) * t + this.rnd(j), this.rnd(2), this.rnd(2), this.rnd(2), 0.14, 0.5, 0.35, 0.8, 1, 1, 0, 0); }
+    this.fire.emit(tx, ty, tz, 0, 0, 0, 0.12, 1.4, 0.4, 0.8, 1, 1, 1.2, 0);
+  }
+  // EMP burst: expanding ring of electric sparks
+  emp(x, y, z, r) {
+    for (let i = 0; i < 70; i++) { const a = i / 70 * 6.283, sp = r * 1.6; this.fire.emit(x, y + 0.5, z, Math.cos(a) * sp, this.rnd(1.5), Math.sin(a) * sp, 0.6, 0.9, 0.35, 0.75, 1, 1, 0.5, 1.2); }
+    for (let i = 0; i < 30; i++) this.fire.emit(x + this.rnd(r * 0.5), y + 1 + Math.random() * 2, z + this.rnd(r * 0.5), this.rnd(6), Math.random() * 6, this.rnd(6), 0.5, 0.6, 0.7, 0.9, 1, 1, 0, 1, 8);
+    this.fire.emit(x, y + 1, z, 0, 0, 0, 0.35, 3, 0.7, 0.9, 1, 1, r * 1.4, 0);
+  }
   burn(x, y, z, secs) { this.burners.push({ x, y, z, t: secs, c: 0 }); }
   trail(x, y, z, big) {
     this.smoke.emit(x, y, z, this.rnd(0.4), 0.2, this.rnd(0.4), big ? 2.5 : 0.9, big ? 2.2 : 0.7, 0.85, 0.85, 0.85, 0.5, big ? 3 : 1.2, 0.5);
