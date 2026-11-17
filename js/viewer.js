@@ -1,6 +1,6 @@
 // Unit / structure model viewer (main menu): orbit, zoom, tier, team colour, level of detail, stats and equipment list.
 import * as THREE from 'three';
-import { makeModel } from './models.js';
+import { makeModel, modelMaterial } from './models.js';
 import { DEFS, BASE_UNITS, BASE_ORDER, BUILDINGS, PLAYER_COLORS, PLAYER_COLOR_NAMES, ROMAN, unitId, BUILD_ORDER } from './sim/defs.js';
 
 const $ = (id) => document.getElementById(id);
@@ -51,6 +51,7 @@ export class ModelViewer {
       this.grid = new THREE.GridHelper(120, 30, 0x4a5d4a, 0x364736); this.grid.position.y = 0.01; this.scene.add(this.grid);
       this.camera = new THREE.PerspectiveCamera(38, 1, 0.5, 1500); this.yaw = 0.6; this.pitch = 0.45; this.dist = 30; this.rad = 6;
     }
+    modelMaterial.flatShading = false; modelMaterial.envMapIntensity = 0.5; modelMaterial.needsUpdate = true;   // smooth lofted bodies need smooth normals
     this.running = true; this.rebuild(true); this.t = performance.now();
     const loop = (now) => { if (!this.running) return; this.raf = requestAnimationFrame(loop); this.draw(Math.min(0.1, (now - this.t) / 1000)); this.t = now; };
     this.raf = requestAnimationFrame(loop);

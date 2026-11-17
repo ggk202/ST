@@ -90,7 +90,10 @@ js/gfx.js           procedural textures, shader patches, sky/clouds, ground scat
 js/models.js        model assembly + materials
 js/model-core.js    Builder + detail helpers (bolts, hatches, antennae, RCWS, APS, ERA, tracks ...)
 js/model-ground.js  infantry + vehicle models
-js/model-air.js     aircraft models
+js/model-air.js     older aircraft models (airlifter, tanker, AWACS) + hardpoint tables
+js/model-air2.js    smooth lofted aircraft in three generations (Mk I 4th gen, Mk II 5th gen stealth, Mk III futuristic)
+js/model-tier.js    tier kits: add-on armour, ERA, slat cages, composite shrouds, EW suites, laser turrets, glow
+js/biomes.js        biome palettes, sky / fog colours and vegetation density
 js/model-drones.js  robots, walkers, FPV, jet drones, carriers
 js/model-buildings.js  structures
 js/fx.js            particles, tracers, procedural sound
@@ -103,6 +106,7 @@ tests/mech-test.mjs drones / EW / EMP / tiers / streaming-economy mechanics test
 tests/air-test.mjs  airfields, loadouts and sorties
 tests/cargo-test.mjs transport, airlift, airdrop, engineer boost
 tests/radar-test.mjs radar / ECM / APS / SAM vs cruise missiles / spy drone / building tiers
+tests/path-test.mjs bases never have a straight open route, but stay reachable by a winding one (all map types)
 tests/tier-test.mjs tier equipment: IRCM decoys, directed-energy defense, personal EW, jam resistance
 ```
 
@@ -178,3 +182,11 @@ Tests: `node tests/cargo-test.mjs` covers the transport, boarding, airlift, aird
 tests/logistics-test.mjs logistics / fuel / tankers / pallets / SEAD / escort / veterancy / salvage / points / weather
 tests/save-test.mjs save / load round trip
 
+
+## Winding routes, biomes and the model overhaul
+
+- **No direct path between bases.** Every spawn pair is separated by serpentine ridge walls with gaps far off-centre (alternating sides); a winding road is carved through the gaps so every base and oil field stays reachable. `tests/path-test.mjs` checks the straight line is always blocked and that the walking route is much longer.
+- **Biomes** (lobby map type): Island, Mountain valley, Desert mesas (terraced cliffs, dunes, cacti, mesa stacks), Arctic (snow, ice spikes, snow pines), Jungle (dense canopy trees, ferns, logs) and Volcanic (cinder cones with lava craters, lava boulders, ash). Each has its own terrain palette, sky and fog colour. Temperate maps gained oaks, birches and fallen logs.
+- **Smooth aircraft.** The Builder now has `fuse()` (superellipse-lofted fuselages), `wing()` / `wingPair()` (swept aerofoil panels) and `loft()`, all with smooth normals and top/bottom countershading. Aircraft read as generations: **Mk I = 4th gen** (round body, twin fins, external pylons and big visible flare / chaff dispenser banks), **Mk II = 5th gen** (faceted low-observable body, canted tails, internal bay seams, flush decoy ports), **Mk III = futuristic** (tailless blended flying wing, glowing leading edges and seams, slot exhausts, sensor blister, directed-energy turrets).
+- **Ground units** get cast-shaped turrets and a lofted sloped hull, a per-tier paint scheme (Mk I olive, Mk II dark steel, Mk III pale ceramic) and much bolder kits: Mk II ERA walls, turret-roof ERA and slat cages; Mk III faceted composite turret shrouds with glowing seams, EW domes and array panels.
+- The **model viewer** (main menu) shows all of this with smooth shading; use the Mk I / II / III buttons to compare generations. Real iPad / GPU performance of the new models and biomes has not been measured (only software-rendered desktop tests).
