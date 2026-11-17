@@ -102,3 +102,12 @@ tests/mech-test.mjs drones / EW / EMP / tiers / streaming-economy mechanics test
 Run the simulation tests with `node tests/sim-test.mjs` and `node tests/mech-test.mjs`.
 
 The simulation only uses `+ − × ÷ sqrt` (no `sin`/`cos`/`pow`), a seeded PRNG and ordered iteration so every browser computes identical results.
+
+## Procedural animation, LOD and iPad performance
+
+All of this is render-side only; the deterministic sim is untouched, so lockstep multiplayer is unaffected.
+
+- **Procedural animation** (`js/procanim.js`): the Combat Robot, EW Dog and Walker have hierarchical legs (thigh → shin → foot) driven by two-bone IK with a stance/swing gait. Planted feet stay fixed in the world, feet follow terrain height, and the body sinks when the ground is out of reach. Vehicles and aircraft get spring-damper pitch/roll from acceleration and turning, gun-kick on firing, road chatter and aircraft turbulence.
+- **LOD**: every model is built at 3 detail levels (small parts dropped, primitives simplified; roughly 75k vs 327k vertices for the full roster at LOD2 vs LOD0). Distance-based with hysteresis, frustum culling, and animation skipped off-screen and throttled at LOD2.
+- **iPad**: pixel ratio capped at 1.5, 1024 shadow map, tighter LOD distances, and an adaptive-resolution governor that steps render scale down/up from frame time.
+- **Settings**: *Model detail* (Auto / Max) and *Adaptive resolution* (On / Off).

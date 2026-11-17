@@ -16,7 +16,11 @@ export class Renderer {
     const r = this.renderer = Renderer.gl || (Renderer.gl = new THREE.WebGLRenderer({ canvas, antialias: !opts.touch, powerPreference: 'high-performance' }));
     modelMaterial.needsUpdate = true;
     this.gfx = opts.gfx === 'classic' ? 0 : opts.gfx === 'low' ? 1 : 2;     // 0 classic, 1 medium (tablet), 2 high
-    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, opts.touch ? 2 : 2));
+    this.pixelCap = opts.touch ? 1.5 : 2;                                   // iPad: cap the backing store (2x retina is very expensive)
+    this.resScale = 1; this.perfLvl = 0; this.ft = 1 / 60; this.perfCool = 3; this._lastT = 0;
+    this.lodBase = opts.touch ? 0.65 : 1; this.lodMul = this.lodBase; this.lodForce = opts.lod === 'max' ? 0 : -1;
+    this.frustum = new THREE.Frustum(); this._pv = new THREE.Matrix4(); this._sph = new THREE.Sphere();
+    this.applyPixelRatio();
     r.shadowMap.enabled = !!opts.shadows; r.shadowMap.type = THREE.PCFShadowMap;
     r.toneMapping = this.gfx ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping; r.toneMappingExposure = 1.0;
     this.scene = new THREE.Scene();
@@ -31,7 +35,7 @@ export class Renderer {
     this.ghost = null; this.selection = new Set();
     this.scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x4d4a3a, this.gfx ? 0.75 : 0.95));
     const sun = this.sun = new THREE.DirectionalLight(0xfff0d0, this.gfx ? 2.2 : 1.5);
-    sun.castShadow = !!opts.shadows; sun.shadow.mapSize.set(2048, 2048);
+    sun.castShadow = !!opts.shadows; sun.shadow.mapSize.set(opts.touch ? 1024 : 2048, opts.touch ? 1024 : 2048);
     sun.shadow.bias = -0.0006; sun.shadow.camera.near = 10; sun.shadow.camera.far = 600;
     this.scene.add(sun); this.scene.add(sun.target);
     this.buildTerrain();
@@ -211,6 +215,20 @@ export class Renderer {
     this.radiusMesh.visible = true; this.radiusMesh.position.set(info.x, y + 0.5, info.z);
   }
 
+  applyPixelRatio() { this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.pixelCap) * this.resScale); }
+  // adaptive quality: lower the render resolution, then the model LOD distances, when frames run long; recover slowly
+  perfTick() {
+    if (!this.opts.adaptive) return;
+    const now = performance.now(), real = this._lastT ? (now - this._lastT) / 1000 : 0.016; this._lastT = now;
+    if (real > 0.25) return;                                                // tab switch / stall: ignore
+    this.ft += (real - this.ft) * 0.06; this.perfCool -= real;
+    if (this.perfCool > 0) return;
+    const L = this.perfLvl, STEP = [1, 0.85, 0.72, 0.62, 0.62, 0.62], LODM = [1, 1, 1, 1, 0.75, 0.55];
+    if (this.ft > 1 / 40 && L < 5) this.perfLvl++; else if (this.ft < 1 / 57 && L > 0) this.perfLvl--; else return;
+    this.perfCool = this.perfLvl > L ? 1.2 : 5;
+    this.resScale = STEP[this.perfLvl]; this.lodMul = this.lodBase * LODM[this.perfLvl];
+    this.applyPixelRatio(); this.resize();
+  }
   resize() {
     const c = this.canvas, w = c.clientWidth || window.innerWidth, h = c.clientHeight || window.innerHeight;
     this.renderer.setSize(w, h, false);
@@ -318,7 +336,7 @@ export class Renderer {
   createView(e) {
     const m = makeModel(e.def, this.sim.players[e.owner].color);
     this.scene.add(m.root);
-    const v = { ent: e, obj: m.root, turret: m.turret, rotor: m.rotor, rotor2: m.rotor2, parts: m.parts, hull: m.hull, rp: m.rp, yaw: Math.atan2(e.dirx, e.dirz), tyaw: 0, frame: 0, visible: true, built: false, flash: 0, mat: null, an: null, ring: null, maxY: 1 };
+    const v = { ent: e, obj: m.root, turret: m.turret, rotor: m.rotor, rotor2: m.rotor2, parts: m.parts, hull: m.hull, rp: m.rp, chains: m.chains, setLod: m.setLod, lod: 0, acc: 0, inView: true, yaw: Math.atan2(e.dirx, e.dirz), tyaw: 0, frame: 0, visible: true, built: false, flash: 0, mat: null, an: null, ring: null, maxY: 1 };
     m.root.rotation.order = 'YXZ';
     if (this.gfx) {
       const mat = makeUnitMaterial(this.U, modelMaterial); v.mat = mat;
@@ -357,6 +375,17 @@ export class Renderer {
       const o = v.obj;
       if (e.air) { y = Math.max(0, y) + d.alt + Math.sin(this.time * 1.6 + e.id) * 0.5; }
       o.position.set(x, y, z);
+      // view-frustum + distance driven level of detail
+      this._sph.center.set(x, y + 1, z); this._sph.radius = e.kind === 'building' ? e.size * CELL * 0.9 + 8 : Math.max(5, e.radius * 2.6) + (e.air ? 4 : 0);
+      const inView = v.inView = this.frustum.intersectsSphere(this._sph);
+      if (inView) {
+        const cp = this.camera.position, dx = x - cp.x, dy = y - cp.y, dz = z - cp.z, dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const near = (e.kind === 'building' ? 260 : 120) * this.lodMul, far = near * 2, cur = v.lod;
+        let lod = dist > far ? 2 : dist > near ? 1 : 0;
+        if (lod > cur) { if (dist < (cur === 0 ? near : far) * 1.08) lod = cur; } else if (lod < cur) { if (dist > (cur === 2 ? far : near) * 0.92) lod = cur; }
+        if (this.lodForce === 0) lod = 0;
+        if (lod !== cur || !v.lodInit) { v.lodInit = true; v.lod = lod; v.setLod(lod, this.opts.shadows); }
+      }
       const want = Math.atan2(e.dirx, e.dirz);
       if (e.kind === 'unit') {
         v.yaw += angDiff(want, v.yaw) * Math.min(1, dt * 14); o.rotation.y = v.yaw;
@@ -373,7 +402,11 @@ export class Renderer {
           v.tyaw += angDiff(aim, v.tyaw) * Math.min(1, dt * 7); v.turret.rotation.y = v.tyaw;
         }
         if (this.gfx) {
-          animateUnit(v, e, d, dt, this.time, Math.sqrt(e.vx * e.vx + e.vz * e.vz), e.flash > 0);
+          if (inView) {
+            v.acc += dt;
+            if (v.lod < 2 || ((f + e.id) % 3) === 0) { animateUnit(v, e, d, v.acc, this.time, Math.sqrt(e.vx * e.vx + e.vz * e.vz), e.flash > 0, v.lod, this._ground); v.acc = 0; }
+            else if (v.an && v.an.sp) { o.rotation.x = (e.armor === 'inf' ? 0 : o.rotation.x) + v.an.sp.p; o.rotation.z = v.an.sp.r; }   // keep the cached body pose on skipped frames
+          }
           const u = v.mat.userData.u; u.uDmg.value = clamp((0.7 - e.hp / e.maxhp) / 0.7, 0, 1); u.uStun.value = e.stun > 0 ? 1 : 0;
         } else if (d.base === 'heli' || d.base === 'uav') { if (v.rotor) { if (d.base === 'heli') v.rotor.rotation.y += dt * 40; else v.rotor.rotation.z += dt * 50; } if (v.rotor2) v.rotor2.rotation.x += dt * 40; }
       } else {
@@ -469,6 +502,9 @@ export class Renderer {
     this.time += dt;
     this.updateCamera(dt);
     if (this.gfx) { this.U.uTime.value = this.time; this.skyObj.mesh.position.copy(this.camera.position); if (this.scatter) this.scatter.update(this.cam); }
+    this.perfTick();
+    this.camera.updateMatrixWorld(); this._pv.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse.copy(this.camera.matrixWorld).invert()); this.frustum.setFromProjectionMatrix(this._pv);
+    if (!this._ground) { const map = this.sim.map; this._ground = (x, z) => map.hAt(x, z); }
     this.syncEntities(alpha, dt);
     this.updateSelection();
     if (this.pingT > 0) { this.pingT -= dt; const t = Math.max(0, this.pingT / 0.6), s = 1 + (1 - t) * 4; this.pingMesh.scale.set(s, 1, s); this.pingMesh.material.opacity = t; if (this.pingT <= 0) this.pingMesh.visible = false; }

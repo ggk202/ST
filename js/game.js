@@ -14,7 +14,7 @@ export class Game {
     this.team = this.sim.players[local].team;
     this.canvas = document.getElementById('view'); this.overlay = document.getElementById('overlay');
     this.octx = this.overlay.getContext('2d');
-    this.renderer = new Renderer(this.canvas, this.sim, local, { shadows: settings.shadows, touch, gfx: settings.gfx });
+    this.renderer = new Renderer(this.canvas, this.sim, local, { shadows: settings.shadows, touch, gfx: settings.gfx, lod: settings.lod, adaptive: settings.adaptive !== undefined ? settings.adaptive : !!touch });
     this.sel = []; this.groups = {}; this.paused = false; this.waiting = false; this.desync = false; this.lastAlert = null;
     this.simAcc = 0; this.tickInTurn = 0; this.curTurn = null; this.alpha = 0; this.running = false; this.ended = false; this.leftEarly = false;
     this.controls = new Controls(this);

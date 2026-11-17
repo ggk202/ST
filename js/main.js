@@ -10,7 +10,7 @@ document.body.classList.toggle('touch', !!touch);
 
 const SETTINGS_KEY = 'spearhead.settings.v1';
 function loadSettings() {
-  const d = { shadows: !touch, edge: !touch, volume: 0.5, gfx: touch ? 'low' : 'high' };
+  const d = { shadows: !touch, edge: !touch, volume: 0.5, gfx: touch ? 'low' : 'high', lod: 'auto', adaptive: !!touch };
   try { const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'); return Object.assign(d, s); } catch (e) { return d; }
 }
 function seedFromString(s) { let h = 7; for (const ch of String(s)) h = (Math.imul(h, 31) + ch.charCodeAt(0)) | 0; return (h >>> 0) % 1000000 + 1; }
@@ -78,6 +78,8 @@ class App {
     const s = this.settings;
     this.seg('segShadows', [{ v: true, label: 'On' }, { v: false, label: 'Off' }], s.shadows, (v) => { s.shadows = v; this.saveSettings(); if (this.game) { this.game.renderer.renderer.shadowMap.enabled = v; this.game.renderer.sun.castShadow = v; } });
     this.seg('segGfx', [{ v: 'high', label: 'High' }, { v: 'low', label: 'Medium' }, { v: 'classic', label: 'Classic' }], s.gfx, (v) => { s.gfx = v; this.saveSettings(); const n = $('gfxNote'); if (n) n.textContent = this.game ? 'Applies to the next game.' : ''; });
+    this.seg('segLod', [{ v: 'auto', label: 'Auto' }, { v: 'max', label: 'Max detail' }], s.lod || 'auto', (v) => { s.lod = v; this.saveSettings(); });
+    this.seg('segAdapt', [{ v: 'on', label: 'On' }, { v: 'off', label: 'Off' }], s.adaptive ? 'on' : 'off', (v) => { s.adaptive = v === 'on'; this.saveSettings(); });
     this.seg('segEdge', [{ v: true, label: 'On' }, { v: false, label: 'Off' }], s.edge, (v) => { s.edge = v; this.saveSettings(); });
     $('volume').value = Math.round(s.volume * 100);
     this.showScreen('settings');

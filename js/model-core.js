@@ -43,10 +43,15 @@ const NI = {}; for (const k in G) NI[k] = G[k].toNonIndexed();
 NI.wedge = wedgeGeo();
 
 export class Builder {
-  constructor(teamColor) {
+  // lod: 0 full detail, 1 drops small parts (bolts, lamps ...), 2 also simplifies primitives and drops fine detail.
+  // lodScale scales the size thresholds (small models use a smaller value, big structures a larger one).
+  constructor(teamColor, lod = 0, lodScale = 1) {
     this.team = teamColor; this.groups = { hull: [] };
-    this.cur = 'hull'; this.rp = {}; this.sc = 1;
+    this.cur = 'hull'; this.rp = {}; this.sc = 1; this.chains = {};
+    this.lod = lod; this.thr = lod === 0 ? 0 : (lod === 1 ? 0.2 : 0.5) * lodScale;
   }
+  // records a two-bone leg chain (hip, knee, ankle as [y, z]) used by the procedural IK animator
+  chain(name, hip, knee, ankle) { const k = this.sc; this.chains[name] = { hip: [hip[0] * k, hip[1] * k], knee: [knee[0] * k, knee[1] * k], ankle: [ankle[0] * k, ankle[1] * k] }; return this; }
   g(name) { this.cur = name; if (!this.groups[name]) this.groups[name] = []; if (!this.rp[name]) this.rp[name] = [0, 0, 0]; return this; }
   set pivot(v) { this.rp.turret = v.map((q) => q * this.sc); }
   get pivot() { return this.rp.turret || [0, 0, 0]; }
@@ -54,6 +59,13 @@ export class Builder {
   at(x, y, z) { this.rp[this.cur] = [x * this.sc, y * this.sc, z * this.sc]; return this; }
   add(kind, sx, sy, sz, x, y, z, color, rot, spin) {
     const k = this.sc;
+    if (this.thr) {
+      const sx2 = typeof kind === 'string' && kind !== 'box' && kind !== 'wedge' && !kind.startsWith('trap') ? 2 : 1;
+      let a = sx * sx2 * k, c = sy * k, d = sz * sx2 * k, t;
+      if (a > c) { t = a; a = c; c = t; } if (c > d) { t = c; c = d; d = t; } if (a > c) { t = a; a = c; c = t; }   // a<=c<=d
+      if (c < this.thr && d < this.thr * 4) return this;
+      if (this.lod >= 2 && typeof kind === 'string') kind = kind === 'cyl' ? 'cyl6' : kind === 'sph' ? 'sph6' : kind === 'cone' ? 'cone6' : kind;
+    }
     const base = typeof kind === 'string' ? NI[kind] : kind;
     let px = x * k, py = y * k, pz = z * k;
     if (this.cur !== 'hull') { const rp = this.rp[this.cur] || [0, 0, 0]; px -= rp[0]; py -= rp[1]; pz -= rp[2]; }
@@ -118,7 +130,7 @@ export class Builder {
       geo.computeBoundingSphere(); geo.computeBoundingBox();
       out[name] = geo;
     }
-    out.rp = this.rp;
+    out.rp = this.rp; out.chains = this.chains;
     return out;
   }
 }

@@ -2,6 +2,7 @@
 // clouds and cloud shadows, environment lighting, ground scatter (grass, rocks, trees) and animation helpers.
 // Everything is generated at load time - no image assets.
 import * as THREE from 'three';
+import { hasIK, animateLegsIK, animateBody } from './procanim.js';
 import { CELL } from './sim/defs.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -443,20 +444,24 @@ const TRACKED = new Set(['ifv', 'mbt', 'heavy', 'aa', 'sph']);
 const PROPS = { heli: 40, uav: 50 };
 
 // per-view animation state is stored on `v.an`
-export function animateUnit(v, e, d, dt, time, speed, firing) {
+export function animateUnit(v, e, d, dt, time, speed, firing, lod = 0, ground = null) {
   const an = v.an || (v.an = { phase: 0, spin: 0, track: 0, bank: 0, lastYaw: v.yaw, recoil: 0, leg: 0 });
   const m = v.parts, base = d.base;
   const mov = e.moving ? 1 : 0;
   an.leg += (mov - an.leg) * Math.min(1, dt * 8);
   if (LEGGED[base] !== undefined) {
-    const stride = LEGGED[base] * 1.0; an.phase += dt * speed * (base === 'walker' ? 0.9 : base === 'ewdog' ? 1.7 : 1.6);
-    const s = Math.sin(an.phase) * stride * an.leg, c = Math.sin(an.phase + Math.PI) * stride * an.leg;
-    if (m.legL) m.legL.rotation.x = s; if (m.legR) m.legR.rotation.x = c;
-    if (m.legFL) { m.legFL.rotation.x = s; m.legBR.rotation.x = s; m.legFR.rotation.x = c; m.legBL.rotation.x = c; }
-    const bob = Math.abs(Math.sin(an.phase)) * (base === 'walker' ? 0.28 : 0.1) * an.leg;
-    v.hull.position.y = bob;
-    for (const k in m) if (k !== 'legL' && k !== 'legR' && !/^leg[FB]/.test(k)) m[k].position.y = (v.rp[k] ? v.rp[k][1] : 0) + bob;
-    v.hull.rotation.z = Math.sin(an.phase) * 0.05 * an.leg;
+    if (hasIK(v, base)) animateLegsIK(v, an, base, dt, speed, lod === 0 ? ground : null);      // articulated IK walker
+    else {
+      const stride = LEGGED[base] * 1.0; an.phase += dt * speed * (base === 'walker' ? 0.9 : base === 'ewdog' ? 1.7 : 1.6);
+      const s = Math.sin(an.phase) * stride * an.leg, c = Math.sin(an.phase + Math.PI) * stride * an.leg;
+      if (m.legL) m.legL.rotation.x = s; if (m.legR) m.legR.rotation.x = c;
+      if (m.legFL) { m.legFL.rotation.x = s; m.legBR.rotation.x = s; m.legFR.rotation.x = c; m.legBL.rotation.x = c; }
+      const bob = Math.abs(Math.sin(an.phase)) * (base === 'walker' ? 0.28 : 0.1) * an.leg;
+      v.hull.position.y = bob;
+      for (const k in m) if (k !== 'legL' && k !== 'legR' && !/^leg[FB]/.test(k)) m[k].position.y = (v.rp[k] ? v.rp[k][1] : 0) + bob;
+      v.hull.rotation.z = Math.sin(an.phase) * 0.05 * an.leg;
+    }
+    if (v.turret && base === 'ewdog' && !e.target) v.turret.rotation.y += Math.sin(time * 0.9 + e.id) * 0.55;   // idle radar-style scan
   }
   if (WHEEL_R[base]) { an.spin += (e.vx * e.dirx + e.vz * e.dirz) * dt / WHEEL_R[base]; if (v.mat) v.mat.userData.u.uSpin.value = -an.spin; }
   if (TRACKED.has(base) && v.mat) { an.track += (e.vx * e.dirx + e.vz * e.dirz) * dt; v.mat.userData.u.uTrack.value = an.track; v.mat.userData.u.uSpin.value = -an.track / 0.42; }   // road wheels turn with the belt
@@ -485,4 +490,5 @@ export function animateUnit(v, e, d, dt, time, speed, firing) {
     else if (k === 'rotor' && (base === 'ewdog' || base === 'ewtruck' || base === 'ewplane')) mesh.rotation.y += dt * 4;
     else if (k === 'rotor' && base === 'fpv') mesh.rotation.y += dt * 60;
   }
+  animateBody(v, e, d, dt, speed, time, firing);
 }
