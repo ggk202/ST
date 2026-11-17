@@ -1,4 +1,6 @@
 // three.js renderer: terrain, entity views, effects, camera and screen-space picking.
+import { Craters } from './decals.js';
+import { buildProjModels, projKind } from './projectile-gfx.js';
 import * as THREE from 'three';
 import { CELL, DEFS, PLAYER_COLORS, UNITS } from './sim/defs.js';
 import { GROUND_PHASES } from './sim/airops.js';
@@ -45,7 +47,10 @@ export class Renderer {
     this.buildTerrain();
     this.buildOil();
     if (this.gfx) this.initWorldGfx();
-    this.fx = new Fx(this.scene);
+    this.fx = new Fx(this.scene, !!opts.touch);
+    this.craters = new Craters(this.scene, this.sim.map, opts.touch ? 120 : 260);
+    // explosion lighting: a few real point lights, driven by the strongest active flashes
+    this.fxLights = []; if (this.gfx) for (let i = 0; i < (opts.touch ? 2 : 4); i++) { const L = new THREE.PointLight(0xff9b4a, 0, 70, 2); L.position.set(0, -50, 0); this.scene.add(L); this.fxLights.push(L); }
     this.buildSelection();
     this.buildProjectiles();
     this.buildGhost();
@@ -151,11 +156,20 @@ export class Renderer {
     this.fogShade = new Float32Array(w * w);
   }
   buildOil() {
+    // Oil fields are always visible: a dark pad plus a tall beacon that ignores fog, so they can be spotted from anywhere on the map.
     this.oilMeshes = [];
     const geo = new THREE.CylinderGeometry(4.2, 4.6, 0.3, 18), mat = new THREE.MeshStandardMaterial({ color: 0x1a1816, roughness: 0.4, metalness: 0.4 });
+    const beam = new THREE.CylinderGeometry(0.35, 1.3, 46, 8, 1, true); beam.translate(0, 23, 0);
+    const bmat = new THREE.MeshBasicMaterial({ color: 0xf0b429, transparent: true, opacity: 0.42, fog: false, depthWrite: false, side: THREE.DoubleSide });
+    const ring = new THREE.RingGeometry(5.0, 6.2, 28); ring.rotateX(-Math.PI / 2);
+    const rmat = new THREE.MeshBasicMaterial({ color: 0xf0b429, transparent: true, opacity: 0.75, fog: false, depthWrite: false, side: THREE.DoubleSide });
     for (const o of this.sim.map.oil) {
-      const m = new THREE.Mesh(geo, mat); m.position.set(o.x, this.sim.map.hAt(o.x, o.z) + 0.15, o.z); m.receiveShadow = true;
-      this.scene.add(m); this.oilMeshes.push(m);
+      const g = new THREE.Group(), y = this.sim.map.hAt(o.x, o.z);
+      const m = new THREE.Mesh(geo, mat); m.position.y = 0.15; m.receiveShadow = true; g.add(m);
+      const b = new THREE.Mesh(beam, bmat); b.renderOrder = 2; g.add(b);
+      const r = new THREE.Mesh(ring, rmat); r.position.y = 0.45; r.renderOrder = 2; g.add(r);
+      g.position.set(o.x, y, o.z); g.userData = { beam: b, ring: r };
+      this.scene.add(g); this.oilMeshes.push(g);
     }
   }
   updateFog(force) {
@@ -178,7 +192,7 @@ export class Renderer {
     for (let q = 0; q < nn; q++) { const sh = this.gfx ? this.fogShade[q] : 1; if (this.gfx) { wc[q * 3] = sh; wc[q * 3 + 1] = sh; wc[q * 3 + 2] = sh; } else { wc[q * 3] = 0.16 * this.fogShade[q]; wc[q * 3 + 1] = 0.44 * this.fogShade[q]; wc[q * 3 + 2] = 0.62 * this.fogShade[q]; } }
     this.waterCol.needsUpdate = true;
     if (this.fogData) { const fd = this.fogData; for (let c = 0; c < n * n; c++) fd[c] = cs[c] * 255; this.fogTex.needsUpdate = true; }
-    this.oilMeshes.forEach((m, idx) => { const o = this.sim.map.oil[idx]; const c = this.sim.map.cellOf(o.x, o.z); m.visible = !!ex[c]; });
+    this.oilMeshes.forEach((m, idx) => { const o = this.sim.map.oil[idx]; m.visible = true; m.userData.beam.visible = !o.building; });
   }
 
   // ---------------- helpers ----------------
@@ -195,12 +209,7 @@ export class Renderer {
     this.pingMesh.visible = false; this.pingMesh.renderOrder = 4; this.scene.add(this.pingMesh); this.pingT = 0; this.pingCol = 0xffffff;
   }
   ping(x, z, color = 0xffffff) { this.pingMesh.position.set(x, this.sim.map.hAt(x, z) + 0.4, z); this.pingMesh.material.color.setHex(color); this.pingT = 0.6; this.pingMesh.visible = true; }
-  buildProjectiles() {
-    const shell = new THREE.CylinderGeometry(0.22, 0.22, 1.2, 6); shell.rotateX(Math.PI / 2);
-    const miss = new THREE.CylinderGeometry(0.16, 0.16, 1.8, 6); miss.rotateX(Math.PI / 2);
-    this.projGeo = { shell, miss };
-    this.projMat = { shell: new THREE.MeshBasicMaterial({ color: 0x2b2b2b }), miss: new THREE.MeshBasicMaterial({ color: 0xf2f2f2 }), bomb: new THREE.MeshBasicMaterial({ color: 0x15171a }) };
-  }
+  buildProjectiles() { this.proj = buildProjModels(); }
   buildGhost() {
     this.ghostMat = new THREE.MeshBasicMaterial({ color: 0x40ff60, transparent: true, opacity: 0.4, depthWrite: false });
     this.ghostMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), this.ghostMat);
@@ -252,7 +261,7 @@ export class Renderer {
   clampCam() {
     const s = this.sim.map.size, c = this.cam;
     c.x = clamp(c.x, 0, s); c.z = clamp(c.z, 0, s);
-    c.dist = clamp(c.dist, 14, 320); c.pitch = clamp(c.pitch, this.gfx ? 0.16 : 0.45, 1.3);
+    c.dist = clamp(c.dist, 14, 560); c.pitch = clamp(c.pitch, this.gfx ? 0.16 : 0.45, 1.3);
   }
   pan(right, forward) {
     const c = this.cam, s = Math.sin(c.yaw), co = Math.cos(c.yaw);
@@ -308,7 +317,7 @@ export class Renderer {
     return worldR / (d * Math.tan(this.camera.fov * Math.PI / 360)) * (this.H / 2);
   }
   visibleToLocal(e) {
-    if (e.team === this.team) return true;
+    if (e.team === this.team || e.def === 'derrick') return true;
     const c = this.sim.map.cellOf(e.x, e.z);
     return c >= 0 && this.sim.vis[this.team][c] === 1;
   }
@@ -368,6 +377,32 @@ export class Renderer {
     this.views.set(e.id, v);
     return v;
   }
+  // continuous effects: vehicle dust, jet afterburners and contrails, rotor wash
+  entityFx(e, d, v, x, y, z, dt) {
+    const cp = this.camera.position, cx = x - cp.x, cz = z - cp.z; if (cx * cx + cz * cz > 300 * 300) return;
+    v.fxT = (v.fxT || 0) - dt; v.fxC = (v.fxC || 0) - dt;
+    const fx = this.fx, map = this.sim.map, gy = map.hAt(x, z), dx = e.dirx, dz = e.dirz;
+    if (d.air) {
+      const base = d.base, spd = e.spd !== undefined ? e.spd : (e.moving ? d.speed : 0), ph = e.ap;
+      if (ph && GROUND_PHASES.has(ph)) return;
+      const jet = base === 'fighter' || base === 'wingman' || base === 'carrier' || base === 'empcarrier';
+      if (jet && v.fxT <= 0) {
+        v.fxT = 0.03; const k = (ph === 'takeoff' || spd > d.speed * 0.82) ? 1 : 0.45, r = d.radius;
+        const vy = e.h !== undefined ? (e.h - e.ph) * d.alt / 0.05 : 0;
+        fx.afterburn(x - dx * r * 1.9, y, z - dz * r * 1.9, dx, dz, vy, spd, k, r * (base === 'carrier' || base === 'empcarrier' ? 0.7 : 0.9), base === 'fighter' ? r * 0.28 : 0);
+      }
+      if ((jet || base === 'bomber' || base === 'ewplane' || base === 'uav') && v.fxC <= 0 && y - gy > d.alt * 0.8 && spd > d.speed * 0.65) { v.fxC = 0.085; fx.contrail(x - dx * d.radius * 2.2, y, z - dz * d.radius * 2.2, d.radius * 0.6); }
+      if ((base === 'heli' || base === 'vtol' || base === 'fpv') && y - gy < 9 && v.fxC <= 0 && (e.h === undefined || e.h > 0.02)) { v.fxC = 0.06; const sand = gy < 1.6; fx.rotorWash(x, gy, z, d.radius * (base === 'fpv' ? 1.2 : 2.2), sand ? 0.78 : 0.5, sand ? 0.7 : 0.44, sand ? 0.52 : 0.32); }
+      return;
+    }
+    if (e.armor === 'inf' || !e.moving) return;
+    const sp = Math.sqrt(e.vx * e.vx + e.vz * e.vz); if (sp < 1.2) return;
+    if (v.fxT <= 0) {
+      v.fxT = Math.max(0.05, 0.14 - sp * 0.01); const sand = gy < 1.6, rock = gy > 14, r = d.radius;
+      fx.dust(x, gy, z, dx, dz, r * 0.9, sand ? 0.8 : rock ? 0.62 : 0.5, sand ? 0.72 : rock ? 0.6 : 0.43, sand ? 0.54 : rock ? 0.56 : 0.3, Math.min(0.42, 0.14 + sp * 0.03));
+    }
+    if (v.fxC <= 0 && (e.armor === 'medium' || e.armor === 'heavy')) { v.fxC = 0.22; fx.smoke.emit(x - dx * d.radius , gy + d.radius * 0.9, z - dz * d.radius, -dx * 1.2, 1.2, -dz * 1.2, 1.1, 0.45, 0.14, 0.14, 0.15, 0.32, 1.4, 0.8); }
+  }
   removeView(id, v) {
     this.scene.remove(v.obj); if (v.mat) v.mat.dispose(); if (v.afg) v.afg.dispose();
     if (v.ring) { this.scene.remove(v.ring); this.scene.remove(v.ring2); v.ring.geometry.dispose(); v.ring.material.dispose(); v.ring2.material.dispose(); }
@@ -405,6 +440,7 @@ export class Renderer {
         if (lod !== cur || !v.lodInit) { v.lodInit = true; v.lod = lod; v.setLod(lod, this.opts.shadows); }
       }
       if (v.afg) v.afg.update(e, true);
+      if (inView && e.kind === 'unit') this.entityFx(e, d, v, x, y, z, dt);
       const want = Math.atan2(e.dirx, e.dirz);
       if (e.kind === 'unit') {
         v.yaw += angDiff(want, v.yaw) * Math.min(1, dt * 14); o.rotation.y = v.yaw;
@@ -463,10 +499,10 @@ export class Renderer {
     for (const p of sim.projs) {
       let m = this.projViews.get(p.id);
       if (!m) {
-        const missile = p.k === 'missile';
-        m = new THREE.Mesh(missile ? this.projGeo.miss : this.projGeo.shell, missile ? this.projMat.miss : (p.dtype === 'he' && p.sy > 8 && p.arc === 0 ? this.projMat.bomb : this.projMat.shell));
-        if (p.big) m.scale.set(3.2, 3.2, 3.2); else if (p.dtype === 'he') m.scale.set(1.3, 1.3, 1.3);
-        m.userData.px = p.x; m.userData.py = p.y; m.userData.pz = p.z;
+        const kind = projKind(p);
+        m = this.proj.models[kind].clone(); m.userData.kind = kind; m.userData.flames = []; m.traverse((o) => { if (o.name === 'flame') m.userData.flames.push(o); });
+        const sc = this.proj.scale[kind] * (p.big ? 2.2 : 1); m.scale.set(sc, sc, sc);
+        m.userData.px = p.x; m.userData.py = p.y; m.userData.pz = p.z; m.userData.seed = p.id * 0.37;
         this.scene.add(m); this.projViews.set(p.id, m);
       }
       m.userData.frame = pf;
@@ -474,9 +510,14 @@ export class Renderer {
       const dx = p.x - m.userData.px, dy = p.y - m.userData.py, dz = p.z - m.userData.pz;
       if (dx * dx + dy * dy + dz * dz > 1e-5) { m.lookAt(p.x + dx, p.y + dy, p.z + dz); }
       m.userData.px = p.x; m.userData.py = p.y; m.userData.pz = p.z;
-      const c = map.cellOf(p.x, p.z);
+      const c = map.cellOf(p.x, p.z), kind = m.userData.kind;
       m.visible = p.team === this.team || (c >= 0 && sim.vis[this.team][c] === 1);
-      if (m.visible && (p.k === 'missile' || p.big)) this.fx.trail(p.x, p.y, p.z, p.big);
+      if (m.visible) {
+        for (const fl of m.userData.flames) { const s = 0.8 + 0.4 * Math.sin(this.time * 60 + m.userData.seed + fl.id); fl.scale.set(s, s, 0.8 + 0.5 * Math.random()); }
+        if (kind === 'atgm' || kind === 'aam' || kind === 'rocket') this.fx.trail(p.x - dx * 8, p.y - dy * 8, p.z - dz * 8, false);
+        else if (kind === 'cruise' || p.big) this.fx.trail(p.x, p.y, p.z, true);
+        else if (kind === 'shell' && (this.frame & 1)) this.fx.smoke.emit(p.x, p.y, p.z, 0, 0, 0, 0.7, 0.35, 0.8, 0.8, 0.8, 0.18, 0.5, 0);
+      }
     }
     for (const [id, m] of this.projViews) if (m.userData.frame !== pf) { this.scene.remove(m); this.projViews.delete(id); }
   }
@@ -508,11 +549,13 @@ export class Renderer {
       switch (e.e) {
         case 'shot': if (e.w === 'hpm') { if (visAt(e.x, e.z) || visAt(e.tx, e.tz)) fx.zap(e.x, e.y, e.z, e.tx, e.ty, e.tz); } else if (visAt(e.x, e.z) || visAt(e.tx, e.tz)) { fx.tracer(e.x, e.y, e.z, e.tx, e.ty, e.tz); fx.muzzle(e.x, e.y, e.z, 0.5); fx.spark(e.tx, e.ty, e.tz); sfx('rifle', vol(e.x, e.z) * 0.6); } break;
         case 'launch': if (visAt(e.x, e.z)) { fx.muzzle(e.x, e.y, e.z, e.big ? 4 : e.w === 'missile' ? 1.2 : 1.8); sfx(e.w === 'missile' ? 'missile' : 'cannon', vol(e.x, e.z) * (e.big ? 1.5 : 0.8)); } break;
+        case 'aps': if (visAt(e.x, e.z)) { fx.aps(e.x, e.y, e.z, e.ok); sfx('boom', vol(e.x, e.z) * 0.5); } break;
         case 'decoy': if (visAt(e.x, e.z)) { fx.spark(e.x, e.y, e.z); fx.spark(e.x, e.y, e.z); } break;
-        case 'boom': if (visAt(e.x, e.z)) { if (e.emp) fx.emp(e.x, e.y, e.z, e.r); else fx.boom(e.x, e.y, e.z, e.r, e.big, e.air); sfx(e.big ? 'big' : 'boom', vol(e.x, e.z) * (e.big ? 1.6 : 0.7)); if (e.big) this.shake = Math.max(this.shake, 2.5 * vol(e.x, e.z)); } break;
+        case 'boom': if (visAt(e.x, e.z)) { if (e.emp) fx.emp(e.x, e.y, e.z, e.r); else fx.boom(e.x, e.y, e.z, e.r, e.big, e.air); if (!e.air && e.y < this.sim.map.hAt(e.x, e.z) + 4) this.craters.add(e.x, e.z, Math.min(13, 1.1 + e.r * 1.05), Math.random() * 6.283); sfx(e.big ? 'big' : 'boom', vol(e.x, e.z) * (e.big ? 1.6 : 0.7)); if (e.big) this.shake = Math.max(this.shake, 2.5 * vol(e.x, e.z)); } break;
         case 'dead': if (!e.silent && visAt(e.x, e.z) || (!e.silent && e.owner === this.local)) {
           const bld = e.kind === 'building', r = bld ? 6 : e.air ? 3 : 3.2;
           fx.boom(e.x, e.y + (bld ? 2 : 1), e.z, r, bld, e.air);
+          if (!e.air && (bld || e.armor !== 'inf')) this.craters.add(e.x, e.z, bld ? 9 : 3.2, Math.random() * 6.283);
           if (bld) { for (let i = 0; i < 4; i++) fx.boom(e.x + (Math.random() - 0.5) * 10, e.y + 2 + Math.random() * 3, e.z + (Math.random() - 0.5) * 10, 4, false, false); this.shake = Math.max(this.shake, 3 * vol(e.x, e.z)); fx.burn(e.x, e.y, e.z, 7); }
           else if (!(e.def === 'rifleman' || e.def === 'at' || e.def === 'manpads' || e.def === 'engineer')) fx.burn(e.x, e.y, e.z, e.air ? 2.5 : 4);
           sfx('boom', vol(e.x, e.z));
@@ -535,6 +578,10 @@ export class Renderer {
     this.fogTimer += dt; if (this.fogTimer > 0.25) { this.fogTimer = 0; this.updateFog(); }
     const scale = this.renderer.domElement.height * 0.5 * this.camera.projectionMatrix.elements[5];
     this.fx.update(dt, scale);
+    if (this.fxLights.length) {
+      const fl = this.fx.flashes.slice().sort((a, b) => b.i * b.t / b.d - a.i * a.t / a.d);
+      for (let i = 0; i < this.fxLights.length; i++) { const L = this.fxLights[i], f = fl[i]; if (f) { const q = f.t / f.d; L.position.set(f.x, f.y, f.z); L.intensity = f.i * q * q; } else L.intensity = 0; }
+    }
     this.renderer.render(this.scene, this.camera);
   }
   dispose() {

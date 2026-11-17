@@ -227,7 +227,7 @@ export class Controls {
     const cam = this.r.cam;
     if (e.shiftKey) { cam.yaw += e.deltaY * 0.003; return; }
     const k = e.ctrlKey ? 0.012 : 0.0012;
-    cam.dist = clamp(cam.dist * Math.exp(e.deltaY * k), 14, 320);
+    cam.dist = clamp(cam.dist * Math.exp(e.deltaY * k), 14, 560);
   }
 
   // ---------- touch gestures ----------
@@ -265,7 +265,7 @@ export class Controls {
     else if (gst.kind === 'pinch' && this.ptrs.size >= 2) {
       const [a, b] = [...this.ptrs.values()];
       const d = Math.hypot(a.x - b.x, a.y - b.y) || 1, ang = Math.atan2(b.y - a.y, b.x - a.x);
-      cam.dist = clamp(gst.dist0 * gst.d0 / d, 14, 320);
+      cam.dist = clamp(gst.dist0 * gst.d0 / d, 14, 560);
       let da = ang - gst.a0; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
       cam.yaw = gst.yaw0 + da;
       const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
@@ -360,8 +360,8 @@ export class Controls {
     if (fx || rx) this.r.pan(rx * speed, fx * speed);
     if (k.has('KeyQ')) cam.yaw += dt * 1.6;
     if (k.has('KeyE')) cam.yaw -= dt * 1.6;
-    if (k.has('KeyZ') || k.has('Equal') || k.has('NumpadAdd') || k.has('PageUp')) cam.dist = clamp(cam.dist * Math.exp(-dt * 1.4), 14, 320);
-    if (k.has('KeyX') || k.has('Minus') || k.has('NumpadSubtract') || k.has('PageDown')) cam.dist = clamp(cam.dist * Math.exp(dt * 1.4), 14, 320);
+    if (k.has('KeyZ') || k.has('Equal') || k.has('NumpadAdd') || k.has('PageUp')) cam.dist = clamp(cam.dist * Math.exp(-dt * 1.4), 14, 560);
+    if (k.has('KeyX') || k.has('Minus') || k.has('NumpadSubtract') || k.has('PageDown')) cam.dist = clamp(cam.dist * Math.exp(dt * 1.4), 14, 560);
   }
 
   // ---------- overlay (selection box, health bars, order lines) ----------

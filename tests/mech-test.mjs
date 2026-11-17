@@ -15,6 +15,7 @@ ok(UNITS.mbt3.cost > UNITS.mbt.cost && UNITS.mbt3.techLv === 2 && UNITS.mbt2.tec
 // 2. HPM EW dog kills drones, ignores tanks
 { const s = mk(); const x = s.map.size / 2, z = s.map.size / 2;
   const dog = near(s, 'ewdog', 0, x, z); const fpv = near(s, 'fpv', 1, x + 15, z); const tank = near(s, 'mbt', 1, x - 15, z);
+  tank.stun = 99999;   // keep the (now very lethal) tank from killing the dog first
   const hp0 = tank.hp; run(s, 80);
   ok(fpv.dead, 'HPM kills enemy FPV drone'); ok(tank.hp >= hp0 - 1, 'HPM does not hurt tank (' + tank.hp + '/' + hp0 + ')'); }
 
@@ -59,4 +60,16 @@ ok(UNITS.mbt3.cost > UNITS.mbt.cost && UNITS.mbt3.techLv === 2 && UNITS.mbt2.tec
 // 10. repair bot heals
 { const s = mk(); const x = s.map.size / 2, z = s.map.size / 2; const r = near(s, 'repair', 0, x, z); const t = near(s, 'mbt', 0, x + 6, z); t.hp = 100; run(s, 60);
   ok(t.hp > 150, 'repair bot heals (' + Math.round(t.hp) + ')'); }
+// 7. tanks: top MG fires at infantry while the main gun engages armor; APS stops guided missiles
+{ const s = mk(); const x = s.map.size / 2 - 100, z = s.map.size / 2;
+  const tank = near(s, 'mbt', 0, x, z), foe = near(s, 'mbt', 1, x + 36, z); foe.stun = 99999; const inf = near(s, 'rifleman', 1, x, z + 18); inf.stun = 99999;
+  run(s, 1, [{ t: 'attack', p: 0, ids: [tank.id], tid: foe.id }]); run(s, 20 * 6);
+  ok(inf.dead || inf.hp < inf.maxhp, 'tank MG shoots infantry while the main gun engages armor (inf hp ' + Math.round(inf.hp) + '/' + inf.maxhp + ')');
+  ok(foe.hp < foe.maxhp, 'main gun still engages the tank (' + Math.round(foe.hp) + '/' + foe.maxhp + ')'); }
+{ const s = mk(); const x = s.map.size / 2 - 100, z = s.map.size / 2;
+  const at = near(s, 'at', 0, x, z), tank = near(s, 'mbt', 1, x + 28, z); tank.stun = 99999;
+  const n0 = tank.apsN; run(s, 1, [{ t: 'attack', p: 0, ids: [at.id], tid: tank.id }]); run(s, 20 * 6);
+  ok(n0 > 0 && tank.apsN < n0, 'APS spends a charge on an incoming ATGM (' + tank.apsN + '/' + n0 + ')');
+  tank.apsN = 0; tank.hp = tank.maxhp; at.cd[0] = 0; run(s, 20 * 12);
+  ok(tank.hp < tank.maxhp, 'with APS exhausted the ATGM hits (' + Math.round(tank.hp) + '/' + tank.maxhp + ')'); }
 process.exit(fail ? 1 : 0);

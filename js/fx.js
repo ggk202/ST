@@ -54,9 +54,10 @@ class Particles {
 }
 
 export class Fx {
-  constructor(scene) {
-    this.fire = new Particles(scene, 2500, true);
-    this.smoke = new Particles(scene, 3500, false);
+  constructor(scene, light) {
+    this.fire = new Particles(scene, light ? 2500 : 5000, true);
+    this.smoke = new Particles(scene, light ? 3500 : 7000, false);
+    this.light = !!light; this.flashes = [];
     this.tracers = [];
     const max = 400;
     this.tpos = new Float32Array(max * 6);
@@ -79,7 +80,15 @@ export class Fx {
     if (this.tracers.length >= this.maxTracers) this.tracers.shift();
     this.tracers.push({ x, y, z, tx, ty, tz, t: 0, d: 0.12 });
   }
+  // short-lived light source (the renderer feeds the strongest few into real point lights)
+  flash(x, y, z, i, d) { if (this.flashes.length < 12) this.flashes.push({ x, y, z, i, t: d, d }); }
   boom(x, y, z, r, big, air) {
+    this.flash(x, y + 2, z, 350 + r * 240, 0.22 + r * 0.04);
+    this.fire.emit(x, y + 0.6, z, 0, 0, 0, 0.14, r * 2.8, 1, 0.95, 0.75, 1, r * 1.2, 0);        // white-hot core
+    this.fire.emit(x, y + 0.8, z, 0, 0.5, 0, 0.3, r * 2.2, 1, 0.6, 0.2, 0.9, r * 1.8, 0);       // fireball
+    if (!air && r >= 3) for (let i = 0; i < Math.min(26, 8 + r * 2); i++) { const a = i / Math.min(26, 8 + r * 2) * 6.283; this.smoke.emit(x, y + 0.3, z, Math.cos(a) * r * 3.2, 0.2, Math.sin(a) * r * 3.2, 0.9, r * 0.8, 0.55, 0.47, 0.36, 0.5, r * 1.6, 2.4); }   // ground shock ring
+    if (!air) for (let i = 0; i < Math.min(18, 4 + r * 1.5); i++) { const a = Math.random() * 6.283, sp = r * (1 + Math.random() * 2.2); this.fire.emit(x, y + 0.4, z, Math.cos(a) * sp, 4 + Math.random() * r * 2.4, Math.sin(a) * sp, 0.9 + Math.random() * 0.5, 0.35, 0.26, 0.2, 0.15, 1, 0, 0.2, 16); }   // flung debris
+    if (big) this.smoke.emit(x, y + r, z, 0, 5, 0, 3.2, r * 1.2, 0.2, 0.2, 0.2, 0.55, r * 2.5, 0.3);
     const n = Math.min(70, Math.round(8 + r * (big ? 4 : 3)));
     const s = Math.max(1.2, r * 0.9);
     for (let i = 0; i < n; i++) {
@@ -94,6 +103,34 @@ export class Fx {
     }
     if (!air) for (let i = 0; i < Math.min(14, 4 + r); i++) { const a = Math.random() * 6.283; this.smoke.emit(x, y + 0.3, z, Math.cos(a) * r * 1.2, 0.4, Math.sin(a) * r * 1.2, 1.2, s * 0.9, 0.5, 0.42, 0.3, 0.4, s * 1.4, 1.5); }
     for (let i = 0; i < 6; i++) this.fire.emit(x, y, z, this.rnd(r * 2), 3 + Math.random() * r * 2, this.rnd(r * 2), 0.5, 0.3, 1, 0.8, 0.3, 1, 0, 0.5, 14);
+  }
+  // active protection intercept: bright flash and a fan of sparks
+  aps(x, y, z, ok) {
+    this.flash(x, y, z, 500, 0.12);
+    this.fire.emit(x, y, z, 0, 0, 0, 0.1, 3.2, 1, 1, 0.9, 1, 1.5, 0);
+    for (let i = 0; i < 16; i++) this.fire.emit(x, y, z, this.rnd(9), this.rnd(9), this.rnd(9), 0.3, 0.3, 1, ok ? 0.85 : 0.5, ok ? 0.4 : 0.2, 1, 0, 1, 6);
+    this.smoke.emit(x, y, z, 0, 0.5, 0, 0.9, 1.4, 0.7, 0.7, 0.7, 0.4, 2, 1);
+  }
+  // jet exhaust: short bright flame stream out of each nozzle (k = 0..1 throttle; >0.8 = afterburner with a blue core)
+  afterburn(x, y, z, dx, dz, vy, spd, k, scale, lat) {
+    const px = -dz, pz = dx, ab = k > 0.8;
+    for (let e = -1; e <= 1; e += 2) {
+      if (lat === 0 && e > 0) break;
+      const ex = x + px * lat * e, ez = z + pz * lat * e;
+      for (let i = 0; i < (ab ? 3 : 1); i++) {
+        const o = i * scale * 0.55;
+        this.fire.emit(ex - dx * o, y - vy * 0.02 * o, ez - dz * o, -dx * spd * 0.25 + this.rnd(0.3), this.rnd(0.2), -dz * spd * 0.25 + this.rnd(0.3), ab ? 0.11 : 0.07, scale * (ab ? 0.85 - i * 0.18 : 0.5), ab ? 1 : 1, ab ? 0.62 : 0.55, ab ? 0.25 : 0.2, 0.95, 0, 0);
+        if (ab && i === 0) this.fire.emit(ex - dx * scale * 0.2, y, ez - dz * scale * 0.2, 0, 0, 0, 0.06, scale * 0.45, 0.65, 0.8, 1, 1, 0, 0);
+      }
+    }
+  }
+  contrail(x, y, z, scale) { this.smoke.emit(x, y, z, this.rnd(0.15), this.rnd(0.1), this.rnd(0.15), 3.2, scale * 0.55, 0.94, 0.95, 0.97, 0.3, scale * 1.4, 0.2); }
+  // dust kicked up behind a moving vehicle / under a rotor
+  dust(x, y, z, dx, dz, scale, r, g, b, a) {
+    this.smoke.emit(x - dx * scale * 0.9 + this.rnd(scale * 0.4), y + 0.25, z - dz * scale * 0.9 + this.rnd(scale * 0.4), -dx * 0.8 + this.rnd(0.5), 0.5 + Math.random() * 0.8, -dz * 0.8 + this.rnd(0.5), 1.1 + Math.random() * 0.6, scale * 0.45, r, g, b, a, scale * 1.5, 0.9);
+  }
+  rotorWash(x, y, z, scale, r, g, b) {
+    for (let i = 0; i < 2; i++) { const a = Math.random() * 6.283, sp = 4 + Math.random() * scale * 1.6; this.smoke.emit(x, y + 0.3, z, Math.cos(a) * sp, 0.6, Math.sin(a) * sp, 0.9, scale * 0.35, r, g, b, 0.3, scale * 1.1, 1.8); }
   }
   // electric blue sparks along a line (HPM emitters)
   zap(x, y, z, tx, ty, tz) {
@@ -118,6 +155,7 @@ export class Fx {
       if (b.t <= 0) this.burners.splice(i, 1);
     }
     this.fire.update(dt, scale); this.smoke.update(dt, scale);
+    for (let i = this.flashes.length - 1; i >= 0; i--) { this.flashes[i].t -= dt; if (this.flashes[i].t <= 0) this.flashes.splice(i, 1); }
     let k = 0;
     for (let i = this.tracers.length - 1; i >= 0; i--) {
       const t = this.tracers[i]; t.t += dt;

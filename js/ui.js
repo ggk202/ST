@@ -238,6 +238,7 @@ export class HUD {
       let s = Math.ceil(e.hp) + ' / ' + e.maxhp + ' HP';
       if (e.kind === 'building') { if (e.progress < 1) s += ' · constructing ' + Math.floor(e.progress * 100) + '%'; else if (e.queue.length) s += ' · training ' + UNITS[e.queue[0].type].name; }
       else if (e.ap && e.ap !== 'fly') { s += ' · ' + PHASE[e.ap]; }
+      if (e.apsN !== undefined && d.aps) s += ' · APS ' + e.apsN + '/' + d.aps.n;
       if (e.kind !== 'building' && e.lo >= 0 && d.loadouts) { s += ' · ' + d.loadouts[e.lo].name; if (e.am && e.ed) { let t = 0, l = 0; e.ed.weapons.forEach((w, i) => { if (w.ammo > 0) { t += w.ammo; l += Math.max(0, e.am[i]); } }); if (t) s += ' (' + l + '/' + t + ' rounds)'; } }
       if (e.kind === 'building' && e.afd) s += ' · runway ' + this.sim.afRunLen(e) + ' m · ' + this.sim.afStandCount(e) + ' stands';
       if (e.kind !== 'building' && (!e.ap || e.ap === 'fly') && e.order) s += ' · ' + ({ idle: 'idle', move: 'moving', attackmove: 'attack-moving', attack: 'attacking', attackground: 'firing at ground' }[e.order.t] || '');
@@ -309,12 +310,12 @@ export class HUD {
     this.fogCtx.putImageData(this.fogImg, 0, 0);
     ctx.imageSmoothingEnabled = true; ctx.drawImage(this.fogCanvas, 0, 0, W, W);
     // oil
-    for (let i = 0; i < map.oil.length; i++) { const o = map.oil[i], c = map.cellOf(o.x, o.z); if (!ex[c]) continue; ctx.fillStyle = o.building ? '#222' : '#f0b429'; ctx.fillRect(o.x * k - 3, o.z * k - 3, 6, 6); }
+    for (let i = 0; i < map.oil.length; i++) { const o = map.oil[i]; ctx.fillStyle = '#f0b429'; ctx.fillRect(o.x * k - 3, o.z * k - 3, 6, 6); ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.strokeRect(o.x * k - 3, o.z * k - 3, 6, 6); }
     // entities
     for (const e of sim.ents) {
       if (e.dead) continue;
       const own = e.team === team;
-      if (!own) { const c = map.cellOf(e.x, e.z); if (c < 0 || !vis[c]) continue; }
+      if (!own && e.def !== 'derrick') { const c = map.cellOf(e.x, e.z); if (c < 0 || !vis[c]) continue; }
       const col = '#' + PLAYER_COLORS[sim.players[e.owner].color].toString(16).padStart(6, '0');
       ctx.fillStyle = col;
       if (e.kind === 'building') { const s = Math.max(5, e.size * 2.6); ctx.fillRect(e.x * k - s / 2, e.z * k - s / 2, s, s); ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.strokeRect(e.x * k - s / 2, e.z * k - s / 2, s, s); }

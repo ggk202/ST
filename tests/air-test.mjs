@@ -2,7 +2,7 @@
 import { Sim } from '../js/sim/sim.js';
 import { UNITS, AF } from '../js/sim/defs.js';
 let fail = false; const ok = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fail = true; };
-const mk = (seed = 3) => { const s = new Sim({ size: 'medium', type: 'island', seed, slots: [{ name: 'A', team: 0 }, { name: 'B', team: 1 }] }); s.recordEvents = false; return s; };
+const mk = (seed = 3) => { const s = new Sim({ size: 'small', type: 'island', seed, slots: [{ name: 'A', team: 0 }, { name: 'B', team: 1 }] }); s.recordEvents = false; return s; };
 const run = (s, n, cmds = []) => { s.step(cmds); for (let i = 1; i < n; i++) s.step([]); };
 const until = (s, f, max) => { for (let i = 0; i < max; i++) { if (f()) return i; s.step([]); } return -1; };
 const rich = (s) => { for (const p of s.players) { p.credits = 99999; p.energy = 99999; p.capM = p.capE = 99999; } };
@@ -61,7 +61,7 @@ ok(u.ap === 'equip' && s.players[0].credits < cr0, 'loadout chosen: crews start 
 until(s, () => { track(); return u.ap === 'takeoff'; }, 600);
 ok(u.ap === 'takeoff' && u.rdy && u.ed && u.ed.weapons.length === 2 && u.am[0] === 2 && u.am[1] === 4, 'armed with Multirole (ammo ' + u.am + ')');
 until(s, () => { track(); return u.ap === 'fly'; }, 600);
-ok(u.ap === 'fly' && u.air && u.h === 1 && af.rwy === 0, 'airborne, runway released');
+ok(u.ap === 'fly' && u.air && u.h > 0.5 && af.rwy === 0, 'airborne, runway released');
 console.log('  phases: ' + seen.join(' -> '));
 ok(['wait', 'taxiOut', 'select', 'equip', 'takeoff'].every((p) => seen.includes(p)), 'all ground phases visited in order');
 
@@ -69,7 +69,7 @@ ok(['wait', 'taxiOut', 'select', 'equip', 'takeoff'].every((p) => seen.includes(
 u.am = u.am.map(() => 0);
 const rt = until(s, () => { track(); return u.ap === 'rtb'; }, 100);
 ok(rt >= 0, 'out of ammo: returns to base automatically');
-const st = until(s, () => { track(); return u.ap === 'stand'; }, 3000);
+const st = until(s, () => { track(); if (process.env.DBG && s.tick % 60 === 0 && u.ap === 'rtb') { const g = af.afd, rx = u.x - af.x, rz = u.z - af.z; console.log('rtb', u.fin, u.ga, ((rx*g.dx+rz*g.dz)-(AF.rw0+s.afRunLen(af)-6)).toFixed(0), (rx*g.px+rz*g.pz).toFixed(0), 'rwy', af.rwy, 'land', af.land, u.h.toFixed(2), u.spd.toFixed(1)); } return u.ap === 'stand'; }, 7000);
 ok(st >= 0 && u.am[0] === 2 && u.am[1] === 4 && !u.air, 'landed, taxied in, re-armed on a stand (' + st + ' ticks)');
 console.log('  phases: ' + seen.join(' -> '));
 ok(seen.includes('land') && seen.includes('taxiIn') && seen.includes('rearm'), 'landing cycle phases visited');

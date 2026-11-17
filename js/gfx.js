@@ -385,7 +385,8 @@ export class Scatter {
     const nearOil = (x, z, rr) => { for (const o of map.oil) { const dx = o.x - x, dz = o.z - z; if (dx * dx + dz * dz < rr * rr) return true; } return false; };
     const forest = (x, z) => { const a = Math.sin(x * 0.021 + 1.3) * Math.cos(z * 0.017 - 0.4) + Math.sin(x * 0.047 + z * 0.039) * 0.5 + Math.sin(z * 0.061 - x * 0.03 + 2.0) * 0.3; return a; };
     const free = (x, z) => { const c = map.cellOf(x, z); if (c < 0) return false; if (map.occ[c]) return false; return true; };
-    const sp = quality === 'high' ? 1.8 : 3.2, tsp = quality === 'high' ? 8 : 11, rsp = 9;
+    const big = map.n > 250 ? 1.5 : map.n > 150 ? 1.2 : 1;   // keep instance counts sane on the larger maps
+    const sp = (quality === 'high' ? 1.8 : 3.2) * big, tsp = (quality === 'high' ? 8 : 11) * big, rsp = 9 * big;
     const col = new THREE.Color();
     // grass
     for (let z = 3; z < map.size - 3; z += sp) for (let x = 3; x < map.size - 3; x += sp) {
@@ -491,8 +492,11 @@ export function animateUnit(v, e, d, dt, time, speed, firing, lod = 0, ground = 
     v.obj.rotation.z = -an.bank * (base === 'heli' || base === 'uav' || base === 'fpv' ? 0.6 : 1);
     let pit = e.moving ? (base === 'heli' ? 0.2 : 0.06) : 0;
     if (d.rwy > 0) { const hv = e.h === undefined ? 1 : e.h; if (e.ap === 'takeoff') pit = -0.3 * Math.min(1, hv * 3); else if (e.ap === 'land') pit = hv < 0.35 ? -0.16 : 0.05; else if (hv < 0.3) pit = 0; }
+    // attitude comes straight from the flight model when there is one (bank from the turn, pitch from the flight path)
+    if (e.pit !== undefined) pit = -e.pit;
     v.obj.rotation.x = pit;
-    if (e.h !== undefined && e.h < 0.3) v.obj.rotation.z = 0;
+    if (d.fw && e.roll !== undefined) v.obj.rotation.z = -e.roll;
+    if (e.h !== undefined && e.h < 0.12) v.obj.rotation.z = 0;
   }
   const idle = e.ap === 'wait' || e.ap === 'stand' || e.ap === 'select' || e.ap === 'equip' || e.ap === 'rearm', pf = idle ? 0 : (e.ap === 'taxiOut' || e.ap === 'taxiIn' ? 0.35 : 1);
   // rotors / props / dishes

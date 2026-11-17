@@ -2,7 +2,7 @@
 import { CELL } from './defs.js';
 import { RNG, clamp, lerp, smoothstep, fbm, dist } from './util.js';
 
-export const MAP_SIZES = { small: 96, medium: 144, large: 200 };
+export const MAP_SIZES = { small: 192, medium: 288, large: 400 };
 export const MAP_TYPES = ['island', 'highlands'];
 export const SEA_LEVEL = 0;
 
@@ -110,35 +110,39 @@ const SPAWN_DIRS = {
 };
 
 export function generateMap({ size = 'medium', type = 'island', seed = 1, players = 2 }) {
-  const n = typeof size === 'number' ? size : (MAP_SIZES[size] || 144);
+  const n = typeof size === 'number' ? size : (MAP_SIZES[size] || 288);
   const map = new GameMap(n);
   const rng = new RNG(seed * 2654435761);
   const s = seed | 0, w = map.vw, half = n / 2;
   if (type === 'random') type = rng.next() < 0.5 ? 'island' : 'highlands';
   map.type = type;
   const f1 = 0.035 * 96 / n * 1.6, f2 = 0.09 * 96 / n * 1.6, f3 = 0.05 * 96 / n * 1.6;
+  const hillAmp = 3.0;   // gentle rolling ground: big open plains rather than constant hills
 
+  const spawnPts = SPAWN_DIRS[Math.max(1, Math.min(4, players))].map((d) => [half + d[0] * half * 0.62, half + d[1] * half * 0.62]);
   for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) {
+    let dmin = 1e9; for (const sp of spawnPts) dmin = Math.min(dmin, dist(i, j, sp[0], sp[1]));
+    const open = smoothstep(30, 70, dmin);   // keep generous open ground around every base
     const u = (i / n - 0.5) * 2, v = (j / n - 0.5) * 2;
     const r = Math.sqrt(u * u + v * v) * 0.6 + Math.max(Math.abs(u), Math.abs(v)) * 0.4;
     const n1 = fbm(i * f1, j * f1, s, 4), n2 = fbm(i * f2, j * f2, s + 7, 3);
     const rid = 1 - Math.abs(2 * fbm(i * f3, j * f3, s + 13, 3) - 1);
     let h;
     if (type === 'island') {
-      const e = 1.08 - r * 1.2 + (n1 - 0.5) * 0.55;
+      const e = 1.2 - r * 1.15 + (n1 - 0.5) * 0.5;
       if (e < 0.12) h = Math.max(-9, (e - 0.12) * 30);
       else {
-        h = 1.0 + (e - 0.12) * 9 + (n2 - 0.5) * 5;
-        const mp = smoothstep(0.62, 0.86, rid) * smoothstep(0.22, 0.6, e);
-        h += mp * 28 * (0.55 + n1);
+        h = 1.0 + (e - 0.12) * 9 + (n2 - 0.5) * hillAmp * (0.35 + 0.65 * open);
+        const mp = smoothstep(0.74, 0.93, rid) * smoothstep(0.3, 0.7, e) * open;
+        h += mp * 26 * (0.55 + n1);
       }
     } else {
-      const m = smoothstep(0.55, 0.88, r + (n1 - 0.5) * 0.3);
-      h = 3 + (n2 - 0.5) * 6 + m * 42;
+      const m = smoothstep(0.66, 0.93, r + (n1 - 0.5) * 0.3);
+      h = 3 + (n2 - 0.5) * hillAmp * 1.2 * (0.35 + 0.65 * open) + m * 42 * (0.25 + 0.75 * open);
       const low = smoothstep(0.4, 0.3, n1);
-      if (r < 0.52) h -= low * 7.5;
-      const mp = smoothstep(0.66, 0.86, rid) * smoothstep(0.18, 0.5, r) * (1 - m);
-      h += mp * 16;
+      if (r < 0.6) h -= low * 4.2;
+      const mp = smoothstep(0.8, 0.94, rid) * smoothstep(0.25, 0.6, r) * (1 - m) * open;
+      h += mp * 13;
     }
     map.h[j * w + i] = h;
   }
@@ -147,7 +151,7 @@ export function generateMap({ size = 'medium', type = 'island', seed = 1, player
   for (const d of dirs) {
     const x = half + d[0] * half * 0.62, z = half + d[1] * half * 0.62;
     map.spawns.push({ x: x * CELL, z: z * CELL, ci: x, cj: z });
-    flatten(map, x, z, 13, 4, 7);
+    flatten(map, x, z, 17, 4, 10);
   }
   // oil nodes
   const nodes = [];
@@ -167,8 +171,8 @@ export function generateMap({ size = 'medium', type = 'island', seed = 1, player
       }
     }
   }
-  const midCount = n <= 96 ? 4 : n <= 144 ? 8 : 12;
-  for (let k = 0, tries = 0; k < midCount && tries < 600; tries++) {
+  const midCount = Math.round(n * n / 4000);   // ~9 / 20 / 40 neutral fields
+  for (let k = 0, tries = 0; k < midCount && tries < 4000; tries++) {
     const ci = 12 + rng.next() * (n - 24), cj = 12 + rng.next() * (n - 24);
     const hh = map.hAt(ci * CELL, cj * CELL);
     if (hh < 1.5 || hh > 9) continue;

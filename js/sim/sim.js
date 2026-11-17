@@ -1,6 +1,7 @@
 // Deterministic RTS simulation. Runs identically on every client (lockstep multiplayer).
 import { DT, CELL, DMG, dmgMult, UNITS, BUILDINGS, DEFS, UNIT_CAP, AF_MODULES } from './defs.js';
 import { AirOps, GROUND_PHASES } from './airops.js';
+import { FlightOps } from './flight.js';
 import { RNG, clamp } from './util.js';
 import { generateMap } from './map.js';
 import { Pathfinder } from './path.js';
@@ -76,6 +77,7 @@ export class Sim {
       dirx: 0, dirz: 1, dead: false, target: 0, cd: d.weapons.map(() => 0), vx: 0, vz: 0,
       radius: d.radius, air: !!d.air, armor: d.armor, flash: 0, jam: 0, cover: 0, stun: 0,
     };
+    if (d.aps) { e.apsN = d.aps.n; e.apsCd = 0; }
     if (d.kind === 'unit') { e.order = { t: 'idle' }; e.path = null; e.pi = 0; e.stuck = 0; e.repath = 0; e.pending = false; e.pt = null; e.moving = false; }
     else { e.progress = 1; e.sm = 0; e.se = 0; e.queue = []; e.rally = null; e.size = d.size; e.cx0 = 0; e.cz0 = 0; e.node = -1; }
     this.ents.push(e); this.byId.set(e.id, e);
@@ -438,6 +440,7 @@ export class Sim {
     const cdr = (d.drone && u.jam) ? Math.max(0.3, 1 - 0.2 * u.jam) : 1;
     for (let k = 0; k < u.cd.length; k++) if (u.cd[k] > 0) u.cd[k] = Math.max(0, u.cd[k] - cdr);
     if (u.flash > 0) u.flash--;
+    if (u.apsCd > 0) u.apsCd--; else if (d.aps && u.apsN < d.aps.n && ((this.tick + u.id) % 900) === 0) u.apsN++;
     if (u.ap !== undefined && u.ap !== 'fly') { this.sortie(u, d); return; }
     if (u.ap === 'fly' && u.am && ((this.tick + u.id) % 10) === 0 && this.afBingo(u)) { if (this.startRtb(u, true)) { this.sortie(u, d); return; } }
     const o = u.order;
@@ -460,6 +463,13 @@ export class Sim {
         tg = this.acquire(u, d, d.maxRange + (chase ? 12 : 0));
         u.target = tg ? tg.id : 0;
       }
+    }
+    // fixed-wing aircraft keep flying: loiter, attack passes, banked turns
+    if (d.fw && (u.ap === undefined || u.ap === 'fly')) {
+      this.fwUnit(u, d, o, tg);
+      u.vx = (u.x - u.px) / DT; u.vz = (u.z - u.pz) / DT;
+      if (d.weapons.length) this.combat(u, d);
+      return;
     }
     // movement
     let moved = false;
@@ -487,6 +497,7 @@ export class Sim {
       default: break;
     }
     u.moving = moved;
+    if (d.air) { if (!moved) this.rotRest(u, d); u.pit = -((u.spd || 0) / d.speed) * (d.base === 'heli' ? 0.24 : 0.18); }
     u.vx = (u.x - u.px) / DT; u.vz = (u.z - u.pz) / DT;
     if (d.weapons.length) this.combat(u, d);
   }
@@ -501,6 +512,7 @@ export class Sim {
     for (let k = 0; k < d.weapons.length; k++) {
       const w = d.weapons[k];
       if (u.am && u.am[k] === 0) continue;
+      if (w.sec) continue;
       if (!this.wCan(w, tg)) continue;
       if (dd <= this.wRange(u, w) + tg.radius * 0.5 && dd >= w.min) return true;
     }
@@ -509,7 +521,7 @@ export class Sim {
   chaseTarget(u, d, tg) {
     // move toward the largest-range usable weapon's range
     let r = 0;
-    for (let k = 0; k < d.weapons.length; k++) { const w = d.weapons[k]; if (this.wCan(w, tg) && !(u.am && u.am[k] === 0)) r = Math.max(r, this.wRange(u, w)); }
+    for (let k = 0; k < d.weapons.length; k++) { const w = d.weapons[k]; if (!w.sec && this.wCan(w, tg) && !(u.am && u.am[k] === 0)) r = Math.max(r, this.wRange(u, w)); }
     this.goTo(u, d, tg.x, tg.z, Math.max(2, r * 0.85), true);
   }
   // returns true when arrived
@@ -520,7 +532,7 @@ export class Sim {
     if (dd <= tol) { u.path = null; return true; }
     if (d.drone && u.jam >= 3 && ((this.tick + u.id) & 3) === 0) return false;
     let wx, wz;
-    if (d.air) { wx = tx; wz = tz; }
+    if (d.air) { this.rotMove(u, d, tx, tz, chasing ? tol : 0.5); return false; }
     else {
       if (u.repath > 0) u.repath--;
       if (u.path && u.pt && chasing) { const ex = u.pt.x - tx, ez = u.pt.z - tz; if (ex * ex + ez * ez > 64 && u.repath === 0) { u.path = null; u.repath = 20; } }
@@ -563,18 +575,19 @@ export class Sim {
 
   // ---------- targeting & weapons ----------
   canSee(team, e) { const c = this.map.cellOf(e.x, e.z); return c >= 0 && this.vis[team][c] === 1; }
-  acquire(u, d, radius) {
+  acquire(u, d, radius, filt) {
     const vis = this.vis[u.team], map = this.map;
     let best = null, bs = 1e18;
     const consider = (e) => {
       if (e.dead || e.team === u.team) return;
       if (e.air ? !d.hitsAir : !d.hitsGround) return;
+      if (filt && !filt(e)) return;
       const dx = e.x - u.x, dz = e.z - u.z, dd = Math.sqrt(dx * dx + dz * dz);
       if (dd > radius + e.radius * 0.5) return;
       const c = map.cellOf(e.x, e.z);
       if (c < 0 || vis[c] !== 1) return;
       let usable = false;
-      for (let k = 0; k < d.weapons.length; k++) { const w = d.weapons[k]; if (this.wCan(w, e) && dd >= w.min && !(u.am && u.am[k] === 0)) { usable = true; break; } }
+      for (let k = 0; k < d.weapons.length; k++) { const w = d.weapons[k]; if ((w.sec && !filt) || (!w.sec && filt)) continue; if (this.wCan(w, e) && dd >= w.min && !(u.am && u.am[k] === 0)) { usable = true; break; } }
       if (!usable) return;
       const ed = DEFS[e.def];
       const armed = ed.weapons.length > 0;
@@ -601,23 +614,28 @@ export class Sim {
     }
     const o = e.order;
     const ground = (e.kind === 'unit' && o.t === 'attackground');
-    if (!tg && !ground) return;
+    if (!tg && !ground && !d.hasSec) return;
     const sy = this.muzzleY(e, d);
     for (let k = 0; k < d.weapons.length; k++) {
       const w = d.weapons[k];
       if (e.cd[k] > 0 || (e.am && e.am[k] === 0)) continue;
+      // secondary guns (coaxial / top machine guns) pick their own infantry targets while the main gun works on its target
+      const T = w.sec ? this.secTarget(e, d, w) : tg, gnd = ground && !w.sec;
+      if (!T && !gnd) continue;
       let ax, az, ay, tid = 0;
-      if (ground) {
+      if (gnd) {
         if (!w.ground || w.kind === 'hit') continue;
         ax = o.x; az = o.z; ay = this.map.hAt(ax, az);
       } else {
-        if (!this.wCan(w, tg)) continue;
-        ax = tg.x; az = tg.z; tid = tg.id;
-        ay = this.map.hAt(ax, az) + (tg.air ? DEFS[tg.def].alt : 1.2);
+        if (!this.wCan(w, T)) continue;
+        ax = T.x; az = T.z; tid = T.id;
+        ay = this.map.hAt(ax, az) + (T.air ? DEFS[T.def].alt : 1.2);
       }
       const dx = ax - e.x, dz = az - e.z, dd = Math.sqrt(dx * dx + dz * dz);
-      const rad = ground ? 0 : tg.radius * 0.5;
+      const rad = gnd ? 0 : T.radius * 0.5;
       if (dd > this.wRange(e, w) + rad || dd < w.min) continue;
+      if (!w.sec && d.hasSec && !gnd && T.armor === 'inf' && !T.air && w.type === 'ap' && dd <= d.secRange + 2) continue;   // do not waste main-gun rounds on infantry the machine gun can reach
+      if (d.fw && w.kind !== 'boom' && dd > 3) { const cs = (e.dirx * dx + e.dirz * dz) / dd; if (cs < (w.kind === 'hit' ? 0.9 : w.kind === 'missile' ? 0.35 : 0.6)) continue; }
       e.cd[k] = w.reloadTicks;
       if (e.am && e.am[k] > 0) e.am[k]--;
       e.flash = 3;
@@ -625,12 +643,12 @@ export class Sim {
       if (w.kind === 'boom') { this.detonate(e, w, ay); return; }
       if (w.kind === 'hit') {
         const miss = e.jam && DEFS[e.def].drone && this.rng.next() < 0.14 * e.jam;
-        if (!miss) this.damage(tg, w.dmg * dmgMult(w.type, tg.armor, DEFS[tg.def].drone), e);
-        this.ev({ e: 'shot', w: w.type, x: mx, y: sy, z: mz, tx: ax, ty: ay, tz: az, hit: !miss, air: !!tg.air });
+        if (!miss) this.damage(T, w.dmg * dmgMult(w.type, T.armor, DEFS[T.def].drone), e);
+        this.ev({ e: 'shot', w: w.type, x: mx, y: sy, z: mz, tx: ax, ty: ay, tz: az, hit: !miss, air: !!T.air });
       } else {
         let hx = ax, hz = az;
-        if (!ground && tg.kind === 'unit' && w.kind === 'shell') {
-          const ft = dd / w.speed; hx += tg.vx * ft * 0.7; hz += tg.vz * ft * 0.7;
+        if (!gnd && T.kind === 'unit' && w.kind === 'shell') {
+          const ft = dd / w.speed; hx += T.vx * ft * 0.7; hz += T.vz * ft * 0.7;
         }
         if (w.spread) { hx += (this.rng.next() - 0.5) * 2 * w.spread * dd; hz += (this.rng.next() - 0.5) * 2 * w.spread * dd; }
         hx = clamp(hx, 1, this.map.size - 1); hz = clamp(hz, 1, this.map.size - 1);
@@ -639,13 +657,22 @@ export class Sim {
         const arcH = w.arc >= 5 ? w.arc : dist2 * w.arc * 0.4;
         this.projs.push({
           id: ++this.nextPid, k: w.kind, w: w.type, big: w.splash >= 10, x: mx, y: sy, z: mz, sx: mx, sy, sz: mz,
-          tx: hx, ty: (tid && w.kind === 'missile') ? ay : this.map.hAt(hx, hz) + (tg && tg.air && w.kind === 'shell' ? 0 : 0.5), tz: hz,
+          tx: hx, ty: (tid && w.kind === 'missile') ? ay : this.map.hAt(hx, hz) + (T && T.air && w.kind === 'shell' ? 0 : 0.5), tz: hz,
           tid, speed: w.speed, dmg: w.dmg, dtype: w.type, splash: w.splash, owner: e.owner, team: e.team, src: e.id,
-          arc: arcH, t: 0, dur: flight, life: Math.ceil(10 / DT), aa: !w.ground, name: e.def,
+          arc: arcH, t: 0, dur: flight, life: Math.ceil(10 / DT), aa: !w.ground, name: e.def, fx: w.fx, fa: !!e.air,
         });
         this.ev({ e: 'launch', w: w.kind, big: w.splash >= 10, x: mx, y: sy, z: mz });
       }
     }
+  }
+  secTarget(e, d, w) {
+    let t = e.t2 ? this.byId.get(e.t2) : null;
+    if (t) { const dx = t.x - e.x, dz = t.z - e.z; if (t.dead || (t.air ? !w.air : false) || dx * dx + dz * dz > (w.range + 4) * (w.range + 4) || !this.canSee(e.team, t)) { t = null; e.t2 = 0; } }
+    if (!t && ((this.tick + e.id) % 5) === 0) {
+      t = this.acquire(e, { weapons: [w], hitsGround: !!w.ground, hitsAir: !!w.air }, w.range, (x) => x.armor === 'inf' || (w.air && x.air));
+      e.t2 = t ? t.id : 0;
+    }
+    return t;
   }
   detonate(e, w, ay) {
     const p = { x: e.x, y: ay, z: e.z, tx: e.x, tz: e.z, splash: w.splash, dmg: w.dmg, dtype: w.type, team: e.team, aa: false, src: e.id, big: w.splash >= 10, tid: 0, stun: w.stun };
@@ -699,13 +726,24 @@ export class Sim {
       } else {
         let tg = p.tid ? this.byId.get(p.tid) : null;
         if (tg && !tg.dead && tg.cover > 0 && this.rng.next() < 0.05 * tg.cover) { p.tid = 0; tg = null; this.ev({ e: 'decoy', x: p.x, y: p.y, z: p.z }); }
-        if (tg && !tg.dead) { p.tx = tg.x; p.tz = tg.z; p.ty = this.map.hAt(tg.x, tg.z) + (tg.air ? DEFS[tg.def].alt : 1.2); }
-        const dx = p.tx - p.x, dy = p.ty - p.y, dz = p.tz - p.z, dd = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        const step = p.speed * DT;
-        p.dx = dx; p.dz = dz;
-        if (dd <= step + (tg ? tg.radius * 0.7 : 0.5)) { p.x = p.tx; p.y = p.ty; p.z = p.tz; this.impact(p); done = true; }
-        else { p.x += dx / dd * step; p.y += dy / dd * step; p.z += dz / dd * step; }
-        if (--p.life <= 0 && !done) { this.impact(p); done = true; }
+        if (tg && !tg.dead && tg.apsN > 0 && tg.apsCd <= 0 && p.dtype === 'ap' && !p.aa) {   // active protection: hard-kill incoming guided missiles
+          const ax = p.x - tg.x, az = p.z - tg.z, ar = DEFS[tg.def].aps.range;
+          if (ax * ax + az * az <= ar * ar) {
+            tg.apsN--; tg.apsCd = 60;
+            const hit = this.rng.next() < 0.88;
+            this.ev({ e: 'aps', x: p.x, y: p.y, z: p.z, id: tg.id, ok: hit });
+            if (hit) done = true;
+          }
+        }
+        if (!done && tg && !tg.dead) { p.tx = tg.x; p.tz = tg.z; p.ty = this.map.hAt(tg.x, tg.z) + (tg.air ? DEFS[tg.def].alt : 1.2); }
+        if (!done) {
+          const dx = p.tx - p.x, dy = p.ty - p.y, dz = p.tz - p.z, dd = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          const step = p.speed * DT;
+          p.dx = dx; p.dz = dz;
+          if (dd <= step + (tg ? tg.radius * 0.7 : 0.5)) { p.x = p.tx; p.y = p.ty; p.z = p.tz; this.impact(p); done = true; }
+          else { p.x += dx / dd * step; p.y += dy / dd * step; p.z += dz / dd * step; }
+          if (--p.life <= 0 && !done) { this.impact(p); done = true; }
+        }
       }
       if (!done) ps[w++] = p;
     }
@@ -765,7 +803,7 @@ export class Sim {
       for (const q of e.queue) { p.credits += q.sm; p.energy += q.se; }
     }
     p.stats.lost++;
-    this.ev({ e: 'dead', id: e.id, def: e.def, kind: e.kind, owner: e.owner, x: e.x, z: e.z, air: e.air, silent: !!silent, y: this.map.hAt(e.x, e.z) + (e.air ? DEFS[e.def].alt : 0) });
+    this.ev({ e: 'dead', id: e.id, def: e.def, kind: e.kind, armor: e.armor, owner: e.owner, x: e.x, z: e.z, air: e.air, silent: !!silent, y: this.map.hAt(e.x, e.z) + (e.air ? DEFS[e.def].alt : 0) });
   }
 
   // ---------- unit separation ----------
@@ -843,10 +881,10 @@ export class Sim {
     const mix = (v) => { h = Math.imul(h ^ (v | 0), 16777619) >>> 0; };
     mix(this.tick); mix(this.rng.s);
     for (const p of this.players) { mix(Math.round(p.credits * 10)); mix(Math.round(p.energy * 10)); mix(p.units); }
-    for (const e of this.ents) { mix(e.id); mix(Math.round(e.x * 100)); mix(Math.round(e.z * 100)); mix(Math.round(e.hp)); if (e.h !== undefined) mix(Math.round(e.h * 100)); }
+    for (const e of this.ents) { mix(e.id); mix(Math.round(e.x * 100)); mix(Math.round(e.z * 100)); mix(Math.round(e.hp)); if (e.h !== undefined) mix(Math.round(e.h * 100)); if (e.spd !== undefined) mix(Math.round(e.spd * 100)); if (e.apsN !== undefined) mix(e.apsN); }
     mix(this.projs.length);
     return h >>> 0;
   }
 }
 
-Object.assign(Sim.prototype, AirOps);
+Object.assign(Sim.prototype, AirOps, FlightOps);

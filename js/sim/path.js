@@ -61,7 +61,7 @@ export class Pathfinder {
   }
 
   // returns flat array [x0,z0,x1,z1,...] of waypoints ending at (or near) the target
-  find(sx, sz, tx, tz, maxNodes = 9000) {
+  find(sx, sz, tx, tz, maxNodes = 40000) {
     const map = this.map, n = map.n;
     let scx = Math.floor(sx / CELL), scz = Math.floor(sz / CELL);
     let tcx = Math.floor(tx / CELL), tcz = Math.floor(tz / CELL);
