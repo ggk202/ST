@@ -435,7 +435,7 @@ export class Renderer {
       } else if (v.canopy && v.canopy.visible) v.canopy.visible = false;
       o.position.set(x, y, z);
       // view-frustum + distance driven level of detail
-      this._sph.center.set(x, y + 1, z); this._sph.radius = e.kind === 'building' ? e.size * CELL * 0.9 + 8 : Math.max(5, e.radius * 2.6) + (d.air ? 4 : 0);
+      this._sph.center.set(x, y + 1, z); this._sph.radius = e.kind === 'building' ? e.size * CELL * 0.9 + 8 : (d.air ? e.radius * 4.5 + 6 : Math.max(5, e.radius * 2.6));   // wingspan is much wider than the hull radius
       const inView = v.inView = this.frustum.intersectsSphere(this._sph);
       if (inView) {
         const cp = this.camera.position, dx = x - cp.x, dy = y - cp.y, dz = z - cp.z, dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -468,8 +468,8 @@ export class Renderer {
         }
         if (this.gfx) {
           if (inView) {
-            v.acc += dt;
-            if (v.lod < 2 || ((f + e.id) % 3) === 0) { animateUnit(v, e, d, v.acc, this.time, Math.sqrt(e.vx * e.vx + e.vz * e.vz), e.flash > 0, v.lod, this._ground); v.acc = 0; }
+            v.acc += dt;   // aircraft attitude must be set every frame, or the skipped-frame pose makes them flicker
+            if (v.lod < 2 || d.air || ((f + e.id) % 3) === 0) { animateUnit(v, e, d, v.acc, this.time, Math.sqrt(e.vx * e.vx + e.vz * e.vz), e.flash > 0, v.lod, this._ground); v.acc = 0; }
             else if (v.an && v.an.sp) { o.rotation.x = (e.armor === 'inf' ? 0 : o.rotation.x) + v.an.sp.p; o.rotation.z = v.an.sp.r; }   // keep the cached body pose on skipped frames
           }
           const u = v.mat.userData.u; u.uDmg.value = clamp((0.7 - e.hp / e.maxhp) / 0.7, 0, 1); u.uStun.value = e.stun > 0 ? 1 : 0;
