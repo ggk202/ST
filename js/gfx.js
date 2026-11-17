@@ -459,7 +459,7 @@ export function animateUnit(v, e, d, dt, time, speed, firing) {
     v.hull.rotation.z = Math.sin(an.phase) * 0.05 * an.leg;
   }
   if (WHEEL_R[base]) { an.spin += (e.vx * e.dirx + e.vz * e.dirz) * dt / WHEEL_R[base]; if (v.mat) v.mat.userData.u.uSpin.value = -an.spin; }
-  if (TRACKED.has(base) && v.mat) { an.track += (e.vx * e.dirx + e.vz * e.dirz) * dt; v.mat.userData.u.uTrack.value = an.track; }
+  if (TRACKED.has(base) && v.mat) { an.track += (e.vx * e.dirx + e.vz * e.dirz) * dt; v.mat.userData.u.uTrack.value = an.track; v.mat.userData.u.uSpin.value = -an.track / 0.42; }   // road wheels turn with the belt
   // recoil of the turret
   if (v.turret) {
     const target = e.flash > 0 && d.weapons.length ? Math.min(1, e.flash / 3) : 0;

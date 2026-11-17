@@ -222,7 +222,7 @@ export class Renderer {
   clampCam() {
     const s = this.sim.map.size, c = this.cam;
     c.x = clamp(c.x, 0, s); c.z = clamp(c.z, 0, s);
-    c.dist = clamp(c.dist, 30, 320); c.pitch = clamp(c.pitch, this.gfx ? 0.16 : 0.45, 1.3);
+    c.dist = clamp(c.dist, 14, 320); c.pitch = clamp(c.pitch, this.gfx ? 0.16 : 0.45, 1.3);
   }
   pan(right, forward) {
     const c = this.cam, s = Math.sin(c.yaw), co = Math.cos(c.yaw);

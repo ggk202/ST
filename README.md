@@ -12,6 +12,7 @@ No build step and no server of your own.
 - **Three tiers per unit (Mk I / II / III)** - Tech Lab unlocks Mk II, the Advanced Tech Lab unlocks Mk III
 - **Streaming economy** (like *Planetary Annihilation*): metal and energy flow continuously into whatever you are building. If supply can't keep up, everything slows down proportionally. Oil Derricks make metal, Power Plants make energy
 - Fog of war, tech tree
+- Highly detailed procedural models (15k–26k vertices per tank): bolted armour, ERA, side skirts, crew hatches, remote weapon stations, APS radar panels, smoke launchers, antennae, sights and stowage on vehicles; kitted-out infantry; detailed aircraft, drones and buildings. Zoom in close to see them.
 - Procedural shaders and textures, wind-swept grass / trees / rocks, drifting clouds with ground shadows, animated water, walk cycles, tracks and wheels, turret recoil, banking aircraft (Settings ▸ Graphics: High / Medium / Classic)
 - Touch controls for iPad plus full mouse and keyboard support
 
@@ -83,7 +84,12 @@ js/game.js          one match: lockstep pacing, render loop
 js/net.js           PeerJS transport + lockstep turn system
 js/render.js        three.js scene, terrain, fog of war, picking, entity views
 js/gfx.js           procedural textures, shader patches, sky/clouds, ground scatter, animation
-js/models.js        procedural unit/building models
+js/models.js        model assembly + materials
+js/model-core.js    Builder + detail helpers (bolts, hatches, antennae, RCWS, APS, ERA, tracks ...)
+js/model-ground.js  infantry + vehicle models
+js/model-air.js     aircraft models
+js/model-drones.js  robots, walkers, FPV, jet drones, carriers
+js/model-buildings.js  structures
 js/fx.js            particles, tracers, procedural sound
 js/input.js         mouse / touch / keyboard + orders
 js/ui.js            HUD, minimap, build menu
