@@ -97,9 +97,9 @@ const AIRK = {
   ewplane: { sy: 1.0, sz: 0.4, zr: -3.2, wx: 4.5, wy: -0.2, wz: -0.6, bl: -0.7, nz: 3.0, fx: 0.0, fy: 0, smooth: 1 },
   bomber: { sy: 1.6, sz: 0.5, zr: -9.0, wx: 12.0, wy: 0.4, wz: -0.6, bl: -1.9, nz: 8.0, fx: 0.0, fy: 0, smooth: 1 },
   strategic: { sy: 2.0, sz: 2.0, zr: -14.5, wx: 23.0, wy: 0.3, wz: -1.5, bl: -2.2, nz: 12, fx: 0.0, fy: 0, smooth: 1 },
-  airlifter: { sy: 3.1, sz: 5.0, zr: -19.0, wx: 26.0, wy: 2.7, wz: -1.0, bl: -3.0, nz: 14, fx: 0.0, fy: 11 },
-  tanker: { sy: 3.1, sz: 5.0, zr: -19.0, wx: 26.0, wy: 2.7, wz: -1.0, bl: -3.0, nz: 14, fx: 0.0, fy: 11 },
-  awacs: { sy: 2.2, sz: 5.0, zr: -14.5, wx: 17.0, wy: 0.9, wz: -0.8, bl: -2.3, nz: 11, fx: 1.0, fy: 5 },
+  airlifter: { sy: 3.1, sz: 5.0, zr: -19.0, wx: 26.0, wy: 2.7, wz: -1.0, bl: -3.0, nz: 14, fx: 0.0, fy: 11, smooth: 1 },
+  tanker: { sy: 3.1, sz: 5.0, zr: -19.0, wx: 26.0, wy: 2.7, wz: -1.0, bl: -3.0, nz: 14, fx: 0.0, fy: 11, smooth: 1 },
+  awacs: { sy: 2.2, sz: 5.0, zr: -14.5, wx: 17.0, wy: 0.9, wz: -0.8, bl: -2.3, nz: 11, fx: 1.0, fy: 5, smooth: 1 },
   spydrone: { sy: 1.4, sz: 3.0, zr: -8.0, wx: 26.0, wy: 0.0, wz: -1.2, bl: -1.0, nz: 9, fx: 0.0, fy: 0, smooth: 1 },
 };
 function aircraft(b, A, tier) {

@@ -7,13 +7,14 @@ import { Builder } from './model-core.js';
 import { GROUND } from './model-ground.js';
 import { AIR, PROPS_MODELS } from './model-air.js';
 import { AIR2 } from './model-air2.js';
+import { AIR3 } from './model-air3.js';
 import { DRONES } from './model-drones.js';
 import { BUILDINGS } from './model-buildings.js';
 import { tierKit } from './model-tier.js';
 import { LOGI } from './model-logi.js';
 import { LATE } from './model-late.js';
 
-const MODELS = { ...GROUND, ...AIR, ...AIR2, ...DRONES, ...BUILDINGS, ...PROPS_MODELS, ...LOGI, ...LATE };
+const MODELS = { ...GROUND, ...AIR, ...AIR2, ...AIR3, ...DRONES, ...BUILDINGS, ...PROPS_MODELS, ...LOGI, ...LATE };
 
 // per-generation paint: Mk II is a dark steel-grey low-visibility scheme, Mk III a pale ceramic composite finish (rgb gain on luminance, blend amount)
 const TINT = { 2: [0.88, 0.98, 1.12, 0.8], 3: [1.55, 1.7, 1.9, 0.82] };

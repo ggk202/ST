@@ -1,6 +1,6 @@
 // Logistics models: supply truck, aerial tanker, radar decoy, supply depot (plus pallet, wreck and control-point props used by the renderer).
 import { C, T, PI } from './model-core.js';
-import { AIR } from './model-air.js';
+import { AIR3 } from './model-air3.js';
 import { DRONES } from './model-drones.js';
 const { OD, OD2, OD3, DARK, DARK2, GREY, METAL, STEEL, BLACK, CONC, WHITE, ORANGE, GLASS, YEL, CYAN } = C;
 const CRATE = 0x8a6a3c, CRATE2 = 0x6e5430, FUEL = 0xc9ced4;
@@ -17,8 +17,8 @@ function supplytruck(b) {
   b.box(0.7, 0.04, 0.7, 0, 2.5, -3.14, ORANGE); b.box(0.5, 0.15, 0.06, 0, 2.6, -3.16, WHITE);   // door marking
   for (const s of [-1, 1]) b.cyl6(0.04, 1.4, s * 1.2, 3.1, 2.9, BLACK);
 }
-function tanker(b) {
-  AIR.airlifter(b); b.g('hull');
+function tanker(b, tier = 1) {
+  AIR3.airlifter(b, tier); b.g('hull');
   for (const s of [-1, 1]) {   // wing refuelling pods + drogues
     const x = s * 14.5; b.cyl(0.55, 4.4, x, 1.5, 0.5, DARK2, [PI / 2, 0, 0]); b.cyl(0.3, 0.9, x, 1.5, -2.0, METAL, [PI / 2, 0, 0]); b.cyl(0.62, 0.12, x, 1.5, -2.6, YEL, [PI / 2, 0, 0]); b.box(0.9, 0.12, 1.4, x, 2.0, 0.5, OD3);
     b.sph6(0.18, x, 1.5, 3.0, ORANGE); b.box(0.12, 0.12, 0.12, s * 14.5, 1.5, -2.8, CYAN);
