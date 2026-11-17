@@ -27,6 +27,13 @@ function storeGeo(kind, team) {
   return g;
 }
 
+// pre-build everything an aircraft needs on the ground (weapon stores, crew, carts) so arming never hitches a frame; returns a list of small tasks
+export function warmTasks(team) {
+  const tasks = Object.keys(STORE).map((k) => () => storeGeo(k, team));
+  tasks.push(() => makeModel('crew', 0), () => makeModel('cart', 0));
+  return tasks;
+}
+
 // ---------- stores on an aircraft ----------
 export function updateStores(v, e, team) {
   const D = UNITS[e.def], base = D.base, hp = HARD[base];

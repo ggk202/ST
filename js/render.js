@@ -9,7 +9,7 @@ const VET_MAT = new THREE.MeshBasicMaterial({ color: 0xff5a3c });
 const PIP_GEO = new THREE.OctahedronGeometry(0.5), PIP_MAT = new THREE.MeshBasicMaterial({ color: 0xffd24a });
 const CANOPY_GEO = new THREE.SphereGeometry(3.4, 12, 6, 0, Math.PI * 2, 0, 1.25), CANOPY_MAT = new THREE.MeshStandardMaterial({ color: 0xd8d2b0, roughness: 0.9, side: THREE.DoubleSide });
 import { AirfieldGfx } from './airfield-gfx.js';
-import { updateStores, CrewPool } from './aircraft-gfx.js';
+import { updateStores, CrewPool, warmTasks } from './aircraft-gfx.js';
 import { makeModel, modelMaterial } from './models.js';
 import { Fx, sfx } from './fx.js';
 import { makeDetailTexture, makeCloudTexture, makeUniforms, patchTerrain, patchWater, makeUnitMaterial, Sky, Clouds, Scatter, animateUnit } from './gfx.js';
@@ -41,6 +41,9 @@ export class Renderer {
     this.shake = 0;
     this.views = new Map(); this.projViews = new Map();
     this.crews = new CrewPool(this.scene, sim);
+    // build aircraft ground-ops geometry and the local team's aircraft models one item per frame, so the first loadout / take-off does not stall
+    this.warm = warmTasks(sim.players[local].color);
+    for (const k of Object.keys(UNITS)) if (UNITS[k].from === 'airfield') { const c = sim.players[local].color; this.warm.push(() => makeModel(k, c), () => makeModel(k, c).setLod(1, false), () => makeModel(k, c).setLod(2, false)); }
     this.frame = 0; this.time = 0;
     this.ghost = null; this.selection = new Set();
     this.hemi = new THREE.HemisphereLight(0xcfe0ff, 0x4d4a3a, this.gfx ? 0.75 : 0.95); this.scene.add(this.hemi);
@@ -602,6 +605,7 @@ export class Renderer {
     this.perfTick();
     this.camera.updateMatrixWorld(); this._pv.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse.copy(this.camera.matrixWorld).invert()); this.frustum.setFromProjectionMatrix(this._pv);
     if (!this._ground) { const map = this.sim.map; this._ground = (x, z) => map.hAt(x, z); }
+    if (this.warm.length) { try { this.warm.shift()(); } catch (e) { /* ignore */ } }
     this.syncEntities(alpha, dt);
     if (!this.logiGfx) this.logiGfx = new LogiGfx(this); this.logiGfx.update(dt);
     this.updateSelection();
