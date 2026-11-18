@@ -82,6 +82,7 @@ body:not(.touch) .touchonly { display:none; }
 #vwCanvas { width:100%; height:min(60vh,460px); display:block; border-radius:10px; background:#16202b; touch-action:none; cursor:grab; }
 .vwside .row { margin:6px 0; } .vwside select { flex:1; min-width:0; background:#101820; color:#e6eef7; border:1px solid #2c3d50; border-radius:8px; padding:7px; font-size:14px; }
 #vwInfo { max-height:34vh; overflow:auto; font-size:12.5px; } #vwInfo h3 { margin:6px 0 2px; font-size:16px; } .vwd { color:#9fb0c0; margin-bottom:6px; line-height:1.35; } .vwst { margin:4px 0; color:#c5d0da; line-height:1.4; } .vwkit { color:#e0b84a; }
+#vwLabels { position:absolute; inset:0; pointer-events:none; overflow:hidden; } .vwlb { position:absolute; transform:translate(-50%,-100%); font-size:11px; background:rgba(10,18,26,.82); color:#cfe3f5; border:1px solid #2c3d50; padding:1px 6px; border-radius:6px; white-space:nowrap; }
 @media (max-width:760px) { .vwgrid { grid-template-columns:1fr; } }
 #menu, #pause, #endscreen { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:radial-gradient(ellipse at 30% 20%, #1c2a38 0%, #0b1015 70%); overflow:auto; padding:calc(14px + env(safe-area-inset-top)) 14px 14px; touch-action:pan-y; }
 #pause, #endscreen { background:rgba(5,8,11,.82); z-index:10; }
@@ -239,13 +240,14 @@ body.touch .item { min-height:66px; } body.touch .btn { min-height:44px; }
     <div class="card hidden" id="screen-viewer">
       <h2>Model Viewer</h2>
       <div class="vwgrid">
-        <div><canvas id="vwCanvas"></canvas><div class="sub" style="margin:4px 0 0">Drag to orbit · scroll or pinch to zoom · rotors and turrets animate</div></div>
+        <div style="position:relative"><canvas id="vwCanvas"></canvas><div id="vwLabels"></div><div class="sub" style="margin:4px 0 0">Drag to orbit · scroll or pinch to zoom · rotors and turrets animate</div></div>
         <div class="vwside">
           <div class="row"><button class="btn" id="vwPrev">◀</button><select id="vwDef"></select><button class="btn" id="vwNext">▶</button></div>
           <div class="row"><label>Tier</label><div class="seg" id="vwTier"></div></div>
           <div class="row"><label>Team</label><div class="seg" id="vwTeam"></div></div>
           <div class="row"><label>Detail</label><div class="seg" id="vwLod"></div></div>
           <div class="row"><label>Auto-rotate</label><input type="checkbox" id="vwAuto" checked></div>
+          <div class="row"><label>Ordnance</label><input type="checkbox" id="vwOrd" checked><span class="sub" style="margin:0">rings of every possible store</span></div>
           <div id="vwInfo"></div>
         </div>
       </div>

@@ -1,7 +1,7 @@
 // Render-side aircraft ground-ops visuals: weapon stores hanging on the wing hardpoints (they appear as the ground crews
 // load them and disappear as ammunition is spent) and the ground crews + ordnance carts themselves.
 import * as THREE from 'three';
-import { Builder, C, PI } from './model-core.js';
+import { Builder, C, PI, T } from './model-core.js';
 import { HARD, HARD_CENTER } from './model-air.js';
 import { makeModel, modelMaterial } from './models.js';
 import { UNITS, PLAYER_COLORS } from './sim/defs.js';
@@ -17,10 +17,19 @@ const STORE = {
   heavy: (b) => { b.cyl(0.42, 2.0, 0, 0, 0, 0x4a5334, [PI / 2, 0, 0]); b.cone(0.42, 0.7, 0, 0, 1.35, 0x4a5334, [PI / 2, 0, 0]); b.cone(0.38, 0.7, 0, 0, -1.35, 0x4a5334, [-PI / 2, 0, 0]); b.cyl(0.43, 0.14, 0, 0, 0.4, YEL, [PI / 2, 0, 0]); b.cyl(0.43, 0.14, 0, 0, -0.3, YEL, [PI / 2, 0, 0]); for (let i = 0; i < 4; i++) { const a = i * PI / 2 + PI / 4; b.box(0.05, 0.6, 0.6, Math.cos(a) * 0.44, Math.sin(a) * 0.44, -1.5, METAL, [0, 0, a]); } b.box(0.14, 0.4, 0.8, 0, 0.5, 0, DARK2); },
   cruise: (b) => { b.cyl(0.2, 3.0, 0, 0, 0, 0xc9ced4, [PI / 2, 0, 0]); b.cone(0.2, 0.7, 0, 0, 1.8, 0xc9ced4, [PI / 2, 0, 0]); b.box(1.5, 0.05, 0.5, 0, 0, -0.9, METAL); b.box(0.05, 0.5, 0.4, 0, 0.3, -1.4, METAL); b.box(0.5, 0.25, 0.8, 0, 0.22, -0.6, DARK2); b.cyl(0.14, 0.4, 0, 0, -1.7, 0x6a4a3a, [PI / 2, 0, 0]); b.box(0.12, 0.3, 0.6, 0, 0.4, 0.3, DARK2); },
   jam: (b) => { b.cyl(0.3, 1.8, 0, 0, 0, 0x8a9096, [PI / 2, 0, 0]); b.cone(0.3, 0.5, 0, 0, 1.15, WHITE, [PI / 2, 0, 0]); b.cone(0.28, 0.4, 0, 0, -1.1, DARK2, [-PI / 2, 0, 0]); b.cyl(0.31, 0.16, 0, 0, 0.2, ORANGE, [PI / 2, 0, 0]); b.box(0.06, 0.4, 0.5, 0, 0.35, -0.4, GREY); b.box(0.1, 0.3, 0.5, 0, 0.4, 0, DARK2); },
+  rod: (b) => { b.cyl(0.2, 4.2, 0, 0, 0, 0x8c8576, [PI / 2, 0, 0]); b.cone(0.2, 0.9, 0, 0, 2.55, 0x6b6250, [PI / 2, 0, 0]); b.cyl(0.3, 0.5, 0, 0, -1.9, 0x2f2a26, [PI / 2, 0, 0]); for (let i = 0; i < 4; i++) { const a = i * PI / 2; b.box(0.05, 0.4, 0.6, Math.cos(a) * 0.28, Math.sin(a) * 0.28, -1.7, METAL, [0, 0, a]); } },
+  slug: (b) => { b.cyl(0.13, 1.3, 0, 0, 0, 0x9aa3ad, [PI / 2, 0, 0]); b.cone(0.13, 0.5, 0, 0, 0.9, 0x6b7280, [PI / 2, 0, 0]); for (const z of [-0.4, 0.1]) b.cyl(0.17, 0.1, 0, 0, z, 0x4fc8ff, [PI / 2, 0, 0]); },
+  kkv: (b) => { b.cyl(0.32, 1.2, 0, 0, 0, 0xcfd5db, [PI / 2, 0, 0]); b.sph6(0.3, 0, 0, 0.7, 0xff5a3a); b.cyl(0.33, 0.1, 0, 0, 0.2, T, [PI / 2, 0, 0]); for (let i = 0; i < 4; i++) { const a = i * PI / 2 + PI / 4; b.cone(0.07, 0.25, Math.cos(a) * 0.36, Math.sin(a) * 0.36, -0.2, DARK2, [-PI / 2, 0, 0]); } },
+  rv: (b) => { b.cone(0.36, 1.5, 0, 0, 0, 0x2f2a26, [PI / 2, 0, 0]); b.cyl(0.37, 0.12, 0, 0, -0.7, METAL, [PI / 2, 0, 0]); b.cyl(0.2, 0.2, 0, 0, -0.85, DARK2, [PI / 2, 0, 0]); },
   optics: (b) => { b.sph(0.34, 0, 0, 0, 0x2b3035); b.sph6(0.18, 0, -0.1, 0.28, 0x1c3850); b.box(0.5, 0.2, 0.5, 0, 0.3, 0, DARK2); },
 };
 const STORE_SCALE = { bomber: 1.7, strategic: 2.3, airlifter: 1, awacs: 1, spydrone: 1, fighter: 1.0, heli: 1.0, vtol: 1.0, uav: 0.8, ewplane: 1.1 };
 const geoCache = new Map();
+export const STORE_NAMES = { aam: 'AAM', atgm: 'ATGM', rocket: 'Rocket pod', bomb: 'Bomb', heavy: 'Heavy bomb', cruise: 'Cruise missile', jam: 'Jammer pod', optics: 'Sensor pod', rod: 'Tungsten rod', slug: 'Rail slug', kkv: 'Kill vehicle', rv: 'Re-entry vehicle' };
+export const SPACE_STORE_SCALE = { satstrike: 1, satkill: 1, orbfighter: 0.8, orbcruiser: 1.6, orbbattleship: 2.4, icbm: 2.2 };
+export const storeScale = (base) => STORE_SCALE[base] || SPACE_STORE_SCALE[base] || 1;
+// a single store as a mesh (shared geometry), pointing along +Z, centred on its origin
+export function storeMesh(kind, team) { return new THREE.Mesh(storeGeo(kind, team), modelMaterial); }
 function storeGeo(kind, team) {
   const key = kind + team; let g = geoCache.get(key);
   if (!g) { const b = new Builder(PLAYER_COLORS[team % PLAYER_COLORS.length], 0, 1); STORE[kind](b); g = b.finish().hull; geoCache.set(key, g); }

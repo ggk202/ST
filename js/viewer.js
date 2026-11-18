@@ -1,6 +1,7 @@
 // Unit / structure model viewer (main menu): orbit, zoom, tier, team colour, level of detail, stats and equipment list.
 import * as THREE from 'three';
 import { makeModel, modelMaterial } from './models.js';
+import { storeMesh, storeScale, STORE_NAMES } from './aircraft-gfx.js';
 import { DEFS, BASE_UNITS, BASE_ORDER, BUILDINGS, PLAYER_COLORS, PLAYER_COLOR_NAMES, ROMAN, unitId, BUILD_ORDER } from './sim/defs.js';
 
 const $ = (id) => document.getElementById(id);
@@ -27,6 +28,7 @@ export class ModelViewer {
     seg('vwTier', [1, 2, 3].map((t) => ({ v: t, label: 'Mk ' + ROMAN[t] })), () => this.tier, (v) => { this.tier = +v; });
     seg('vwTeam', PLAYER_COLORS.map((c, i) => ({ v: i, label: PLAYER_COLOR_NAMES[i] })), () => this.team, (v) => { this.team = +v; });
     seg('vwLod', [{ v: 0, label: 'High' }, { v: 1, label: 'Mid' }, { v: 2, label: 'Far' }], () => this.lod, (v) => { this.lod = +v; });
+    $('vwOrd').addEventListener('change', () => this.rebuild(false));
     $('vwAuto').addEventListener('change', (e) => { this.auto = e.target.checked; });
     $('vwPrev').addEventListener('click', () => this.step(-1)); $('vwNext').addEventListener('click', () => this.step(1));
     const cv = $('vwCanvas');
@@ -56,7 +58,7 @@ export class ModelViewer {
     const loop = (now) => { if (!this.running) return; this.raf = requestAnimationFrame(loop); this.draw(Math.min(0.1, (now - this.t) / 1000)); this.t = now; };
     this.raf = requestAnimationFrame(loop);
   }
-  close() { this.running = false; if (this.raf) cancelAnimationFrame(this.raf); if (this.obj) { this.scene.remove(this.obj.root); this.obj = null; } if (this.renderer) { this.renderer.dispose(); this.renderer = null; } }
+  close() { this.running = false; if (this.raf) cancelAnimationFrame(this.raf); if (this.obj) { this.scene.remove(this.obj.root); this.obj = null; } if (this.scene) this.clearOrd(); if (this.renderer) { this.renderer.dispose(); this.renderer = null; } }
   rebuild(frame) {
     const isB = !!BUILDINGS[this.base];
     $('vwTier').style.opacity = isB ? 0.3 : 1; $('vwTier').style.pointerEvents = isB ? 'none' : '';
@@ -66,8 +68,41 @@ export class ModelViewer {
     const bb = new THREE.Box3().setFromObject(this.obj.root), sz = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
     this.obj.root.position.y = -bb.min.y * 0 + (d.air ? Math.max(0.5, -bb.min.y + 0.2) : 0);
     this.ctr = new THREE.Vector3(c.x, (bb.max.y - bb.min.y) * 0.45 + (d.air ? this.obj.root.position.y : 0), c.z);
-    const r = Math.max(sz.x, sz.y, sz.z) * 0.9 + 2; if (frame || !this.rad) { this.rad = r; this.dist = r * 2.05; } else { this.dist *= r / this.rad; this.rad = r; }
+    const rmax = isB ? 0 : this.buildOrd(d, this.base, Math.max(sz.x, sz.z) * 0.5);
+    const r = Math.max(Math.max(sz.x, sz.y, sz.z) * 0.9 + 2, rmax * 1.35); if (frame || !this.rad) { this.rad = r; this.dist = r * 2.05; } else { this.dist *= r / this.rad; this.rad = r; }
     this.grid.scale.setScalar(Math.max(0.3, r / 12)); this.info(d);
+  }
+  // every store the unit can carry, laid out in one circle per loadout around it (labelled)
+  clearOrd() {
+    if (this.ord) { this.scene.remove(this.ord); this.ord.traverse((o) => { if (o.isLine) o.geometry.dispose(); }); this.ord = null; }
+    this.labels = []; $('vwLabels').innerHTML = '';
+  }
+  ordRings(d, base) {
+    const out = [], P = (n, kinds) => out.push({ name: n, items: kinds });
+    if (d.loadouts) { for (const l of d.loadouts) if (l.vis && l.vis.length) P(l.name, l.vis.map(([k, n]) => [k, k === 'optics' ? 1 : n * 2])); }
+    else if (d.air && d.weapons && d.weapons.length) { const it = []; for (const w of d.weapons) { const k = w.kind === 'missile' ? (w.type === 'aa' ? 'aam' : 'atgm') : w.kind === 'shell' ? (w.type === 'blast' ? 'heavy' : 'bomb') : null; if (k) it.push([k, 2]); } if (it.length) P('Standard', it); }
+    const O = { satstrike: [['Kinetic rods', [['rod', 3]]]], satkill: [['Kinetic interceptor', [['kkv', 1]]]], icbm: [['MIRV payload', [['rv', 3]]]], orbfighter: [['Rail slugs', [['slug', 6]]]], orbcruiser: [['Rail slugs', [['slug', 8]]], ['Strike rods', [['rod', 4]]]], orbbattleship: [['Rail slugs', [['slug', 10]]], ['Strike rods', [['rod', 6]]]] }[base];
+    if (O) for (const [n, k] of O) P(n, k);
+    return out;
+  }
+  buildOrd(d, base, R) {
+    this.clearOrd(); if (!$('vwOrd').checked) return 0;
+    const rings = this.ordRings(d, base); if (!rings.length) return 0;
+    const sc = storeScale(base), len = 2.8 * sc, pitch = len * 1.5, cols = [0x7fd8ff, 0xffb04a, 0x9ef28a, 0xff7a9a, 0xd9a6ff];
+    const g = new THREE.Group(); let r = R * 0.9 + len * 0.8 + 2;
+    rings.forEach((ring, i) => {
+      const n = ring.items.reduce((s, it) => s + it[1], 0); r = Math.max(r + (i ? pitch : 0), n * len * 0.2);
+      const pts = []; for (let k = 0; k <= 96; k++) pts.push(new THREE.Vector3(Math.cos(k / 96 * Math.PI * 2) * r, 0.06, Math.sin(k / 96 * Math.PI * 2) * r));
+      g.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: cols[i % cols.length], transparent: true, opacity: 0.55 })));
+      const th0 = i * 0.55; let k = 0;
+      for (const [kind, c] of ring.items) for (let j = 0; j < c; j++, k++) {
+        const th = th0 + k / n * Math.PI * 2, m = storeMesh(kind, this.team); m.scale.setScalar(sc); m.position.set(Math.cos(th) * r, 0.5 * sc, Math.sin(th) * r); m.rotation.y = -th; g.add(m);
+      }
+      const el = document.createElement('div'); el.className = 'vwlb'; el.style.borderColor = '#' + cols[i % cols.length].toString(16);
+      el.textContent = ring.name + ' · ' + ring.items.map(([k, c]) => c + '× ' + STORE_NAMES[k]).join(', ');
+      $('vwLabels').appendChild(el); this.labels.push({ el, p: new THREE.Vector3(Math.cos(th0 - 0.12) * r, 1.2 * sc, Math.sin(th0 - 0.12) * r) });
+    });
+    this.ord = g; this.scene.add(g); return r + len;
   }
   info(d) {
     const rows = [];
@@ -94,5 +129,6 @@ export class ModelViewer {
     const cp = Math.cos(this.pitch), c = this.ctr;
     this.camera.position.set(c.x + Math.sin(this.yaw) * cp * this.dist, c.y + Math.sin(this.pitch) * this.dist, c.z + Math.cos(this.yaw) * cp * this.dist);
     this.camera.lookAt(c); r.render(this.scene, this.camera);
+    if (this.labels) for (const l of this.labels) { const v = l.p.clone().project(this.camera), vis = v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05; l.el.style.display = vis ? '' : 'none'; if (vis) { l.el.style.left = (v.x * 0.5 + 0.5) * w + 'px'; l.el.style.top = (-v.y * 0.5 + 0.5) * h + 'px'; } }
   }
 }
