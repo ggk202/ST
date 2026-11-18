@@ -45,6 +45,17 @@ export class SensorOverlay {
       const big = (DEFS[e.def].rcs || 1) > 1.4 ? 'LARGE' : (DEFS[e.def].rcs || 1) < 0.5 ? 'SMALL' : 'MED';
       label(vis ? DEFS[e.def].name : 'BOGEY · ' + big + ' · ' + Math.round(Math.sqrt(vx * vx + vz * vz) * 3.6) + ' km/h', p.x, p.y - s - 6, col);
     }
+    // ground-surveillance tracks and coverage
+    for (const g of sim.gradars) {
+      const e = sim.byId.get(g.id); if (!e || (g.team !== team && !sim.seen(team, e))) continue; const own = g.team === team, col = own ? COL.radar : COL.radarEn, jammed = g.r < g.r0 - 0.5;
+      ctx.lineWidth = 1.6; ctx.setLineDash([10, 6]); ctx.strokeStyle = 'rgba(' + col + ',.8)'; this.ring(ctx, e.x, e.z, g.r); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(' + col + ',.035)'; this.ring(ctx, e.x, e.z, g.r, 0, TAU, true); ctx.fill();
+      const lp = this.at(e.x + Math.sin(0.6) * g.r, e.z + Math.cos(0.6) * g.r); if (!lp.behind) label('GROUND SURVEILLANCE ' + Math.round(g.r) + (jammed ? ' (jammed)' : ''), lp.x, lp.y, jammed ? COL.warn : col);
+    }
+    for (const id of sim.gcontact[team]) {
+      const e = sim.byId.get(id); if (!e || e.dead || sim.seen(team, e)) continue; const p = this.at(e.x, e.z, 1.2); if (p.behind) continue;
+      ctx.strokeStyle = 'rgb(' + COL.contact + ')'; ctx.lineWidth = 1.4; ctx.strokeRect(p.x - 4, p.y - 4, 8, 8);
+    }
     // our own aircraft that are being jammed
     for (const v of R.views.values()) {
       const e = v.ent; if (e.dead || e.team !== team || !(e.jam > 0) || !(e.air || DEFS[e.def].drone)) continue;

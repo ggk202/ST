@@ -324,7 +324,7 @@ export class Renderer {
   visibleToLocal(e) {
     if (e.team === this.team || e.def === 'derrick') return true;
     const c = this.sim.map.cellOf(e.x, e.z);
-    return (c >= 0 && this.sim.vis[this.team][c] === 1) || (e.air && this.sim.contact[this.team].has(e.id));
+    return (c >= 0 && this.sim.vis[this.team][c] === 1) || (e.air && this.sim.contact[this.team].has(e.id)) || (!e.air && e.kind === 'unit' && this.sim.gcontact[this.team].has(e.id));
   }
   // pick the entity under a screen point; minPx widens hit area for touch
   pickEntity(sx, sy, minPx = 10, filter) {

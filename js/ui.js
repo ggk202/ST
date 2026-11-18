@@ -391,7 +391,7 @@ export class HUD {
     for (const e of sim.ents) {
       if (e.dead) continue;
       const own = e.team === team;
-      if (!own && e.def !== 'derrick') { const c = map.cellOf(e.x, e.z); if (c < 0 || !vis[c]) continue; }
+      if (!own && e.def !== 'derrick') { const c = map.cellOf(e.x, e.z); if ((c < 0 || !vis[c]) && !(e.kind === 'unit' && !e.air && sim.gcontact[team].has(e.id))) continue; }
       const col = '#' + PLAYER_COLORS[sim.players[e.owner].color].toString(16).padStart(6, '0');
       ctx.fillStyle = col;
       if (e.kind === 'building') { const s = Math.max(5, e.size * 2.6); ctx.fillRect(e.x * k - s / 2, e.z * k - s / 2, s, s); ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.strokeRect(e.x * k - s / 2, e.z * k - s / 2, s, s); }

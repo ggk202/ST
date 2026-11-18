@@ -70,13 +70,49 @@ function railgun(b) {
   b.box(2.2, 0.8, 1.2, 0, 1.2, -2.4, DARK2); for (const x of [-1.2, 1.2]) b.cyl6(0.3, 1.0, x, 1.4, -2.2, GLOW);
 }
 function acUnit4(b, x, y, z) { b.box(1.0, 0.5, 0.8, x, y + 0.25, z, 0x9aa0a6); b.cyl(0.32, 0.06, x, y + 0.53, z, DARK2); }
-function heavyart(b) {   // twin 305 mm siege guns in an armoured casemate
-  slab(b, 16, 16, 0.6); b.cyl(5.4, 1.4, 0, 1.3, 0, 0x707780); b.cyl(4.8, 0.4, 0, 2.2, 0, DARK2); H.boltRing(b, 0, 1.4, 0, 5.4, 22, 0.16); H.hazard(b, 0, 0.62, 6.8, 10, 0.5, 8);
-  b.box(3.6, 2.4, 3.2, -6.0, 1.8, -5.4, OD2); b.box(3.7, 0.2, 3.3, -6.0, 3.0, -5.4, T); b.box(3.6, 2.0, 3.2, 6.0, 1.6, -5.6, OD2); b.box(3.7, 0.2, 3.3, 6.0, 2.7, -5.6, T);
-  for (const x of [-6, 6]) for (let i = 0; i < 3; i++) b.cyl(0.55, 1.2, x - 1 + i, 0.8, 5.8, 0x4a5a3a);
-  b.rel('turret', 0, 2.6, 0); b.cyl(3.4, 0.5, 0, 0.25, 0, DARK2); b.box(5.2, 2.4, 6.0, 0, 1.7, -0.6, OD); b.trap(5.2, 0.9, 6.0, 0.7, 0.7, 0, 3.3, -0.6, OD2); b.box(5.0, 0.3, 1.2, 0, 2.2, 2.7, DARK);
-  for (const x of [-1.2, 1.2]) { b.barrel(0.52, 11.0, x, 2.1, 2.6, METAL); b.cyl(0.78, 1.8, x, 2.1, 3.0, OD2, [PI / 2, 0, 0]); b.cyl(0.66, 0.9, x, 2.1, 13.8, DARK, [PI / 2, 0, 0]); b.cyl(0.6, 0.7, x, 2.1, 14.4, BLACK, [PI / 2, 0, 0]); }
-  b.box(1.4, 1.0, 1.8, 0, 3.7, -2.0, DARK2); H.antenna(b, 1.8, 3.4, -2.8, 1.8); H.hatch(b, -1.4, 3.8, -1.4, 0.4);
+function heavyart(b) {   // Stonehenge-style siege gun: one colossal barrel on an armoured crawler carrier, deployed on stabiliser feet
+  const PITCH = 0.33, sp = Math.sin(PITCH), cp = Math.cos(PITCH), BY = 3.5, BZ = 2.6;
+  slab(b, 16, 16, 0.5); H.hazard(b, 0, 0.56, 7.4, 12, 0.5, 8);
+  b.box(10.4, 2.0, 13.0, 0, 2.0, 0, OD2); b.trap(10.4, 1.2, 13.0, 0.84, 0.88, 0, 3.6, 0, OD); b.trap(10.4, 1.3, 3.0, 1.0, 0.45, 0, 2.2, 7.4, OD2, [0, 0, 0]);   // hull, roof, sloped glacis
+  for (const s of [-1, 1]) {
+    b.box(2.7, 2.5, 14.6, s * 6.4, 1.5, 0, 0x2a2e33); b.box(2.9, 0.3, 14.8, s * 6.4, 2.85, 0, 0x1d2024); b.box(0.5, 1.9, 12.0, s * 7.9, 2.4, 0, OD3);   // crawler tracks + side skirt
+    for (let i = 0; i < 7; i++) b.wheel(0.85, 0.45, s * 7.55, 1.25, -6 + i * 2.0, 0x1c1f22, 0x59606a);
+    b.cyl(1.0, 0.8, s * 6.4, 1.6, 7.6, 0x2a2e33, [0, 0, PI / 2]); b.cyl(1.0, 0.8, s * 6.4, 1.6, -7.6, 0x2a2e33, [0, 0, PI / 2]);
+    b.pipe(s * 5.0, 3.4, 5.6, s * 7.4, 0.5, 7.4, 0.32, STEEL); b.pipe(s * 5.0, 3.4, -5.6, s * 7.4, 0.5, -7.4, 0.32, STEEL); b.cyl(0.95, 0.3, s * 7.4, 0.3, 7.4, DARK2); b.cyl(0.95, 0.3, s * 7.4, 0.3, -7.4, DARK2);   // outrigger stabilisers
+    b.box(0.2, 0.9, 3.0, s * 5.25, 3.5, 6.2, T); H.vent(b, s * 5.2, 4.3, -4.5, 1.2, 2.6, 4);
+  }
+  b.box(2.4, 0.2, 2.4, 0, 4.25, 6.4, DARK2); H.hatch(b, 2.5, 4.3, 5.4, 0.5); H.hatch(b, -2.5, 4.3, 5.4, 0.5);
+  b.cyl(4.6, 0.8, 0, 4.4, -0.6, DARK2); H.boltRing(b, 0, 4.8, -0.6, 4.6, 24, 0.16);   // turret ring
+  b.rel('turret', 0, 5.0, -0.6);
+  b.cyl(4.2, 0.9, 0, 0.45, 0, 0x4a5058); b.box(8.2, 3.0, 9.0, 0, 2.3, -0.4, OD); b.trap(8.2, 1.2, 9.0, 0.78, 0.8, 0, 4.4, -0.4, OD2);   // turret body
+  for (const s of [-1, 1]) { b.box(0.9, 2.6, 5.6, s * 4.4, 2.5, 0.8, OD2, [0, s * -0.08, 0]); b.box(0.3, 0.3, 4.4, s * 4.62, 3.0, 0.8, DARK2); }          // cheek armour
+  b.box(6.2, 3.4, 4.6, 0, 3.0, -5.6, OD2); b.box(6.3, 0.2, 4.7, 0, 4.7, -5.6, T); H.vent(b, 0, 4.9, -5.8, 3.0, 2.4, 5); b.box(2.0, 2.0, 1.4, 0, 2.2, -8.4, DARK);   // counterweight / ammunition hoist
+  for (const s of [-1, 1]) { b.box(1.2, 3.0, 3.4, s * 2.9, 4.2, 3.2, OD); b.cyl(1.0, 1.4, s * 3.6, 4.5 - 0.6, 3.1, STEEL, [0, 0, PI / 2]); }   // trunnion cheeks
+  // the single colossal barrel: recoil sleeve, long tube with fume extractor and cooling bands, big slotted muzzle brake
+  const P = (t) => [BY + sp * t, BZ + cp * t];
+  b.barrel(1.7, 7.0, 0, BY, BZ - 1.0, OD2, PITCH); b.barrel(1.9, 0.5, 0, BY + sp * 0.2, BZ - 0.8, T, PITCH);
+  b.barrel(1.15, 22.0, 0, BY, BZ + 3.0, METAL, PITCH);
+  b.barrel(1.38, 2.8, 0, P(9.6)[0], P(9.6)[1], 0x59606a, PITCH);   // bore evacuator
+  for (const t of [4.5, 7.0, 13.0, 15.5, 17.5]) { const q = P(t + 3.0); b.barrel(1.3, 0.45, 0, q[0], q[1], DARK2, PITCH); }
+  const m = P(22.5); b.barrel(1.7, 2.6, 0, m[0], m[1], 0x30353b, PITCH); b.barrel(1.4, 0.4, 0, m[0] + sp * 2.7, m[1] + cp * 2.7, BLACK, PITCH);
+  for (let i = 0; i < 4; i++) { const q = P(23.2 + i * 0.55); b.barrel(1.75, 0.16, 0, q[0], q[1], BLACK, PITCH); }
+  b.pipe(0, 4.4, -2.0, 0, BY + 0.4, BZ + 1.0, 0.4, STEEL); b.pipe(1.2, 4.4, 0.2, 1.1, BY + 0.9, BZ + 2.4, 0.3, STEEL); b.pipe(-1.2, 4.4, 0.2, -1.1, BY + 0.9, BZ + 2.4, 0.3, STEEL);   // elevation rams
+  b.box(1.4, 1.0, 1.8, -2.6, 4.9, -2.2, DARK2); b.cyl6(0.4, 0.5, -2.6, 5.6, -2.2, DARK); b.sph6(0.2, -2.6, 5.9, -2.2, RED); H.antenna(b, 2.8, 4.6, -2.0, 2.2);   // optics + mast
+}
+function gsr(b) {   // ground surveillance radar: control block, lattice tower, huge rotating cylindrical reflector
+  slab(b, 12, 12, 0.5); b.box(4.6, 2.8, 3.8, -3.6, 1.9, -3.6, 0x6f777e); b.box(4.7, 0.2, 3.9, -3.6, 3.4, -3.6, T); H.vent(b, -3.6, 3.5, -3.6, 2.4, 1.2, 4); door(b, -3.6, 1.2, -1.7);
+  b.box(2.6, 1.8, 2.6, 3.8, 1.4, -3.8, 0x5c636c); for (let i = 0; i < 3; i++) b.cyl(0.4, 1.2, 3.0 + i * 0.8, 2.9, -3.8, STEEL);
+  const TH = 15.0;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.pipe(sx * 2.2, 0.5, sz * 2.2, sx * 0.8, TH, sz * 0.8, 0.2, 0x8a929b);
+  for (let i = 1; i < 8; i++) { const y = 0.5 + i * (TH - 0.5) / 8, w = 2.2 - 1.4 * i / 8; b.box(w * 2, 0.14, 0.14, 0, y, w, 0x8a929b); b.box(w * 2, 0.14, 0.14, 0, y, -w, 0x8a929b); b.box(0.14, 0.14, w * 2, w, y, 0, 0x8a929b); b.box(0.14, 0.14, w * 2, -w, y, 0, 0x8a929b); }
+  b.box(2.6, 0.3, 2.6, 0, TH, 0, DARK2); for (let k = 0; k < 4; k++) b.box(0.1, 0.5, 0.1, (k & 1 ? 1.2 : -1.2), TH + 0.4, (k & 2 ? 1.2 : -1.2), METAL); b.sph6(0.25, 0, TH + 1.6, 0, RED);
+  b.rel('rotor', 0, TH + 1.6, 0);
+  b.cyl(0.9, 1.2, 0, -0.4, 0, DARK2); b.box(1.2, 2.6, 1.2, 0, 1.0, -0.4, 0x59606a);
+  // cylindrical-parabolic reflector built from angled strips, fed by a horn array on struts
+  for (let i = -5; i <= 5; i++) { const x = i * 1.45, slope = 0.1 * i * 1.45 * 0.5; b.box(1.5, 6.4, 0.22, x, 2.2, 1.8 - 0.045 * x * x * 0.55, 0xdfe3e8, [0, -Math.atan(slope) * 0.9, 0]); b.box(1.5, 0.2, 0.3, x, 5.5, 1.8 - 0.045 * x * x * 0.55, 0x9aa0a6); b.box(1.5, 0.2, 0.3, x, -1.1, 1.8 - 0.045 * x * x * 0.55, 0x9aa0a6); }
+  b.box(11.0, 0.35, 0.35, 0, 2.2, 5.6, DARK2); for (let i = -4; i <= 4; i++) b.cone(0.28, 0.6, i * 1.2, 2.2, 6.0, 0xc9ced4, [PI / 2, 0, 0]);
+  for (const x of [-5.5, 0, 5.5]) b.pipe(x * 0.9, 2.2, 1.0, x, 2.2, 5.6, 0.1, 0x8a929b);
+  b.g('hull'); b.box(0.2, 0.2, 0.2, 0, 0.2, 0, DARK);
 }
 function abm(b) {   // anti-ballistic battery: phased array radar and four tall interceptor canisters
   slab(b, 12, 12, 0.5); b.box(4.0, 3.0, 3.4, -3.2, 2.0, -3.2, 0x6f777e); b.box(4.1, 0.2, 3.5, -3.2, 3.6, -3.2, T); H.vent(b, -3.2, 3.7, -3.2, 2.4, 1.2, 4); door(b, -3.2, 1.3, -1.5);
@@ -115,4 +151,4 @@ function icbm(b) {
   for (const a of [0, PI / 2, PI, PI * 1.5]) b.box(0.08, 1.2, 1.4, Math.sin(a) * 0.9, 2.2 + Math.cos(a) * 0.9, -4.0, 0x6b7280, [0, 0, -a]);
 }
 // ---------------- orbital craft ----------------
-export const LATE = { solar, fusion, synth, reserve, wall, bunker, lasertower, railgun, heavyart, abm, silo, launchpad, icbm };
+export const LATE = { solar, fusion, synth, reserve, wall, bunker, lasertower, railgun, heavyart, gsr, abm, silo, launchpad, icbm };

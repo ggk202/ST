@@ -6,7 +6,7 @@ const DIFF = {
   normal: { interval: 20, base: 2400, step: 800, grace: 150, reserve: 1.0 },
   hard:   { interval: 12, base: 1800, step: 650, grace: 100, reserve: 1.0 },
 };
-const PLAN = [['barracks', 1], ['powerplant', 8], ['factory', 1], ['techlab', 1], ['turret', 1], ['supplydepot', 1], ['dronebay', 1], ['airfield', 1], ['sam', 1], ['radar', 1], ['ewtower', 1], ['advtech', 1], ['turret', 2], ['factory', 2], ['sam', 2], ['barracks', 2], ['dronebay', 2], ['turret', 4], ['airfield', 2], ['bunker', 2], ['solar', 2], ['reserve', 1], ['fusion', 1], ['lasertower', 1], ['railgun', 2], ['synth', 2], ['abm', 1], ['heavyart', 1], ['silo', 1], ['launchpad', 1], ['railgun', 3], ['bunker', 4], ['lasertower', 2], ['heavyart', 2], ['silo', 2]];
+const PLAN = [['barracks', 1], ['powerplant', 8], ['factory', 1], ['techlab', 1], ['turret', 1], ['supplydepot', 1], ['dronebay', 1], ['airfield', 1], ['sam', 1], ['radar', 1], ['ewtower', 1], ['advtech', 1], ['turret', 2], ['factory', 2], ['sam', 2], ['barracks', 2], ['dronebay', 2], ['turret', 4], ['airfield', 2], ['bunker', 2], ['solar', 2], ['reserve', 1], ['fusion', 1], ['lasertower', 1], ['railgun', 2], ['synth', 2], ['abm', 1], ['gsr', 1], ['heavyart', 1], ['silo', 1], ['launchpad', 1], ['railgun', 3], ['bunker', 4], ['lasertower', 2], ['heavyart', 2], ['silo', 2]];
 const WEIGHTS = { rifleman: 2, at: 1.6, manpads: 0.8, scout: 0.5, ifv: 2.5, mbt: 3.5, aa: 0.8, sph: 1.2, heavy: 2.5, mlrs: 1.4, tel: 0.25, uav: 0.15, heli: 2, vtol: 1.4, fighter: 1.3, bomber: 0.9, strategic: 0.6, awacs: 0.3, spydrone: 0.15, engineer: 0,
   ewtruck: 0.35, supplytruck: 0.45, tanker: 0.3, ewplane: 0.3, robot: 2.5, ewdog: 0.9, sapper: 0.8, repair: 0.5, walker: 2, fpv: 1.2, wingman: 1.3, carrier: 0.9, empcarrier: 0.3 };
 const hyp = (a, b) => Math.sqrt(a * a + b * b);
@@ -91,7 +91,7 @@ export class AIController {
       if (type === 'powerplant' && (cnt('powerplant') >= 5 || p.energy > 1200 || p.pE - p.pU > 14 + p.demE * 0.7 || (cnt('powerplant') >= 1 && secs < 90 && p.energy > 300))) continue;
       if (type === 'airfield' && secs < 150) continue;
       if (d.space && !sim.space) continue;
-      const LATE_T = { bunker: 420, solar: 480, reserve: 540, fusion: 600, lasertower: 660, railgun: 700, synth: 760, abm: 840, heavyart: 900, silo: 980, launchpad: 1100 };
+      const LATE_T = { bunker: 420, solar: 480, reserve: 540, fusion: 600, lasertower: 660, railgun: 700, synth: 760, abm: 840, gsr: 860, heavyart: 900, silo: 980, launchpad: 1100 };
       if (LATE_T[type] && (secs < LATE_T[type] || (this.diff === 'easy' && secs < LATE_T[type] + 400))) continue;
       if (n >= 2 && secs < 300) continue;
       if ((type === 'turret' || type === 'sam') && secs < 150) continue;

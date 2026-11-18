@@ -21,7 +21,7 @@ export const DMG = {
 // damage multiplier of a hit against a particular entity (drones are fried by HPM regardless of armor class)
 export function dmgMult(type, armor, drone) { if (type === 'hpm' && drone) return 1; return DMG[type][armor]; }
 
-const W = (o) => Object.assign({ min: 0, kind: 'hit', speed: 0, splash: 0, ground: true, air: false, arc: 0, spread: 0, radar: false, drone: false, stun: 0, ammo: 0, sec: false, fx: '' }, o);
+const W = (o) => Object.assign({ min: 0, kind: 'hit', speed: 0, splash: 0, ground: true, air: false, arc: 0, spread: 0, radar: false, ind: false, drone: false, stun: 0, ammo: 0, sec: false, fx: '' }, o);
 
 // per-tier multipliers (Mk I, Mk II, Mk III)
 const TS = [null,
@@ -55,13 +55,13 @@ const BASE = {
   aa: { name: 'Mobile AA', desc: 'Radar-guided flak vehicle with its own search radar. Shreds aircraft and drones.', radar: { range: 65 }, from: 'factory', cost: 650, time: 16, hp: 380, speed: 8, armor: 'light', radius: 2.2, vision: 50,
     weapons: [W({ type: 'aa', range: 52, dmg: 16, reload: 0.25, ground: false, air: true, radar: true })] },
   sph: { name: 'Self-Prop. Howitzer', desc: 'Long-range artillery. Needs spotters.', from: 'factory', cost: 900, time: 22, hp: 260, speed: 6, armor: 'light', radius: 2.5, vision: 36,
-    weapons: [W({ type: 'he', range: 130, min: 30, dmg: 320, reload: 7, kind: 'shell', speed: 55, splash: 8, arc: 0.5, spread: 0.035 })] },
+    weapons: [W({ ind: true, type: 'he', range: 130, min: 30, dmg: 320, reload: 7, kind: 'shell', speed: 55, splash: 8, arc: 0.5, spread: 0.035 })] },
   heavy: { name: 'Heavy Tank', desc: 'Slow, heavily armored.', from: 'factory', techLv: 1, cost: 1400, time: 30, hp: 1450, speed: 5.5, armor: 'heavy', radius: 3.0, vision: 44, aps: { n: 4, range: 18 },
     weapons: [W({ type: 'ap', range: 46, dmg: 470, reload: 4.5, kind: 'shell', speed: 95, splash: 2 }), W({ type: 'bullet', range: 28, dmg: 16, reload: 0.35, sec: true })] },
   mlrs: { name: 'Rocket Artillery', desc: 'Area bombardment.', from: 'factory', techLv: 1, cost: 1100, time: 26, hp: 300, speed: 7, armor: 'light', radius: 2.5, vision: 36,
-    weapons: [W({ type: 'he', range: 105, min: 25, dmg: 110, fx: 'rocket', reload: 1.6, kind: 'shell', speed: 65, splash: 7, arc: 0.7, spread: 0.06 })] },
+    weapons: [W({ ind: true, type: 'he', range: 105, min: 25, dmg: 110, fx: 'rocket', reload: 1.6, kind: 'shell', speed: 65, splash: 7, arc: 0.7, spread: 0.06 })] },
   tel: { name: 'Ballistic Missile', desc: 'Devastating long-range missile.', from: 'factory', techLv: 1, cost: 2200, time: 50, hp: 320, speed: 5.5, armor: 'light', radius: 2.8, vision: 36,
-    weapons: [W({ type: 'blast', range: 260, min: 70, dmg: 600, reload: 60, kind: 'shell', speed: 70, splash: 16, arc: 90, spread: 0.01 })] },
+    weapons: [W({ ind: true, type: 'blast', range: 260, min: 70, dmg: 600, reload: 60, kind: 'shell', speed: 70, splash: 16, arc: 90, spread: 0.01 })] },
   ewtruck: { name: 'EW Truck', desc: 'Wide-area jammer. Degrades enemy drones, aircraft radar and missile locks. Drains energy.', from: 'factory', techLv: 1, cost: 800, time: 20, hp: 320, speed: 7, armor: 'light', radius: 2.4, vision: 50,
     ew: { radius: 60 }, upkeep: 7, weapons: [] },
   // ---- aircraft (Airfield) ----
@@ -285,6 +285,7 @@ export const BUILDINGS = {
     weapons: [W({ type: 'aa', range: 75, dmg: 380, reload: 3.6, kind: 'missile', speed: 75, ground: false, air: true, radar: true })] },
   radar: { name: 'Ground Radar', desc: 'Long-range air-search radar. Detects aircraft far beyond visual range for your whole team; low flyers are harder to see. Drains energy.', cost: 500, energy: 300, time: 20, size: 2, hp: 600, armor: 'struct', vision: 44, requires: ['factory'], radar: { range: 170 }, upkeep: 5, weapons: [] },
   supplydepot: { name: 'Supply Depot', desc: 'Forward supply base. Rearms ground units in range, tops up Supply Trucks and refuels helicopters. Build one beside an Engineer far from home; stock it by truck or air-dropped pallets.', cost: 400, energy: 100, time: 18, size: 2, hp: 700, armor: 'struct', vision: 44, requires: ['barracks'], depot: { cap: 3000, radius: 30, rate: 44, regen: 1.5 }, weapons: [] },
+  gsr: { name: 'Ground Surveillance Radar', desc: 'Colossal over-the-horizon battlefield radar. Holds every enemy ground vehicle and infantry squad inside a huge radius (about 40% of the map width) and shares the tracks team-wide, so artillery can shell contacts nobody can see. Blind to aircraft and structures. Jamming shortens its range. Drains energy.', cost: 2200, energy: 1300, time: 34, size: 3, hp: 800, armor: 'struct', vision: 40, requires: ['advtech'], gradar: { frac: 0.4 }, upkeep: 14, weapons: [] },
   ewtower: { name: 'EW Tower', desc: 'Static jammer: degrades enemy drones, aircraft radar and missile locks in a wide area. Drains energy.', cost: 450, energy: 350, time: 18, size: 2, hp: 500, armor: 'struct', vision: 40, requires: ['techlab'], ew: { radius: 62, power: 2 }, upkeep: 6, weapons: [] },
   // ---- late game
   solar: { name: 'Solar Array', desc: 'Large photovoltaic field. Modest energy output but cheap and needs no fuel.', cost: 400, energy: 0, time: 18, size: 3, hp: 450, armor: 'struct', vision: 28, incomeE: 100, capE: 600, requires: ['techlab'], weapons: [] },
@@ -299,7 +300,7 @@ export const BUILDINGS = {
   railgun: { name: 'Railgun Emplacement', desc: 'Hypervelocity cannon. Punches through the heaviest armour at long range.', cost: 1500, energy: 900, time: 28, size: 2, hp: 1100, armor: 'struct', vision: 70, requires: ['advtech'],
     weapons: [W({ type: 'ap', range: 90, dmg: 1800, reload: 6, kind: 'shell', speed: 260, splash: 2 })] },
   heavyart: { name: 'Heavy Artillery Battery', desc: 'Stationary siege guns with enormous range. Needs spotters (vision) to hit anything.', cost: 2000, energy: 1100, time: 36, size: 4, hp: 1600, armor: 'struct', vision: 44, requires: ['advtech'],
-    weapons: [W({ type: 'he', range: 290, min: 60, dmg: 900, reload: 9, kind: 'shell', speed: 85, splash: 14, arc: 0.6, spread: 0.03 })] },
+    weapons: [W({ ind: true, type: 'he', range: 290, min: 60, dmg: 900, reload: 9, kind: 'shell', speed: 85, splash: 14, arc: 0.6, spread: 0.03 })] },
   abm: { name: 'Anti-Ballistic Battery', desc: 'Long-range interceptor battery. Shoots down incoming strategic missiles near it and engages aircraft. Has its own radar.', radar: { range: 150 }, cost: 1600, energy: 900, time: 30, size: 3, hp: 1000, armor: 'struct', vision: 70, requires: ['advtech'], abm: { range: 140, pk: 0.75, cd: 120 },
     weapons: [W({ type: 'aa', range: 120, dmg: 600, reload: 5, kind: 'missile', speed: 100, ground: false, air: true, radar: true })] },
   silo: { name: 'Missile Silo', desc: 'Stores and launches strategic ballistic missiles that arc through space and hit anywhere on the map. Queue missiles here.', cost: 2500, energy: 1500, time: 45, size: 3, hp: 2200, armor: 'struct', vision: 36, requires: ['advtech'], produces: 'silo', weapons: [] },
@@ -331,12 +332,12 @@ export const AF_MODULES = {
 };
 export const AF_KEYS = Object.keys(AF_MODULES);
 
-export const BUILD_ORDER = ['derrick', 'powerplant', 'barracks', 'factory', 'dronebay', 'airfield', 'techlab', 'advtech', 'turret', 'sam', 'radar', 'ewtower', 'supplydepot', 'solar', 'fusion', 'synth', 'reserve', 'wall', 'bunker', 'lasertower', 'railgun', 'heavyart', 'abm', 'silo', 'launchpad'];
+export const BUILD_ORDER = ['derrick', 'powerplant', 'barracks', 'factory', 'dronebay', 'airfield', 'techlab', 'advtech', 'turret', 'sam', 'radar', 'gsr', 'ewtower', 'supplydepot', 'solar', 'fusion', 'synth', 'reserve', 'wall', 'bunker', 'lasertower', 'railgun', 'heavyart', 'abm', 'silo', 'launchpad'];
 // building tiers (derricks and power plants): output / storage multiplier by tier and the upgrade steps
 export const BTIER = { mult: [1, 1.9, 3.0], max: 3, steps: { derrick: [{ cost: 300, energy: 0, time: 16 }, { cost: 650, energy: 150, time: 24 }], powerplant: [{ cost: 300, energy: 0, time: 16 }, { cost: 650, energy: 0, time: 24 }] }, roman: ['', 'I', 'II', 'III'] };
 export const PRODUCER_KINDS = ['hq', 'barracks', 'factory', 'airfield', 'dronebay', 'silo', 'launchpad'];
 // building categories for the build panel
-export const BUILD_CATS = [['eco', 'Economy', ['derrick', 'powerplant', 'solar', 'fusion', 'synth', 'reserve', 'supplydepot']], ['prod', 'Production', ['barracks', 'factory', 'dronebay', 'airfield', 'techlab', 'advtech', 'silo', 'launchpad']], ['def', 'Defense', ['turret', 'bunker', 'wall', 'sam', 'lasertower', 'railgun', 'heavyart', 'abm']], ['sense', 'Sensors', ['radar', 'ewtower']]];
+export const BUILD_CATS = [['eco', 'Economy', ['derrick', 'powerplant', 'solar', 'fusion', 'synth', 'reserve', 'supplydepot']], ['prod', 'Production', ['barracks', 'factory', 'dronebay', 'airfield', 'techlab', 'advtech', 'silo', 'launchpad']], ['def', 'Defense', ['turret', 'bunker', 'wall', 'sam', 'lasertower', 'railgun', 'heavyart', 'abm']], ['sense', 'Sensors', ['radar', 'gsr', 'ewtower']]];
 export const STORAGE_BASE = { m: 0, e: 0 };
 
 for (const [k, d] of Object.entries(BUILDINGS)) {

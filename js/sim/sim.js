@@ -34,6 +34,7 @@ export class Sim {
     this.pathQ = [];
     this.jammers = [];
     this.radars = [];                                   // active radar emitters (overlay + detection)
+    this.gradars = []; this.gcontact = [0, 1, 2, 3].map(() => new Set());   // ground-surveillance radars and the enemy ground units they hold, per team
     this.contact = [0, 1, 2, 3].map(() => new Set());   // per team: enemy aircraft currently held by radar
     this.over = false;
     this.winner = -1;
@@ -239,7 +240,7 @@ export class Sim {
       case 'bupg': for (const b of this.own(c.ids, c.p)) if (b.kind === 'building') this.bldStartUp(b); break;
       case 'cancelbupg': for (const b of this.own(c.ids, c.p)) if (b.kind === 'building' && b.tu) { p.credits += b.tu.sm; p.energy += b.tu.se; b.tu = null; } break;
       case 'escort': { const ld = this.byId.get(c.tid); if (!ld || ld.dead || ld.team !== p.team) return; for (const u of this.own(c.ids, c.p)) if (u.kind === 'unit' && u.id !== ld.id) { u.order = { t: 'escort', tid: ld.id }; u.path = null; u.pt = null; u.pending = false; u.target = 0; } break; }
-      case 'emcon': for (const e of this.own(c.ids, c.p)) { const d = e.ed || DEFS[e.def]; if (d.radar || d.ew) e.emcon = !!c.v; } break;
+      case 'emcon': for (const e of this.own(c.ids, c.p)) { const d = e.ed || DEFS[e.def]; if (d.radar || d.ew || d.gradar) e.emcon = !!c.v; } break;
       case 'lauto': for (const u of this.own(c.ids, c.p)) if (u.kind === 'unit' && DEFS[u.def].supply) u.auto = !!c.v; break;
       case 'supplydrop': for (const u of this.own(c.ids, c.p)) if (u.kind === 'unit' && u.ap === 'fly' && u.pal > 0) { u.order = { t: 'sdrop', x: clamp(c.x, 10, this.map.size - 10), z: clamp(c.z, 10, this.map.size - 10) }; u.lcx = undefined; } break;
       case 'orbmove': if (this.space) this.orbMove(c.p, c.ids, c.layer, c.ph); break;
@@ -447,6 +448,19 @@ export class Sim {
   updateRadar() {
     const S = this.radars; S.length = 0;
     for (const c of this.contact) c.clear();
+    // ground surveillance radars: range is a fraction of the map width; every enemy ground unit inside is held as a track
+    const G = this.gradars; G.length = 0; for (const c of this.gcontact) c.clear();
+    for (const e of this.ents) {
+      if (e.dead || e.kind !== 'building' || e.progress < 1) continue;
+      const d = BUILDINGS[e.def]; if (!d.gradar) continue;
+      if (e.stun > 0 || e.emcon || !this.players[e.owner].ewOn) continue;
+      const r0 = Math.max(140, d.gradar.frac * this.map.size);
+      G.push({ id: e.id, x: e.x, z: e.z, team: e.team, r0, r: r0 * Math.max(0.25, 1 - 0.15 * (e.jam || 0)) });
+    }
+    if (G.length) for (const t of this.ents) {
+      if (t.dead || t.air || t.kind !== 'unit') continue;
+      for (let i = 0; i < G.length; i++) { const g = G[i]; if (g.team === t.team) continue; const dx = t.x - g.x, dz = t.z - g.z; if (dx * dx + dz * dz <= g.r * g.r) this.gcontact[g.team].add(t.id); }
+    }
     for (const e of this.ents) {
       if (e.dead) continue;
       const d = e.ed || DEFS[e.def]; if (!d.radar) continue;
@@ -732,7 +746,7 @@ export class Sim {
 
   // ---------- targeting & weapons ----------
   seen(team, e) { const c = this.map.cellOf(e.x, e.z); return c >= 0 && this.vis[team][c] === 1; }
-  canSee(team, e) { return this.seen(team, e) || (e.air && this.contact[team].has(e.id)) || this.esm[team].has(e.id); }
+  canSee(team, e) { return this.seen(team, e) || (e.air && this.contact[team].has(e.id)) || (!e.air && this.gcontact[team].has(e.id)) || this.esm[team].has(e.id); }
   acquire(u, d, radius, filt) {
     const vis = this.vis[u.team], map = this.map;
     let best = null, bs = 1e18;
@@ -744,10 +758,10 @@ export class Sim {
       if (dd > radius + e.radius * 0.5) return;
       const c = map.cellOf(e.x, e.z);
       const sight = c >= 0 && vis[c] === 1;
-      const ctc = e.air && this.contact[u.team].has(e.id);
+      const gc = !e.air && this.gcontact[u.team].has(e.id), ctc = (e.air && this.contact[u.team].has(e.id)) || gc;
       if (!sight && !ctc && !this.esm[u.team].has(e.id)) return;   // radar tracks / ESM bearings only support radar/missile weapons
       let usable = false;
-      for (let k = 0; k < d.weapons.length; k++) { const w = d.weapons[k]; if ((w.sec && !filt) || (!w.sec && filt)) continue; if (!sight && !(w.radar || w.kind === 'missile')) continue; if (this.wCan(w, e) && dd >= w.min && !(u.am && u.am[k] === 0)) { usable = true; break; } }
+      for (let k = 0; k < d.weapons.length; k++) { const w = d.weapons[k]; if ((w.sec && !filt) || (!w.sec && filt)) continue; if (!sight && !(w.radar || w.kind === 'missile' || (gc && w.ind))) continue; if (this.wCan(w, e) && dd >= w.min && !(u.am && u.am[k] === 0)) { usable = true; break; } }
       if (!usable) return;
       const ed = DEFS[e.def];
       const armed = ed.weapons.length > 0;
