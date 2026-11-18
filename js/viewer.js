@@ -4,7 +4,7 @@ import { makeModel, modelMaterial } from './models.js';
 import { DEFS, BASE_UNITS, BASE_ORDER, BUILDINGS, PLAYER_COLORS, PLAYER_COLOR_NAMES, ROMAN, unitId, BUILD_ORDER } from './sim/defs.js';
 
 const $ = (id) => document.getElementById(id);
-const GROUPS = [['Infantry', 'barracks'], ['Vehicles', 'factory'], ['Aircraft', 'airfield'], ['Drones', 'dronebay']];
+const GROUPS = [['Infantry', 'barracks'], ['Vehicles', 'factory'], ['Aircraft', 'airfield'], ['Drones', 'dronebay'], ['Missiles', 'silo'], ['Satellites', 'launchpad'], ['Orbital ships', 'orbyard']];
 
 export class ModelViewer {
   constructor() { this.base = 'mbt'; this.tier = 1; this.team = 0; this.lod = 0; this.auto = true; this.running = false; this.inited = false; }
