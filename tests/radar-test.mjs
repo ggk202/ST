@@ -35,10 +35,11 @@ const upd = (s, n = 8) => { for (let i = 0; i < n; i++) s.step([]); };
 {
   const s = mk(), cx = half(s), cz = half(s);
   const aw = flyer(s, 'awacs', 0, cx, cz); aw.ed = UNITS.awacs.loadouts[0].ed;
-  const t1 = flyer(s, 'fighter', 1, cx + 170, cz), t2 = flyer(s, 'fighter', 1, cx + 235, cz);
+  const t1 = flyer(s, 'fighter', 1, cx + 170, cz), t2 = flyer(s, 'fighter', 1, cx + 380, cz);
   upd(s);
   ok(s.contact[0].has(t1.id) && !s.contact[0].has(t2.id), 'AWACS (range ' + DEFS.awacs.radar.range + ') detects aircraft well beyond vision');
   ok(s.canSee(0, t1) && !s.seen(0, t1), 'contact is usable for targeting although not visually seen');
+  s.kill(aw, true);   // isolate the fighter's own radar cone
   const f = flyer(s, 'fighter', 0, cx - 150, cz + 150, 1, 0), front = flyer(s, 'fighter', 1, cx - 80, cz + 150), back = flyer(s, 'fighter', 1, cx - 220, cz + 150);
   upd(s);
   ok(s.contact[0].has(front.id) && !s.contact[0].has(back.id), 'fighter radar sees ahead, not behind (cone)');

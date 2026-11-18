@@ -133,6 +133,7 @@ class App {
     const lock = (id) => { for (const b of $(id).children) b.disabled = ro; };
     this.seg('segType', [{ v: 'island', label: 'Island' }, { v: 'highlands', label: 'Mountain valley' }, { v: 'desert', label: 'Desert mesas' }, { v: 'arctic', label: 'Arctic' }, { v: 'jungle', label: 'Jungle' }, { v: 'volcanic', label: 'Volcanic' }, { v: 'random', label: 'Random' }], L.map.type, (v) => { L.map.type = v; this.pushLobby(); }); lock('segType');
     this.seg('segSize', [{ v: 'small', label: 'Small' }, { v: 'medium', label: 'Medium' }, { v: 'large', label: 'Large' }, { v: 'xl', label: 'Huge' }, { v: 'xxl', label: 'Colossal' }], L.map.size, (v) => { L.map.size = v; this.pushLobby(); }); lock('segSize');
+    $('rowDebug').classList.toggle('hidden', this.setupMode !== 'sp'); this.seg('segDebug', [{ v: false, label: 'Off' }, { v: true, label: 'On' }], !!L.map.debug, (v) => { L.map.debug = v; });
     this.seg('segSpace', [{ v: false, label: 'Off' }, { v: true, label: 'On' }], !!L.map.space, (v) => { L.map.space = v; this.pushLobby(); }); lock('segSpace');
     $('seedInput').value = L.map.seed; $('seedInput').disabled = ro; $('btnReseed').disabled = ro;
     $('btnStart').classList.toggle('hidden', ro);
@@ -151,6 +152,11 @@ class App {
         sel.value = s.kind === 'ai' ? 'ai:' + s.diff : s.kind;
         sel.addEventListener('change', () => { const v = sel.value; if (v.startsWith('ai:')) { s.kind = 'ai'; s.diff = v.slice(3); } else s.kind = v; this.pushLobby(); this.renderSetup(); });
         row.appendChild(sel);
+        if (s.kind === 'ai') {
+          const ag = document.createElement('select'); ag.title = 'AI aggression: how big its attack waves are, how soon they leave and when it gives up';
+          for (const [v, t] of [['defensive', 'Defensive'], ['balanced', 'Balanced'], ['aggressive', 'Aggressive'], ['relentless', 'Relentless']]) { const o = document.createElement('option'); o.value = v; o.textContent = t; ag.appendChild(o); }
+          ag.value = s.aggr || 'balanced'; ag.addEventListener('change', () => { s.aggr = ag.value; this.pushLobby(); }); row.appendChild(ag);
+        }
       } else if (i !== 0 && !ro && s.kind === 'human') {
         const k = document.createElement('button'); k.className = 'btn'; k.textContent = 'Kick'; k.addEventListener('click', () => this.kick(i)); row.appendChild(k);
       }
@@ -168,7 +174,7 @@ class App {
     if (this.setupMode !== 'host' || !this.net) return;
     this.net.conns.forEach((conn, slot) => this.net.sendConn(conn, { k: 'lobby', lobby: this.publicLobby(), you: slot }));
   }
-  publicLobby() { return { map: this.lobby.map, slots: this.lobby.slots.map((s) => ({ kind: s.kind, name: s.name, diff: s.diff, team: s.team })) }; }
+  publicLobby() { return { map: this.lobby.map, slots: this.lobby.slots.map((s) => ({ kind: s.kind, name: s.name, diff: s.diff, aggr: s.aggr, team: s.team })) }; }
   leaveSetup() {
     if (this.net) { this.net.close(); this.net = null; }
     this.showScreen('main');
@@ -244,13 +250,13 @@ class App {
   seedNum(seed) { return /^\d+$/.test(String(seed)) ? parseInt(seed, 10) % 1000000 + 1 : seedFromString(seed); }
   buildCfg() {
     const L = this.lobby, slots = [], map = {};
-    L.slots.forEach((s, i) => { if (s.kind === 'human' || s.kind === 'ai') { map[i] = slots.length; slots.push({ name: s.kind === 'ai' ? 'AI ' + PLAYER_COLOR_NAMES[i] : (s.name || 'Player'), ai: s.kind === 'ai' ? s.diff : null, team: s.team }); } });
-    return { cfg: { seed: this.seedNum(L.map.seed), size: L.map.size, type: L.map.type, space: !!L.map.space, slots }, map };
+    L.slots.forEach((s, i) => { if (s.kind === 'human' || s.kind === 'ai') { map[i] = slots.length; slots.push({ name: s.kind === 'ai' ? 'AI ' + PLAYER_COLOR_NAMES[i] : (s.name || 'Player'), ai: s.kind === 'ai' ? s.diff : null, aggr: s.kind === 'ai' ? (s.aggr || 'balanced') : null, team: s.team }); } });
+    return { cfg: { seed: this.seedNum(L.map.seed), size: L.map.size, type: L.map.type, space: !!L.map.space, slots, debug: this.setupMode === 'sp' && !!L.map.debug }, map };
   }
   startFromSetup() {
     const { cfg, map } = this.buildCfg();
-    if (cfg.slots.length < 2) { $('setupErr').textContent = 'Add at least one opponent.'; return; }
-    if (new Set(cfg.slots.map((s) => s.team)).size < 2) { $('setupErr').textContent = 'All players are on the same team – put at least two teams in play.'; return; }
+    if (cfg.slots.length < 2 && !cfg.debug) { $('setupErr').textContent = 'Add at least one opponent.'; return; }
+    if (!cfg.debug && new Set(cfg.slots.map((s) => s.team)).size < 2) { $('setupErr').textContent = 'All players are on the same team – put at least two teams in play.'; return; }
     try { localStorage.setItem('spearhead.name', this.lobby.slots[0].name); } catch (e) { /* ignore */ }
     if (this.setupMode === 'sp') { this.startGame(cfg, 0, new Lockstep(null, 'local', 0)); return; }
     // host

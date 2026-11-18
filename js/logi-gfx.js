@@ -61,8 +61,9 @@ export class LogiGfx {
     }
     if (r.sun) r.sun.intensity = this.sunBase * (1 - 0.82 * k.n) * (1 - 0.4 * k.g);
     if (r.hemi) r.hemi.intensity = this.hemiBase * (1 - 0.6 * k.n) * (1 - 0.15 * k.g);
+    if (r.wxfx) r.wxfx.update(dt, w.kind);
     const el = this.tint; if (!el) return;
     const alpha = Math.min(0.5, 0.42 * k.n + 0.18 * k.g), bg = k.n > 0.15 ? 'rgba(10,18,52,' + alpha.toFixed(3) + ')' : 'rgba(150,160,172,' + alpha.toFixed(3) + ')';
-    el.style.backgroundColor = bg; el.classList.toggle('rain', w.kind === 3 || w.kind === 4); el.classList.toggle('storm', w.kind === 4);
+    const fxOn = r.wxfx && r.wxfx.on; el.style.backgroundColor = bg; el.classList.toggle('rain', !fxOn && (w.kind === 3 || w.kind === 4)); el.classList.toggle('storm', !fxOn && w.kind === 4);
   }
 }

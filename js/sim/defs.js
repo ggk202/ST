@@ -122,7 +122,7 @@ const BASE = {
       { id: 'pallets', name: 'Supply Pallets', desc: 'Eight parachute supply pallets. Use SUPPLY DROP to release them on a point; any friendly unit or depot nearby draws from them.', cost: 80, prep: 5, vis: [], weapons: [], cap: 0, pallets: 8 },
       { id: 'hauler', name: 'Vehicle Hauler', desc: 'Capacity 60 for tanks and heavy vehicles. Needs the Heavy Runway.', cost: 200, prep: 8, rw: 3, mods: { speed: 0.9 }, vis: [], weapons: [], cap: 60 },
     ] },
-  awacs: { name: 'AWACS', desc: 'Large airborne early-warning radar plane. Detects enemy aircraft far beyond visual range and shares the picture with all your air defenses. Drains energy. Needs the Long Runway.', from: 'airfield', rwy: 2, techLv: 1, cost: 2600, time: 40, hp: 650, speed: 15, armor: 'air', radius: 5.5, vision: 70, air: true, fw: true, turn: 0.3, accel: 3, alt: 30, rcs: 2.4, radar: { range: 200 }, upkeep: 10, weapons: [],
+  awacs: { name: 'AWACS', desc: 'Large airborne early-warning radar plane. Detects enemy aircraft far beyond visual range and shares the picture with all your air defenses. Drains energy. Needs the Long Runway.', from: 'airfield', rwy: 2, techLv: 1, cost: 2600, time: 40, hp: 650, speed: 15, armor: 'air', radius: 5.5, vision: 70, air: true, fw: true, turn: 0.3, accel: 3, alt: 30, rcs: 2.4, radar: { range: 340 }, upkeep: 10, weapons: [],
     stdName: 'Surveillance Radar', stdDesc: 'Standard long-range air search.', stdPrep: 5, stdVis: [],
     lo: [
       { id: 'longrange', name: 'Extended Range Array', desc: '+25% radar range, 10% slower, more energy.', cost: 150, prep: 7, mods: { rng: 1.25, speed: 0.9, upk: 1.3 }, vis: [], weapons: [] },

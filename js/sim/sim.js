@@ -53,11 +53,11 @@ export class Sim {
       id: i, name: s.name || ('Player ' + (i + 1)), team: s.team != null ? s.team : i, color: i,
       credits: START_CREDITS, energy: START_ENERGY, capM: 4000, capE: 3000, incM: 4, incE: 12, upkeep: 0, eff: 1, effM: 1, effE: 1, demM: 0, demE: 0,
       pM: 6, pE: 12, pU: 0, spentM: 0, spentE: 0, ewOn: true, tech: 0, tech2: 0,
-      ai: s.ai || null, alive: true, units: 0, income: 6,
+      ai: s.ai || null, aggr: s.aggr || 'balanced', alive: true, units: 0, income: 6,
       spawn: this.map.spawns[i], stats: { built: 0, killed: 0, lost: 0 }, lastAlert: -999,
     }));
     this.ais = {};
-    for (const p of this.players) if (p.ai) this.ais[p.id] = new AIController(p.id, p.ai);
+    for (const p of this.players) if (p.ai) this.ais[p.id] = new AIController(p.id, p.ai, p.aggr);
     this.space = !!cfg.space;
     this.spaceInit();
     this.logiInit();
@@ -94,7 +94,7 @@ export class Sim {
     if (d.sup) e.sup = d.sup;
     if (d.supply) { e.stock = d.supply.cap; e.auto = false; }
     if (d.depot) e.stock = d.depot.cap * 0.4;
-    if (d.kind === 'unit') { e.order = { t: 'idle' }; e.path = null; e.pi = 0; e.stuck = 0; e.repath = 0; e.pending = false; e.pt = null; e.moving = false; }
+    if (d.kind === 'unit') { e.order = { t: 'idle' }; e.st = 1; e.hx = x; e.hz = z; e.path = null; e.pi = 0; e.stuck = 0; e.repath = 0; e.pending = false; e.pt = null; e.moving = false; }
     else { e.progress = 1; e.sm = 0; e.se = 0; e.tier = 1; e.tu = null; e.queue = []; e.rally = null; e.size = d.size; e.cx0 = 0; e.cz0 = 0; e.node = -1; }
     this.ents.push(e); this.byId.set(e.id, e);
     return e;
@@ -212,6 +212,28 @@ export class Sim {
         }
         break;
       }
+      case 'dbg': {   // solo debug mode only: spawn anything, force weather / time of day, grant resources
+        if (!this.cfg.debug) return;
+        const o = this.players[c.o | 0] ? (c.o | 0) : c.p;
+        if (c.op === 'spawn') {
+          const dd = UNITS[c.def], bd = BUILDINGS[c.def];
+          if (dd && !(dd.space && !this.space)) {
+            const n = Math.max(1, Math.min(60, c.n | 0 || 1)), cols = Math.ceil(Math.sqrt(n)), S = this.map.size;
+            for (let i = 0; i < n; i++) {
+              const x = Math.max(8, Math.min(S - 8, c.x + ((i % cols) - (cols - 1) / 2) * 6)), z = Math.max(8, Math.min(S - 8, c.z + (((i / cols) | 0) - (cols - 1) / 2) * 6));
+              this.spawnUnit(c.def, o, x, z);
+            }
+          } else if (bd && c.def !== 'hq' && !(bd.space && !this.space)) {
+            let node = null; if (bd.oil) { let bt = 1e9; for (const nd of this.map.oil) { if (nd.building) continue; const dx = nd.ci * CELL - c.x, dz = nd.cj * CELL - c.z, dd2 = dx * dx + dz * dz; if (dd2 < bt) { bt = dd2; node = nd; } } if (!node) return; }
+            const sn = this.snap(c.def, c.x, c.z, node); this.placeBuildingRaw(c.def, o, sn.x, sn.z, true, node);
+          }
+        } else if (c.op === 'wx') { this.wx.kind = c.v | 0; this.wx.left = 1e9; }
+        else if (c.op === 'night') { this.wx.fn = c.v < 0 ? -1 : c.v; }
+        else if (c.op === 'money') { const q = this.players[o]; q.credits += 20000; q.energy += 20000; }
+        else if (c.op === 'kill') { for (const e of this.ents) if (!e.dead && e.owner === o && e.def !== 'hq' && Math.hypot(e.x - c.x, e.z - c.z) < (c.r || 40)) this.kill(e, false); }
+        break;
+      }
+      case 'stance': for (const u of this.own(c.ids, c.p)) if (u.kind === 'unit') { u.st = Math.max(0, Math.min(2, c.v | 0)); if (u.order.t === 'idle') { u.hx = u.x; u.hz = u.z; } } break;
       case 'stop': for (const u of this.own(c.ids, c.p)) if (u.kind === 'unit') { u.oq = null; this.finishOrder(u); } break;
       case 'build': {
         const r = this.canPlace(c.p, c.type, c.x, c.z, c.node);
@@ -279,7 +301,19 @@ export class Sim {
     this.finishOrderNow(u);
     if (nx) { this.cmdMove([u], nx.x, nx.z, nx.t); u.oq = rest && rest.length ? rest : null; }
   }
-  finishOrderNow(u) { u.order = { t: 'idle' }; u.path = null; u.pt = null; u.pending = false; u.target = 0; u.moving = false; }
+  finishOrderNow(u) {
+    const o = u.order; u.order = { t: 'idle' }; u.path = null; u.pt = null; u.pending = false; u.target = 0; u.moving = false;
+    if (u.kind !== 'unit' || u.st === undefined) return;
+    if (o && o.auto && u.st > 0 && !u.air) { const dx = u.hx - u.x, dz = u.hz - u.z; if (dx * dx + dz * dz > 36) { this.cmdMove([u], u.hx, u.hz, 'move'); u.order.rtn = true; } }   // limited autonomy: drop the fight and walk back to the post
+    else if (!(o && o.rtn)) { u.hx = u.x; u.hz = u.z; }                                                                                                    // an order the player gave has been carried out: this is the new post
+  }
+  // stance engagement: idle ground units attack visible enemies within a leash of their post, then return
+  autoEngage(u, d) {
+    const L = u.st === 2 ? 140 : 60, e = this.acquire(u, d, Math.max(d.maxRange, d.vision) + L * 0.5);
+    if (!e) return null;
+    const hx = e.x - u.hx, hz = e.z - u.hz; if (hx * hx + hz * hz > (L + d.maxRange * 0.8) * (L + d.maxRange * 0.8)) return null;
+    u.order = { t: 'attack', tid: e.id, auto: true, leash: L }; u.target = e.id; u.path = null; return e;
+  }
 
   producerFor(owner, d) {
     let best = null;
@@ -624,6 +658,7 @@ export class Sim {
         tg = this.acquire(u, d, d.maxRange + (chase ? 12 : 0));
         u.target = tg ? tg.id : 0;
       }
+      if (o.t === 'idle' && !tg && u.st > 0 && d.speed > 0 && !d.air && !d.builder && ((this.tick + u.id) % 8) === 0) { const e = this.autoEngage(u, d); if (e) tg = e; }
     }
     // fixed-wing aircraft keep flying: loiter, attack passes, banked turns
     if (d.fw && (u.ap === undefined || u.ap === 'fly')) {
@@ -654,7 +689,7 @@ export class Sim {
         if (this.inRange(u, d, tg)) { this.faceTo(u, tg.x, tg.z); u.path = null; }
         else {
           this.chaseTarget(u, d, tg); moved = true;
-          if (o.auto) { const dx = tg.x - u.x, dz = tg.z - u.z, r = d.vision * 1.8; if (dx * dx + dz * dz > r * r) this.finishOrder(u); }
+          if (o.auto) { if (o.leash) { const hx = u.x - u.hx, hz = u.z - u.hz; if (hx * hx + hz * hz > o.leash * o.leash) this.finishOrder(u); } else { const dx = tg.x - u.x, dz = tg.z - u.z, r = d.vision * 1.8; if (dx * dx + dz * dz > r * r) this.finishOrder(u); } }
         }
         break;
       case 'attackground': {
@@ -1002,11 +1037,11 @@ export class Sim {
     const op = this.players[t.owner];
     if (this.tick - op.lastAlert > 80 && t.hp > 0) { op.lastAlert = this.tick; this.ev({ e: 'alert', owner: t.owner, x: t.x, z: t.z, kind: t.kind }); }
     if (t.hp <= 0) { if (src) this.players[src.owner].stats.killed++; this.kill(t); return; }
-    if (t.kind === 'unit' && src && !src.dead && t.order.t === 'idle' && (t.ap === undefined || t.ap === 'fly')) {
+    if (t.kind === 'unit' && src && !src.dead && t.order.t === 'idle' && t.st > 0 && (t.ap === undefined || t.ap === 'fly')) {
       const d = t.ed || UNITS[t.def];
       if (d.weapons.length && (src.air ? d.hitsAir : d.hitsGround) && src.team !== t.team) {
         const dx = src.x - t.x, dz = src.z - t.z;
-        if (dx * dx + dz * dz < d.vision * d.vision * 3) t.order = { t: 'attack', tid: src.id, auto: true };
+        if (dx * dx + dz * dz < d.vision * d.vision * 3) t.order = { t: 'attack', tid: src.id, auto: true, leash: t.st === 2 ? 140 : 60 };
       }
     }
   }

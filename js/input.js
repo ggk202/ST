@@ -79,6 +79,11 @@ export class Controls {
   orderLift(af) { const u = this.selUnits().filter((e) => e.cargo); if (!u.length) return false; this.cmd({ t: 'lift', ids: this.ids(u), bid: af.id }); this.r.ping(af.x, af.z, 0x6cb8ff); sfx('ui', 0.6); return true; }
   orderDrop(x, z) { const u = this.selUnits().filter((e) => e.cargo); if (!u.length) return; this.cmd({ t: 'drop', ids: this.ids(u), x, z }); this.r.ping(x, z, 0xffd24a); sfx('ui', 0.6); }
   unload() { const u = this.selUnits().filter((e) => e.cargo); if (u.length) this.cmd({ t: 'unload', ids: this.ids(u) }); }
+  cycleStance() {
+    const u = this.selUnits().filter((q) => q.st !== undefined && !q.air && UNITS[q.def].weapons.length && UNITS[q.def].speed > 0 && !DEFS[q.def].builder); if (!u.length) return;
+    const nx = (Math.min(...u.map((q) => q.st)) + 1) % 3; this.cmd({ t: 'stance', ids: this.ids(u), v: nx });
+    this.g.toast('Stance: ' + ['Hold – never leaves its post', 'Defend – engages nearby enemies, then returns', 'Aggressive – hunts further out, then returns'][nx], 'info'); setTimeout(() => { this.g.hud.selSig = null; }, 160);
+  }
   stop() { const u = this.selUnits(); if (u.length) this.cmd({ t: 'stop', ids: this.ids(u) }); }
   sell() { const b = this.selBlds().filter((e) => e.def !== 'hq'); if (b.length) this.cmd({ t: 'sell', ids: this.ids(b) }); }
 
@@ -100,6 +105,8 @@ export class Controls {
     this.q = !!shift;
     const gp = this.r.groundAt(sx, sy), m = this.mode.t;
     const hit = this.hitEntity(sx, sy, touch ? 28 : 10);
+    if (m === 'dbgspawn') { if (gp) { this.g.dbg.place(gp.x, gp.z); } return; }
+    if (m === 'dbgkill') { if (gp) { this.cmd({ t: 'dbg', op: 'kill', o: this.g.dbg.team, x: gp.x, z: gp.z, r: 40 }); this.r.ping(gp.x, gp.z, 0xff5050); } return; }
     if (m === 'attackmove') { if (hit && hit.team !== this.team) this.orderAttack(hit); else if (gp) this.orderAttackMove(gp.x, gp.z); }
     else if (m === 'move') { if (gp) this.orderMove(gp.x, gp.z); }
     else if (m === 'forcefire') { if (gp) this.orderForceFire(gp.x, gp.z); }
@@ -374,7 +381,7 @@ export class Controls {
       if (code === 'KeyM') { stop(); this.setMode({ t: 'move' }); return; }
       if (code === 'KeyS') { stop(); this.stop(); return; }
       if (code === 'KeyF') { stop(); this.setMode({ t: 'forcefire' }); return; }
-      if (code === 'KeyH') { stop(); const fl = this.selUnits().filter((u) => u.ap === 'fly' && UNITS[u.def].loadouts); if (fl.length) { this.cmd({ t: 'rtb', ids: this.ids(fl) }); this.g.toast('Returning to base to re-arm', 'info'); } return; }
+      if (code === 'KeyH') { stop(); const fl = this.selUnits().filter((u) => u.ap === 'fly' && UNITS[u.def].loadouts); if (fl.length) { this.cmd({ t: 'rtb', ids: this.ids(fl) }); this.g.toast('Returning to base to re-arm', 'info'); } else this.cycleStance(); return; }
       if (code === 'KeyT' && this.selUnits().some((u) => u.cargo)) { stop(); this.setMode({ t: 'lift' }); return; }
       if (code === 'KeyJ' && this.selUnits().some((u) => u.cargo)) { stop(); this.setMode({ t: 'drop' }); return; }
       if (code === 'KeyU' && this.selUnits().some((u) => u.cargo)) { stop(); this.unload(); return; }

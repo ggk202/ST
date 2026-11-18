@@ -42,6 +42,9 @@ void main(){
   lc = mix(lc, vec3(0.40, 0.42, 0.36), smoothstep(0.64, 0.82, lat));
   lc = mix(lc, vec3(0.38, 0.33, 0.29), smoothstep(0.56, 0.72, elev) * 0.8);
   lc *= 0.72 + 0.55 * h2;
+  float rel = (fbm(n * 9.0 + L * 0.03) - h2) * 9.0;   // slope toward the sun: mountain relief
+  lc *= 1.0 + clamp(rel, -0.5, 0.5) * land * smoothstep(0.52, 0.66, elev) * 1.4;
+  lc = mix(lc, vec3(0.92, 0.95, 1.0), smoothstep(0.66, 0.78, elev) * 0.8 * land);   // snow-capped ranges
   vec3 col = mix(ocean, lc, land);
   float ice = smoothstep(0.80, 0.90, lat + (h2 - 0.5) * 0.14);
   col = mix(col, vec3(0.93, 0.96, 1.0), ice);
@@ -56,6 +59,10 @@ void main(){
   lit += vec3(1.0, 0.72, 0.34) * city * (1.0 - day) * (1.0 - cs * 0.8) * 0.9;
   float tw = smoothstep(-0.14, 0.0, ndl) * (1.0 - smoothstep(0.0, 0.28, ndl));
   lit += vec3(0.95, 0.38, 0.12) * tw * 0.20 * (0.4 + 0.6 * land);
+  // aurora curtains over both poles, visible on the night side
+  float al = smoothstep(0.66, 0.78, lat) * (1.0 - smoothstep(0.86, 0.95, lat)), ang = atan(n.z, n.x);
+  float cur = pow(max(vn(vec3(ang * 5.0 + uTime * 0.05, lat * 30.0, uTime * 0.04)) * 1.2 - 0.25, 0.0), 2.0);
+  lit += mix(vec3(0.15, 1.0, 0.45), vec3(0.6, 0.2, 0.9), smoothstep(0.78, 0.9, lat)) * cur * al * (1.0 - day) * (0.6 + 0.4 * sin(uTime * 0.6 + ang * 3.0)) * 0.9;
   float fr = pow(1.0 - max(dot(N, V), 0.0), 3.2);
   vec3 atm = mix(vec3(0.22, 0.5, 1.0), vec3(1.0, 0.5, 0.25), tw);
   lit += atm * fr * (0.10 + 1.15 * day);
@@ -76,6 +83,11 @@ void main(){
   float tw = smoothstep(-0.14, 0.0, ndl) * (1.0 - smoothstep(0.0, 0.28, ndl));
   col += vec3(1.0, 0.45, 0.2) * tw * 0.35 * d;
   float fr = pow(1.0 - max(dot(N, V), 0.0), 2.5);
+  float st = smoothstep(0.80, 0.95, c) * step(0.985, fract(sin(floor(uTime * 1.5 + dot(floor(n * 18.0), vec3(1.0, 7.0, 13.0))) * 12.9898) * 43758.5453));   // storm-cell flashes
+  col += vec3(0.75, 0.85, 1.0) * st * (1.0 - day) * 1.6;
+  float cir = smoothstep(0.55, 0.9, vn(vec3(n.x * 2.0 + uTime * 0.01, n.y * 14.0, n.z * 2.0)) ) * 0.28 * (1.0 - d);
+  col += vec3(1.0) * cir * max(ndl, 0.0);
+  d = max(d, cir * (0.4 + 0.6 * day));
   gl_FragColor = vec4(col + vec3(0.3, 0.5, 0.9) * fr * 0.15 * day, d * (0.06 + 0.94 * smoothstep(-0.2, 0.15, ndl)) * (0.85 + 0.15 * thick));
 }`;
 const ATM_VS = `varying vec3 vNV; varying vec3 vNW; varying vec3 vW; void main(){ vNV = normalize(normalMatrix * normal); vNW = normalize(mat3(modelMatrix) * normal); vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
@@ -87,6 +99,8 @@ void main(){
   float tw = smoothstep(-0.25, 0.05, ndl) * (1.0 - smoothstep(0.05, 0.4, ndl));
   vec3 col = mix(vec3(0.20, 0.45, 1.0), vec3(0.45, 0.78, 1.0), glow);
   col = mix(col, vec3(1.0, 0.45, 0.2), tw * 0.8);
+  float mie = pow(max(dot(normalize(vNW), normalize(uSun)), -0.2) * 0.5 + 0.5, 6.0) * glow;   // forward-scatter halo toward the sun
+  col += vec3(1.0, 0.85, 0.6) * mie * 0.6;
   gl_FragColor = vec4(col * glow * (0.12 + 1.4 * day), glow * (0.1 + 0.9 * day));
 }`;
 const MOON_FS = `#define OCT 5

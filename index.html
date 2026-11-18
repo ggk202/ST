@@ -15,14 +15,15 @@
   "./js/aircraft-gfx.js": "./js/aircraft-gfx.js?v=9534e2ce",
   "./js/airfield-gfx.js": "./js/airfield-gfx.js?v=fc18d998",
   "./js/biomes.js": "./js/biomes.js?v=f4cafe97",
+  "./js/debug.js": "./js/debug.js?v=55c1f3cc",
   "./js/decals.js": "./js/decals.js?v=cc994a8e",
   "./js/fx.js": "./js/fx.js?v=d239f435",
-  "./js/game.js": "./js/game.js?v=8ba338d1",
-  "./js/gfx.js": "./js/gfx.js?v=6e124b7d",
-  "./js/input.js": "./js/input.js?v=d4b4d816",
-  "./js/logi-gfx.js": "./js/logi-gfx.js?v=ca0722d2",
+  "./js/game.js": "./js/game.js?v=a7bcaaf3",
+  "./js/gfx.js": "./js/gfx.js?v=e631037b",
+  "./js/input.js": "./js/input.js?v=3e202ce3",
+  "./js/logi-gfx.js": "./js/logi-gfx.js?v=24923812",
   "./js/logi-ui.js": "./js/logi-ui.js?v=e4f5e1e3",
-  "./js/main.js": "./js/main.js?v=c9973381",
+  "./js/main.js": "./js/main.js?v=a7519bd3",
   "./js/model-air.js": "./js/model-air.js?v=97d62914",
   "./js/model-air2.js": "./js/model-air2.js?v=90233f9c",
   "./js/model-air3.js": "./js/model-air3.js?v=6c84b361",
@@ -36,27 +37,28 @@
   "./js/model-tier.js": "./js/model-tier.js?v=230f2520",
   "./js/models.js": "./js/models.js?v=7790254e",
   "./js/net.js": "./js/net.js?v=2c021794",
-  "./js/orbital.js": "./js/orbital.js?v=5fc73cf1",
+  "./js/orbital.js": "./js/orbital.js?v=94e34345",
   "./js/overlay.js": "./js/overlay.js?v=aea1c6db",
   "./js/procanim.js": "./js/procanim.js?v=8cd3244b",
   "./js/prod-ui.js": "./js/prod-ui.js?v=5f97f89d",
   "./js/projectile-gfx.js": "./js/projectile-gfx.js?v=2ec4b81b",
-  "./js/render.js": "./js/render.js?v=45830693",
-  "./js/sim/ai.js": "./js/sim/ai.js?v=98b3f94a",
+  "./js/render.js": "./js/render.js?v=a4fac4db",
+  "./js/sim/ai.js": "./js/sim/ai.js?v=ae1f8a5e",
   "./js/sim/airops.js": "./js/sim/airops.js?v=cad5fbaa",
   "./js/sim/cargo.js": "./js/sim/cargo.js?v=a424367c",
-  "./js/sim/defs.js": "./js/sim/defs.js?v=086cdd8d",
+  "./js/sim/defs.js": "./js/sim/defs.js?v=e7b74eba",
   "./js/sim/flight.js": "./js/sim/flight.js?v=5d5e79d6",
-  "./js/sim/logistics.js": "./js/sim/logistics.js?v=d99120ec",
+  "./js/sim/logistics.js": "./js/sim/logistics.js?v=f8e96e18",
   "./js/sim/map.js": "./js/sim/map.js?v=438ec206",
   "./js/sim/path.js": "./js/sim/path.js?v=75fdfeb1",
   "./js/sim/save.js": "./js/sim/save.js?v=ec393b6c",
-  "./js/sim/sim.js": "./js/sim/sim.js?v=e6324c2a",
+  "./js/sim/sim.js": "./js/sim/sim.js?v=51689347",
   "./js/sim/space.js": "./js/sim/space.js?v=08509580",
   "./js/sim/util.js": "./js/sim/util.js?v=d8ff3f69",
   "./js/terrain-chunks.js": "./js/terrain-chunks.js?v=dffee037",
-  "./js/ui.js": "./js/ui.js?v=b92854ff",
-  "./js/viewer.js": "./js/viewer.js?v=7c55b7e7"
+  "./js/ui.js": "./js/ui.js?v=f625d39c",
+  "./js/viewer.js": "./js/viewer.js?v=7c55b7e7",
+  "./js/weather.js": "./js/weather.js?v=e7ffe3b6"
  }
 }
 </script>
@@ -134,6 +136,13 @@ body:not(.touch) .touchonly { display:none; }
 #vwLabels { position:absolute; inset:0; pointer-events:none; overflow:hidden; } .vwlb { position:absolute; transform:translate(-50%,-100%); font-size:11px; background:rgba(10,18,26,.82); color:#cfe3f5; border:1px solid #2c3d50; padding:1px 6px; border-radius:6px; white-space:nowrap; }
 @media (max-width:760px) { .vwgrid { grid-template-columns:1fr; } }
 #menu, #pause, #endscreen { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:radial-gradient(ellipse at 30% 20%, #1c2a38 0%, #0b1015 70%); overflow:auto; padding:calc(14px + env(safe-area-inset-top)) 14px 14px; touch-action:pan-y; }
+#dbgPanel { position:absolute; left:8px; top:64px; z-index:6; width:210px; background:rgba(10,14,18,.86); border:1px solid #c0902a; border-radius:8px; padding:6px 8px; font-size:12px; color:#dfe6ec; }
+#dbgPanel .dh { color:#ffc24a; font-weight:700; letter-spacing:.12em; display:flex; justify-content:space-between; }
+#dbgPanel label { display:flex; justify-content:space-between; align-items:center; gap:6px; margin-top:4px; }
+#dbgPanel select, #dbgPanel input { width:130px; background:#1a232b; color:#dfe6ec; border:1px solid #3a4856; border-radius:4px; padding:2px; }
+#dbgPanel .r { display:flex; flex-wrap:wrap; gap:4px; margin-top:5px; }
+#dbgPanel button { background:#25323d; color:#dfe6ec; border:1px solid #3d4d5b; border-radius:4px; padding:3px 6px; font-size:11px; cursor:pointer; }
+#dbgPanel button:hover { background:#34495a; }
 #pause, #endscreen { background:rgba(5,8,11,.82); z-index:10; }
 .card { width:min(94vw,640px); background:rgba(17,23,30,.94); border:1px solid var(--line); border-radius:14px; padding:20px 22px; box-shadow:0 20px 60px #000a; margin:auto; }
 .card h1 { margin:0 0 2px; font-size:34px; letter-spacing:6px; color:var(--acc); } .card h2 { margin:0 0 12px; font-size:20px; } .card .sub { color:var(--dim); margin-bottom:18px; }
@@ -308,6 +317,7 @@ body.touch .item { min-height:66px; } body.touch .btn { min-height:44px; }
       <div class="row"><label>Map type</label><div class="seg" id="segType"></div></div>
       <div class="row"><label>Map size</label><div class="seg" id="segSize"></div></div>
       <div class="row"><label>Space layer</label><div class="seg" id="segSpace"></div><span class="sub" style="margin:0">Orbital view: satellites, launch pads, orbital shipyards and space warships</span></div>
+      <div class="row" id="rowDebug"><label>Debug sandbox</label><div class="seg" id="segDebug"></div><span class="sub" style="margin:0">Solo only: spawn any unit or building for any team, force weather and time of day</span></div>
       <div class="row"><label>Seed</label><input type="text" id="seedInput" maxlength="8" style="width:120px"><button class="btn" id="btnReseed">🎲 Random</button></div>
       <div id="slots"></div>
       <div id="lobbyCode" class="row hidden"><label>Room code</label><span class="code" id="codeText"></span><span class="sub" style="margin:0">Share this code – friends choose “Join Game”.</span></div>
@@ -378,6 +388,7 @@ body.touch .item { min-height:66px; } body.touch .btn { min-height:44px; }
     </div>
   </div>
 
+  <div id="dbgPanel" class="hidden"></div>
   <div id="pause" class="hidden">
     <div class="card" style="width:min(90vw,380px)">
       <h2>Paused</h2>

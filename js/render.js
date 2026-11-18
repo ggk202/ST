@@ -13,6 +13,7 @@ import { updateStores, CrewPool, warmTasks } from './aircraft-gfx.js';
 import { makeModel, modelMaterial } from './models.js';
 import { biomeOf } from './biomes.js';
 import { ChunkedSurface } from './terrain-chunks.js';
+import { Weather } from './weather.js';
 import { Fx, sfx } from './fx.js';
 import { makeDetailTexture, makeCloudTexture, makeUniforms, patchTerrain, patchWater, makeUnitMaterial, Sky, Clouds, Scatter, animateUnit } from './gfx.js';
 
@@ -57,6 +58,8 @@ export class Renderer {
     this.buildTerrain();
     this.buildOil();
     if (this.gfx) this.initWorldGfx();
+    this.biomeName = biomeOf(this.sim.map).name; this.touch = !!opts.touch; this.wxBase = { hor: biomeOf(this.sim.map).hor.slice() };
+    this.wxfx = new Weather(this, this.gfx ? (opts.weather === undefined ? (opts.touch ? 1 : 2) : opts.weather) : 0);
     this.fx = new Fx(this.scene, this.q.fxLow);
     this.craters = new Craters(this.scene, this.sim.map, opts.touch ? 120 : 260);
     // explosion lighting: a few real point lights, driven by the strongest active flashes
@@ -80,6 +83,7 @@ export class Renderer {
     this.fogTex.minFilter = this.fogTex.magFilter = THREE.LinearFilter; this.fogTex.wrapS = this.fogTex.wrapT = THREE.ClampToEdgeWrapping; this.fogTex.needsUpdate = true;
     this.U = makeUniforms(this.sim.map.size, this.fogTex, R.detail, R.cloud);
     this.U.uSunDir.value.set(70, 130, 45).normalize();
+    this.U.uPeak.value = { Desert: 0, Volcanic: 0.35, Jungle: 0.6 }[this.biomeName] ?? 1;
     const bio = biomeOf(this.sim.map); this.skyObj = new Sky(this.U, bio.hor, bio.zen);
     this.scene.background = null; this.scene.add(this.skyObj.mesh);
     this.scene.fog = new THREE.Fog(new THREE.Color().setRGB(bio.hor[0], bio.hor[1], bio.hor[2]), 260 * this.q.view, 1250 * this.q.view);

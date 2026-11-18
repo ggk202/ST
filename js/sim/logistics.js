@@ -40,7 +40,7 @@ export const LogiOps = {
   // ---------- weather & daylight ----------
   weatherTick() {
     const w = this.wx, ph = (this.tick % DAY_TICKS) / DAY_TICKS, tri = ph < 0.5 ? 1 - 4 * ph : 4 * ph - 3;
-    w.night = clamp(-tri * 1.3, 0, 1); w.dl = 1 - w.night;
+    w.night = clamp(-tri * 1.3, 0, 1); if (w.fn >= 0) w.night = w.fn; w.dl = 1 - w.night;
     if (--w.left <= 0) {
       const r = this.rng.next();
       w.kind = r < 0.42 ? 0 : r < 0.58 ? 1 : r < 0.73 ? 2 : r < 0.9 ? 3 : 4;

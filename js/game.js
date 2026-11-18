@@ -1,4 +1,5 @@
 // One running match: simulation + lockstep pacing + renderer + controls + HUD.
+import { DebugPanel } from './debug.js';
 import { Sim } from './sim/sim.js';
 import { Renderer } from './render.js';
 import { Controls } from './input.js';
@@ -26,6 +27,7 @@ export class Game {
     this.simAcc = 0; this.tickInTurn = 0; this.curTurn = null; this.alpha = 0; this.running = false; this.ended = false; this.leftEarly = false;
     this.controls = new Controls(this);
     this.hud = new HUD(this);
+    this.dbg = cfg.debug ? new DebugPanel(this) : null;
     this.sensor = new SensorOverlay(this);
     this.logi = new LogiPanel(this);
     this.orbital = new OrbitalView(this); this.prod = new ProdPanel(this);
@@ -51,6 +53,7 @@ export class Game {
     this.running = false; cancelAnimationFrame(this.raf);
     this.controls.unbind(); window.removeEventListener('resize', this.onResize); window.removeEventListener('orientationchange', this.onResize);
     this.hud.show(false); this.octx.clearRect(0, 0, this.overlay.width, this.overlay.height);
+    if (this.dbg) this.dbg.dispose();
     this.renderer.dispose();
   }
   // on-screen performance read-out (FPS, frame time, draw calls, triangles, sim cost)

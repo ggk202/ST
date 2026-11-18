@@ -154,7 +154,7 @@ Tests: `node tests/cargo-test.mjs` covers the transport, boarding, airlift, aird
 
 ## Radar, electronic warfare and the sensor overlay
 
-- **Radar emitters**: *Ground Radar* (170 m air search), *AWACS* (200 m, airborne), SAM sites (95), Mobile AA (65), and fighters / VTOLs (forward 120° cone, 85 / 60). Radar needs energy, parked aircraft don't emit.
+- **Radar emitters**: *Ground Radar* (170 m air search), *AWACS* (340 m, airborne), SAM sites (95), Mobile AA (65), and fighters / VTOLs (forward 120° cone, 85 / 60). Radar needs energy, parked aircraft don't emit.
 - **Detection** uses the radar equation: range scales with the fourth root of the target's radar cross-section (large transports and bombers are seen from further away, UAVs and helicopters from much closer, the stealth drone barely at all). Low flyers are partly masked from ground radars. Everything your team's radars hold is shared as a *contact*; SAMs and radar/missile weapons can fire on contacts, guns still need visual range.
 - **Jamming**: enemy EW over a radar shrinks its range; EW covering the target (escort jammers) shrinks the detection range of enemy radars; inside the *burn-through* range (30 %) the radar always wins.
 - **Stealth Spy Drone** (Long Runway): ultra-high-altitude, huge vision, out of reach of every weapon, so it **cannot be shot down**. Only jammers blind it (EW towers, trucks, aircraft, with double reach against it).
@@ -197,6 +197,12 @@ tests/save-test.mjs save / load round trip
 - **Production overview** (**C**): bulk-queue, repeat, clear and rally per unit group; **Shift** queues waypoints, quantity selector ×1/5/10/25, SELECT menu and control groups for large armies. **R** opens the Strategic tab.
 - **Colossal** map size (800 cells). Terrain and water are chunked with distance LOD and frustum culling, so the largest map draws roughly 5% of the triangles it used to.
 - **Graphics settings**: presets (auto/low/medium/high/ultra) plus resolution, shadows, view distance, object density, clouds, effects, anti-aliasing, FPS cap, orbital quality and an FPS overlay.
+
+## Autonomy, AI aggression, weather and the debug sandbox
+- **Unit stances** (button in the command bar, key **H**): *Hold* (never leave the spot), *Defend* (engage anything near the post, then return), *Aggressive* (longer leash, chases further) or *Mixed* for a mixed selection. Idle units now handle fights on their own and walk back to their post, so less micromanagement is needed.
+- **AI aggression** (per AI slot in skirmish setup): *Defensive*, *Balanced*, *Aggressive*, *Relentless*. It changes attack-wave size, timing, how long the AI keeps attacking and how fast it feeds reinforcements.
+- **Weather** is rendered in 3D from the sim's weather: rain, snow / blizzard, ash fall, dust storms, ground mist, wet ground, settling snow and lightning with delayed thunder, adapted to the biome. Orbital view adds aurora, storm flashes on the night side, cirrus, a sun halo and mountain relief. Mountains get sun-facing and shaded faces, cracks, strata and snow-capped summits.
+- **Debug sandbox** (solo only): in skirmish setup switch *Debug sandbox* on. A panel lets you spawn any unit tier or building for any team (click the map), delete things, force weather and day / night, and add resources. The sim ignores these commands unless the game was started in debug mode, so it never works in multiplayer.
 
 ## Releasing
 Run `node tools/stamp.mjs` before committing: it puts a content hash on every module URL in the import map in `index.html`, so browsers (especially iPad Safari) never mix a fresh page with stale cached scripts.

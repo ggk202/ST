@@ -6,6 +6,13 @@ const DIFF = {
   normal: { interval: 20, base: 2400, step: 800, grace: 150, reserve: 1.0 },
   hard:   { interval: 12, base: 1800, step: 650, grace: 100, reserve: 1.0 },
 };
+// aggression: how big a wave must be before it leaves (waveMul), how soon it may leave (graceMul), when a wave gives up (giveUp = fraction of its launch value that may be lost), how eagerly stragglers are fed in (feed)
+export const AGGR = {
+  defensive:  { waveMul: 1.7, graceMul: 1.8, giveUp: 0.55, feed: 4 },
+  balanced:   { waveMul: 1.0, graceMul: 1.0, giveUp: 0.30, feed: 3 },
+  aggressive: { waveMul: 0.65, graceMul: 0.6, giveUp: 0.18, feed: 2 },
+  relentless: { waveMul: 0.4, graceMul: 0.3, giveUp: 0.06, feed: 1 },
+};
 const PLAN = [['barracks', 1], ['powerplant', 8], ['factory', 1], ['techlab', 1], ['turret', 1], ['supplydepot', 1], ['dronebay', 1], ['airfield', 1], ['sam', 1], ['radar', 1], ['ewtower', 1], ['advtech', 1], ['turret', 2], ['factory', 2], ['sam', 2], ['barracks', 2], ['dronebay', 2], ['turret', 4], ['airfield', 2], ['bunker', 2], ['solar', 2], ['reserve', 1], ['fusion', 1], ['lasertower', 1], ['railgun', 2], ['synth', 2], ['abm', 1], ['gsr', 1], ['heavyart', 1], ['silo', 1], ['launchpad', 1], ['railgun', 3], ['bunker', 4], ['lasertower', 2], ['heavyart', 2], ['silo', 2]];
 const WEIGHTS = { rifleman: 2, at: 1.6, manpads: 0.8, scout: 0.5, ifv: 2.5, mbt: 3.5, aa: 0.8, sph: 1.2, heavy: 2.5, mlrs: 1.4, tel: 0.25, uav: 0.15, heli: 2, vtol: 1.4, fighter: 1.3, bomber: 0.9, strategic: 0.6, awacs: 0.3, spydrone: 0.15, engineer: 0,
   ewtruck: 0.35, supplytruck: 0.45, tanker: 0.3, ewplane: 0.3, robot: 2.5, ewdog: 0.9, sapper: 0.8, repair: 0.5, walker: 2, fpv: 1.2, wingman: 1.3, carrier: 0.9, empcarrier: 0.3 };
@@ -13,8 +20,8 @@ const hyp = (a, b) => Math.sqrt(a * a + b * b);
 const DIRS = [[1, 0], [0.7, 0.7], [0, 1], [-0.7, 0.7], [-1, 0], [-0.7, -0.7], [0, -1], [0.7, -0.7]];
 
 export class AIController {
-  constructor(id, diff) {
-    this.id = id; this.diff = diff || 'normal'; this.cfg = DIFF[this.diff] || DIFF.normal;
+  constructor(id, diff, aggr) {
+    this.id = id; this.diff = diff || 'normal'; this.cfg = DIFF[this.diff] || DIFF.normal; this.aggr = AGGR[aggr] ? aggr : 'balanced'; this.ag = AGGR[this.aggr];
     this.attacking = false; this.wave = 0; this.target = null; this.launched = 0; this.claims = {};
   }
 
@@ -201,20 +208,20 @@ export class AIController {
     const tgt = this.pickTarget(sim, p, hq, enemies);
     if (!tgt) return;
     if (!this.attacking) {
-      const need = cfg.base + this.wave * cfg.step;
-      if (secs > cfg.grace && value >= Math.min(need, 11000)) {
+      const need = (cfg.base + this.wave * cfg.step) * this.ag.waveMul;
+      if (secs > cfg.grace * this.ag.graceMul && value >= Math.min(need, 11000 * Math.max(0.5, this.ag.waveMul))) {
         this.attacking = true; this.launched = value; this.target = tgt;
         sim.exec({ t: 'attackmove', p: id, ids: army.concat(support).map((u) => u.id), x: tgt.x, z: tgt.z });
       }
     } else {
       const idle = army.filter((u) => u.order.t === 'idle');
-      if (value < this.launched * 0.3 || army.length < 3) {
+      if (value < this.launched * this.ag.giveUp || army.length < Math.min(3, this.ag.feed + 1)) {
         this.attacking = false; this.wave++;
         if (army.length) sim.exec({ t: 'move', p: id, ids: army.map((u) => u.id), x: rally.x, z: rally.z });
       } else if (idle.length >= Math.max(3, army.length * 0.5)) {
         this.target = tgt;
         sim.exec({ t: 'attackmove', p: id, ids: army.map((u) => u.id), x: tgt.x, z: tgt.z });
-      } else if (idle.length >= 3) {
+      } else if (idle.length >= this.ag.feed) {
         sim.exec({ t: 'attackmove', p: id, ids: idle.map((u) => u.id), x: this.target.x, z: this.target.z });
       }
     }

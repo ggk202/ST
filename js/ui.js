@@ -310,6 +310,8 @@ export class HUD {
       add('Move', 'M', 'move', () => c.setMode(c.mode.t === 'move' ? { t: 'normal' } : { t: 'move' }));
       if (units.some((u) => UNITS[u.def].weapons.length)) add('Attack-Move', 'A', 'attackmove', () => c.setMode(c.mode.t === 'attackmove' ? { t: 'normal' } : { t: 'attackmove' }));
       add('Stop', 'S', null, () => c.stop());
+      const stU = units.filter((u) => u.st !== undefined && !u.air && !DEFS[u.def].builder && UNITS[u.def].weapons.length && UNITS[u.def].speed > 0);
+      if (stU.length) { const cur = stU[0].st, same = stU.every((u) => u.st === cur), nm = ['Hold', 'Defend', 'Aggressive']; add('Stance: ' + (same ? nm[cur] : 'Mixed'), 'H', null, () => c.cycleStance(), same && cur === 2 ? 'on' : ''); }
       if (units.some((u) => u.ap === 'fly' && UNITS[u.def].loadouts)) add('Return to base', 'H', null, () => { this.g.cmd({ t: 'rtb', ids: units.filter((u) => u.ap === 'fly').map((u) => u.id) }); this.toast('Returning to base to re-arm', 'info'); });
       const par = units.find((u) => u.ap === 'stand' || u.ap === 'select'); if (par) add('Loadout…', 'L', null, () => { this.loTarget = par.id; this.loHide.delete(par.id); this.loSig = ''; });
       if (units.some((u) => u.cargo)) {
@@ -346,7 +348,8 @@ export class HUD {
     const m = this.c ? this.c.mode : { t: 'normal' }; this.mode = m.t;
     for (const k in this.cmdBtns || {}) this.cmdBtns[k].classList.toggle('on', m.t === k);
     const txt = { fire: 'Launch: click the target anywhere on the map (hold Shift to empty the silo). Esc cancels', escort: 'Escort: click a friendly unit to follow and protect (Esc cancels)', sdrop: 'Supply drop: pick the point to release the pallets over (Esc cancels)', attackmove: 'Attack-move: pick a destination or target (Esc cancels)', move: 'Move: pick a destination (Esc cancels)', forcefire: 'Fire at ground: pick a point (Esc cancels)', rally: 'Rally point: pick a location (Esc cancels)', lift: 'Airlift: click a friendly airfield to fly the loaded cargo there (Esc cancels)', drop: 'Airdrop: click the drop zone; infantry, drones and light vehicles are paradropped (Esc cancels)', place: '' }[m.t];
-    this.el.banner.textContent = txt || ''; this.el.banner.classList.toggle('hidden', !txt);
+    const dtx = m.t === 'dbgspawn' ? 'DEBUG: click the map to spawn. Esc to stop' : m.t === 'dbgkill' ? 'DEBUG: click to delete everything of that team nearby. Esc to stop' : '';
+    this.el.banner.textContent = dtx || txt || ''; this.el.banner.classList.toggle('hidden', !(dtx || txt));
     const placing = m.t === 'place';
     this.el.placeBar.classList.toggle('hidden', !(placing && this.g.touch));
     if (!placing) this.hideTipSoon();

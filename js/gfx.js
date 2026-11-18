@@ -60,15 +60,15 @@ export function makeCloudTexture(size = 256) {
 export function makeUniforms(mapSize, fogTex, detail, cloud) {
   return {
     uTime: { value: 0 }, uDet: { value: detail }, uCld: { value: cloud }, uFog: { value: fogTex }, uMapSize: { value: mapSize },
-    uWind: { value: new THREE.Vector2(0.0009, 0.0004) }, uCloudAmt: { value: 0.42 }, uSunDir: { value: new THREE.Vector3(0.5, 0.8, 0.35).normalize() },
+    uWind: { value: new THREE.Vector2(0.0009, 0.0004) }, uCloudAmt: { value: 0.42 }, uPeak: { value: 0 }, uOver: { value: 0 }, uWet: { value: 0 }, uSnow: { value: 0 }, uSunDir: { value: new THREE.Vector3(0.5, 0.8, 0.35).normalize() },
   };
 }
 const FRAG_COMMON = `
 uniform sampler2D uDet; uniform sampler2D uCld; uniform sampler2D uFog;
-uniform float uTime; uniform float uMapSize; uniform vec2 uWind; uniform float uCloudAmt;
+uniform float uTime; uniform float uMapSize; uniform vec2 uWind; uniform float uCloudAmt; uniform float uOver; uniform float uWet; uniform float uSnow; uniform float uPeak; uniform vec3 uSunDir;
 float cloudShade(vec2 xz) {
   float c = texture2D(uCld, xz * 0.0014 + uWind * uTime * 40.0).r * 0.65 + texture2D(uCld, xz * 0.0033 + 0.37 + uWind * uTime * 55.0).g * 0.35;
-  return smoothstep(0.52, 0.78, c) * uCloudAmt;
+  return mix(smoothstep(0.52, 0.78, c) * uCloudAmt, uCloudAmt * 1.3, uOver);
 }
 float fogShade(vec2 xz) { return texture2D(uFog, xz / uMapSize).r; }
 `;
@@ -98,7 +98,16 @@ export function patchTerrain(mat, U) {
       float rockW = max(smoothstep(0.26, 0.48, slope), greyish * 0.85);
       float tex = mix(mix(grassTex, sandTex, sandy), rockTex, rockW);
       diffuseColor.rgb *= tex;
+      // mountains: sun-facing faces glow, shaded faces go cool and deep, cracks and strata read at distance, scree at the foot
+      float facing = dot(wn, normalize(uSunDir)); float crag = smoothstep(0.30, 0.62, slope);
+      float cracks = smoothstep(0.42, 0.50, rock) - smoothstep(0.50, 0.58, rock);
+      diffuseColor.rgb *= 1.0 + crag * (facing * 0.38 - 0.10 - cracks * 0.28 + (strata - 0.5) * 0.18);
+      diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.80, 0.88, 1.12), crag * smoothstep(0.1, -0.5, facing) * 0.55);
+      float peak = smoothstep(34.0, 62.0, vWP.y + (d2.g - 0.5) * 14.0) * (1.0 - crag * 0.55);
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.94, 0.96, 1.0) * (0.86 + 0.14 * facing), peak * uPeak);   // snow-capped summits
       diffuseColor.rgb *= 1.0 - 0.42 * cloudShade(P);
+      diffuseColor.rgb *= 1.0 - 0.24 * uWet * (1.0 - rockW * 0.45);                                   // rain-soaked ground
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.90, 0.94, 1.0) * (0.9 + 0.1 * d1.r), uSnow * smoothstep(0.55, 0.12, slope) * (0.55 + 0.4 * d2.g));   // snow settles on flat ground
     }`);
     sh.fragmentShader = inject(sh.fragmentShader, '#include <normal_fragment_maps>', `
     {
@@ -218,11 +227,11 @@ export class Sky {
   constructor(U, hor = [0.50, 0.66, 0.84], zen = [0.10, 0.28, 0.66]) {
     this.U = U;
     this.mat = new THREE.ShaderMaterial({
-      uniforms: { uHor: { value: new THREE.Vector3(...hor) }, uZen: { value: new THREE.Vector3(...zen) }, uSun: U.uSunDir, uTime: U.uTime, uCld: U.uCld, uWind: U.uWind },
+      uniforms: { uHor: { value: new THREE.Vector3(...hor) }, uZen: { value: new THREE.Vector3(...zen) }, uSun: U.uSunDir, uTime: U.uTime, uCld: U.uCld, uWind: U.uWind, uOver: U.uOver },
       side: THREE.BackSide, depthWrite: false, fog: false,
       vertexShader: 'varying vec3 vDir; void main() { vDir = position; vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_Position.z = gl_Position.w * 0.99999; }',
       fragmentShader: `
-      varying vec3 vDir; uniform vec3 uHor; uniform vec3 uZen; uniform vec3 uSun; uniform float uTime; uniform sampler2D uCld; uniform vec2 uWind;
+      varying vec3 vDir; uniform vec3 uHor; uniform vec3 uZen; uniform vec3 uSun; uniform float uTime; uniform sampler2D uCld; uniform vec2 uWind; uniform float uOver;
       void main() {
         vec3 d = normalize(vDir); float h = d.y;
         vec3 zen = uZen, hor = uHor;
@@ -233,11 +242,12 @@ export class Sky {
         if (h > 0.0) {
           vec2 p = d.xz / (h + 0.18) * 0.6 + uWind * uTime * 25.0;
           float c = texture2D(uCld, p).r * 0.62 + texture2D(uCld, p * 2.7 + 0.31).g * 0.38;
-          float m = smoothstep(0.50, 0.80, c) * smoothstep(0.0, 0.22, h);
+          float m = max(smoothstep(0.50, 0.80, c), uOver * (0.55 + 0.45 * c)) * smoothstep(0.0, 0.22, h);
           float lit = clamp(0.55 + 0.6 * dot(vec2(d.x, d.z), normalize(uSun.xz + 0.001)) * 0.3 + (1.0 - c) * 0.5, 0.0, 1.0);
-          vec3 cc = mix(vec3(0.55, 0.60, 0.70), vec3(1.0, 0.98, 0.95), lit);
+          vec3 cc = mix(vec3(0.55, 0.60, 0.70), vec3(1.0, 0.98, 0.95), lit) * (1.0 - 0.45 * uOver * (1.0 - 0.5 * c));
           col = mix(col, cc, m * 0.92);
         }
+        col = mix(col, vec3(dot(col, vec3(0.33))) * 0.62 + vec3(0.04), uOver * 0.55);
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -278,7 +288,7 @@ export class Clouds {
     const area = mapSize + 700;
     this.mat = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, fog: false,
-      uniforms: { uTime: U.uTime, uCld: U.uCld, uWind: U.uWind, uArea: { value: area }, uOrg: { value: -350 }, uSun: U.uSunDir },
+      uniforms: { uTime: U.uTime, uCld: U.uCld, uWind: U.uWind, uArea: { value: area }, uOrg: { value: -350 }, uSun: U.uSunDir, uOver: U.uOver },
       vertexShader: `
       attribute vec3 aPos; attribute float aScale; attribute float aSeed; attribute float aTone;
       uniform float uTime; uniform vec2 uWind; uniform float uArea; uniform float uOrg;
@@ -292,14 +302,15 @@ export class Clouds {
         vFade = smoothstep(120.0, 300.0, dist) * smoothstep(0.0, 120.0, edge);
       }`,
       fragmentShader: `
-      uniform sampler2D uCld; uniform vec3 uSun; varying vec2 vUv; varying float vSeed; varying float vTone; varying float vFade;
+      uniform sampler2D uCld; uniform vec3 uSun; uniform float uOver; varying vec2 vUv; varying float vSeed; varying float vTone; varying float vFade;
       void main() {
         vec2 p = vUv - 0.5; float d = length(p) * 2.0;
         float n = texture2D(uCld, vUv * 0.6 + vSeed * 7.0).r * 0.6 + texture2D(uCld, vUv * 1.7 + vSeed * 3.0).g * 0.4;
         float a = smoothstep(1.0, 0.25, d + (n - 0.5) * 0.9);
         float top = clamp(vUv.y * 1.25 - 0.1, 0.0, 1.0);
         vec3 col = mix(vec3(0.60, 0.65, 0.74), vec3(1.0, 0.99, 0.96), top * 0.8 + 0.2 + (n - 0.5) * 0.3);
-        gl_FragColor = vec4(col, a * 0.82 * vFade);
+        col *= 1.0 - 0.42 * uOver;
+        gl_FragColor = vec4(col, min(1.0, a * (0.82 + 0.5 * uOver)) * vFade);
         if (gl_FragColor.a < 0.01) discard;
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
