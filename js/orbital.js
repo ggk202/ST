@@ -12,7 +12,7 @@ const TAU = Math.PI * 2;
 export const R_EARTH = 100, R_LAYER = [118, 142, 172];
 const INC = [[0.0, 0.0], [0.62, 1.0], [1.05, 2.3], [0.3, 4.1]];   // inclination, node angle per orbit plane index
 const KIND_SCALE = { recon: 3.2, survey: 3.4, strike: 3.0, hk: 3.2, yard: 1.1, ship: 1.0 };
-const SHIP_SCALE = { orbfighter: 2.6, orbcruiser: 1.5, orbbattleship: 1.0 };
+const SHIP_SCALE = { orbfighter: 2.0, orbcruiser: 1.4, orbbattleship: 1.0 };
 
 // ---- procedural planet shaders -------------------------------------------------------------------------------------------
 const NOISE = `

@@ -115,46 +115,4 @@ function icbm(b) {
   for (const a of [0, PI / 2, PI, PI * 1.5]) b.box(0.08, 1.2, 1.4, Math.sin(a) * 0.9, 2.2 + Math.cos(a) * 0.9, -4.0, 0x6b7280, [0, 0, -a]);
 }
 // ---------------- orbital craft ----------------
-function panels(b, x, y, z, n, w, d, side) {
-  b.box(0.3, 0.3, 0.3, x, y, z, STEEL); b.box(Math.abs(side) * 0.6, 0.12, 0.2, x + side * 0.4, y, z, STEEL);
-  for (let i = 0; i < n; i++) { const px = x + side * (0.9 + i * (w + 0.08) + w / 2); b.box(w, 0.1, d, px, y, z, (i & 1) ? SOLAR2 : SOLAR); for (let k = 1; k < 4; k++) b.box(0.03, 0.12, d, px - w / 2 + k * w / 4, y + 0.01, z, 0x6b8fd0); }
-}
-function satbus(b, c = FOIL) { b.box(2.2, 2.2, 3.2, 0, 0, 0, c); b.box(2.3, 0.2, 3.3, 0, 1.15, 0, 0x3a3f46); b.box(2.3, 0.2, 3.3, 0, -1.15, 0, 0x3a3f46); for (const s of [-1, 1]) b.box(0.1, 1.6, 2.6, s * 1.15, 0, 0, T); }
-function satrecon(b) { satbus(b); panels(b, 1.15, 0, 0, 3, 2.2, 1.8, 1); panels(b, -1.15, 0, 0, 3, 2.2, 1.8, -1); b.cyl(0.8, 1.8, 0, 0, 2.5, 0xe1e5ea, [PI / 2, 0, 0]); b.cyl(0.9, 0.2, 0, 0, 3.5, BLACK, [PI / 2, 0, 0]); b.sph6(0.5, 0, 0, 3.7, GLOW); b.cyl6(0.04, 1.4, 0, 1.9, -1.2, STEEL); b.cyl(0.55, 0.14, 0, 2.6, -1.2, WHITE); }
-function satsurvey(b) { satbus(b, 0xe8e8ea); panels(b, 1.15, 0, 0, 4, 2.6, 2.2, 1); panels(b, -1.15, 0, 0, 4, 2.6, 2.2, -1); b.cyl(2.0, 0.2, 0, 2.0, -1.0, WHITE, [0.5, 0, 0]); b.cone(2.0, 0.6, 0, 2.0, -0.8, 0xd2d6db, [0.5 + PI, 0, 0]); b.cyl6(0.08, 1.8, 0, 1.4, -0.8, METAL); b.cyl(0.7, 1.4, 0, 0, 2.3, 0xd0d4d9, [PI / 2, 0, 0]); b.sph6(0.45, 0, 0, 3.2, CYAN); }
-function satstrike(b) { b.box(2.6, 2.0, 5.0, 0, 0, 0, 0x424851); b.box(2.7, 0.2, 5.1, 0, 1.05, 0, 0x6b7280); for (const x of [-0.8, 0.8]) for (let i = 0; i < 3; i++) { b.cyl(0.22, 3.0, x, -1.4, -1.5 + i * 1.5, 0x9a8f75, [PI / 2, 0, 0]); b.cone(0.22, 0.6, x, -1.4, 0.2 + i * 1.5 + 1.0, 0x6b6250, [PI / 2, 0, 0]); } panels(b, 1.3, 0, 0, 2, 2.0, 2.0, 1); panels(b, -1.3, 0, 0, 2, 2.0, 2.0, -1); b.cyl(0.4, 1.2, 0, 0, -3.0, DARK2, [PI / 2, 0, 0]); b.cyl(0.3, 0.2, 0, 0, -3.7, ORANGE, [PI / 2, 0, 0]); for (const s of [-1, 1]) b.box(0.12, 1.4, 2.4, s * 1.35, 0.1, 0, T); }
-function satkill(b) { b.fuse([{ z: -2.8, w: 0.5, t: 0.5 }, { z: -2, w: 1.0, t: 1.0 }, { z: 1.4, w: 1.1, t: 1.1 }, { z: 2.8, w: 0.5, t: 0.5 }], HULL2); for (const [x, y] of [[1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]]) { b.box(Math.abs(x) ? 1.4 : 0.2, Math.abs(y) ? 1.4 : 0.2, 0.3, x, y, 1.6, STEEL); b.cyl6(0.25, 0.9, x * 1.15, y * 1.15, 1.8, DARK2, [PI / 2, 0, 0]); b.cyl6(0.18, 0.2, x * 1.15, y * 1.15, 2.4, ORANGE, [PI / 2, 0, 0]); } b.sph6(0.5, 0, 0, 3.0, RED); b.box(0.3, 0.9, 0.5, 0, 0, -2.4, T); panels(b, 1.0, 0.8, -1.0, 1, 1.6, 1.4, 1); panels(b, -1.0, 0.8, -1.0, 1, 1.6, 1.4, -1); }
-function orbyard(b) {
-  b.cyl(1.8, 18, 0, 0, 0, HULL, [PI / 2, 0, 0]); for (let i = 0; i < 6; i++) { b.cyl(2.0, 0.5, 0, 0, -7 + i * 3, i % 2 ? HULL2 : DARK2, [PI / 2, 0, 0]); }
-  b.cyl(4.6, 0.5, 0, 0, 3, STEEL, [PI / 2, 0, 0]); for (let i = 0; i < 12; i++) { const a = i / 12 * PI * 2; b.box(0.4, 1.6, 0.4, Math.cos(a) * 4.4, Math.sin(a) * 4.4, 3, HULL2, [0, 0, a]); b.box(1.8, 1.0, 1.8, Math.cos(a) * 5.4, Math.sin(a) * 5.4, 3, (i & 1) ? T : GLOW); }
-  b.box(0.5, 14, 0.5, 0, 0, 8, STEEL, [0, 0, 0]); for (const s of [-1, 1]) { b.box(14, 0.16, 5, s * 9.0, 0, -4, SOLAR2); for (let k = 1; k < 7; k++) b.box(0.05, 0.18, 5, s * (2.5 + k * 1.9), 0, -4, 0x6b8fd0); b.box(5, 0.3, 0.3, s * 2.6, 0, -4, STEEL); }
-  b.cone(1.8, 3, 0, 0, 10.5, STEEL, [PI / 2, 0, 0]); b.cyl(1.0, 1.6, 0, 0, -9.5, DARK2, [PI / 2, 0, 0]); b.cyl(0.8, 0.3, 0, 0, -10.4, PLASMA, [PI / 2, 0, 0]);
-  b.box(3, 0.6, 7, 0, 3.4, -2, T); b.sph6(0.5, 0, 0, 8.6, CYAN); for (const z of [-2, 4]) b.cyl(1.0, 0.4, 0, -2.2, z, WHITE);
-}
-function hullShip(b, L, W, H2, col) {
-  b.fuse([{ z: -L, w: W * 0.5, t: H2 * 0.6 }, { z: -L * 0.8, w: W * 0.9, t: H2 }, { z: L * 0.2, w: W, t: H2 }, { z: L * 0.7, w: W * 0.6, t: H2 * 0.8 }, { z: L, w: 0.2, t: 0.2 }], col, 12);
-}
-function orbfighter(b) {
-  hullShip(b, 4, 0.9, 0.7, 0xb7bdc4); b.wedge(4.6, 0.2, 3.2, 0, 0, -0.5, T, [0, 0, 0]);
-  for (const s of [-1, 1]) { b.wing([{ x: s * 0.6, z: 0.4, c: 2.8, y: 0, t: 0.1 }, { x: s * 3.2, z: -1.2, c: 1.6, y: 0, t: 0.07 }], HULL2); b.box(0.3, 0.3, 1.8, s * 3.2, 0, -0.4, DARK2); b.cyl6(0.18, 1.0, s * 1.2, 0, -3.8, DARK2, [PI / 2, 0, 0]); b.cyl6(0.12, 0.2, s * 1.2, 0, -4.4, PLASMA, [PI / 2, 0, 0]); }
-  b.sph6(0.5, 0, 0.5, 1.8, GLASS, 0.7);
-}
-function orbcruiser(b) {
-  hullShip(b, 9, 1.8, 1.3, HULL); b.box(4.6, 0.3, 11, 0, 1.5, -1, T); for (const s of [-1, 1]) { b.box(1.0, 2.2, 4, s * 2.2, 0, -3.5, DARK2); b.cyl6(0.7, 1.6, s * 2.2, 0, -7.3, DARK2, [PI / 2, 0, 0]); b.cyl6(0.5, 0.3, s * 2.2, 0, -8.2, PLASMA, [PI / 2, 0, 0]); b.wedge(3.0, 0.2, 4.0, s * 3.4, 0.1, -2.5, HULL2); }
-  b.box(2.6, 1.4, 3.0, 0, 1.9, -3.0, HULL2); b.sph6(0.5, 0, 2.7, -3.0, CYAN);
-  b.cyl(0.55, 8.0, 0, 0.1, 6.5, 0x474d56, [PI / 2, 0, 0]); b.cyl(0.35, 2.0, 0, 0.1, 11.5, DARK2, [PI / 2, 0, 0]); b.cyl(0.7, 2.2, 0, 0.1, 3.8, STEEL, [PI / 2, 0, 0]);
-  for (const z of [-1, 2.4]) { b.cyl6(0.6, 0.4, 0, 1.7, z, DARK2); b.barrel(0.12, 1.8, 0, 1.9, z + 0.2, METAL); }
-}
-function orbbattleship(b) {
-  hullShip(b, 15, 3.4, 2.2, 0xaeb5bd); b.box(7.8, 0.4, 20, 0, 2.5, -1, T); b.box(5.2, 2.4, 9, 0, 2.2, -4.5, 0x8d959e);
-  b.trap(4.2, 1.2, 7, 0.7, 0.7, 0, 4.0, -4.5, 0x737b85); b.box(2.4, 1.6, 3.0, 0, 5.2, -6.0, 0x5a626c); b.sph6(0.7, 0, 6.2, -6.0, CYAN);
-  for (const s of [-1, 1]) {
-    b.box(2.4, 3.2, 8, s * 4.4, 0, -6.0, 0x464c55); b.cyl6(1.5, 2.2, s * 4.4, 0, -11.8, DARK2, [PI / 2, 0, 0]); b.cyl6(1.0, 0.4, s * 4.4, 0, -13.0, PLASMA, [PI / 2, 0, 0]);
-    b.box(3.0, 0.4, 10, s * 6.4, 0.2, 1, 0x7d858f); b.box(0.5, 4.0, 4, s * 7.6, 0.8, -1.5, T);
-    for (let i = 0; i < 3; i++) b.box(1.8, 1.4, 0.8, s * 3.4, 3.2, 4 + i * 3, i & 1 ? DARK2 : 0x59606a);
-  }
-  b.cyl(1.9, 12, 0, 1.2, 12, 0x4a5058, [PI / 2, 0, 0]); b.cyl(1.3, 3.0, 0, 1.2, 19.4, DARK2, [PI / 2, 0, 0]); b.cyl(0.9, 0.5, 0, 1.2, 21.0, PLASMA, [PI / 2, 0, 0]); b.cyl(2.3, 0.8, 0, 1.2, 8.0, STEEL, [PI / 2, 0, 0]);
-  for (const z of [-1, 4, 9]) for (const s of [-1, 1]) { b.cyl6(1.0, 0.5, s * 2.2, 3.0, z, DARK2); b.barrel(0.2, 3.0, s * 2.2, 3.3, z + 0.3, METAL); b.barrel(0.2, 3.0, s * 2.2 + s * 0.5, 3.3, z + 0.3, METAL); }
-  H.antenna(b, 0, 5.8, 0, 3.0); b.sph6(0.18, 0, 8.9, 0, RED);
-}
-export const LATE = { solar, fusion, synth, reserve, wall, bunker, lasertower, railgun, heavyart, abm, silo, launchpad, icbm, satrecon, satsurvey, satstrike, satkill, orbyard, orbfighter, orbcruiser, orbbattleship };
+export const LATE = { solar, fusion, synth, reserve, wall, bunker, lasertower, railgun, heavyart, abm, silo, launchpad, icbm };
