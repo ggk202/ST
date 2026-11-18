@@ -65,7 +65,7 @@ void main(){
   lit += mix(vec3(0.15, 1.0, 0.45), vec3(0.6, 0.2, 0.9), smoothstep(0.78, 0.9, lat)) * cur * al * (1.0 - day) * (0.6 + 0.4 * sin(uTime * 0.6 + ang * 3.0)) * 0.9;
   float fr = pow(1.0 - max(dot(N, V), 0.0), 3.2);
   vec3 atm = mix(vec3(0.22, 0.5, 1.0), vec3(1.0, 0.5, 0.25), tw);
-  lit += atm * fr * (0.10 + 1.15 * day);
+  lit += atm * fr * (0.03 + 0.25 * day);   // the scattering shell now supplies most of the limb glow
   gl_FragColor = vec4(lit, 1.0);
 }`;
 const CLOUD_FS = `#define OCT 6
@@ -92,16 +92,35 @@ void main(){
 }`;
 const ATM_VS = `varying vec3 vNV; varying vec3 vNW; varying vec3 vW; void main(){ vNV = normalize(normalMatrix * normal); vNW = normalize(mat3(modelMatrix) * normal); vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
 const ATM_FS = `precision highp float; varying vec3 vNV; varying vec3 vNW; varying vec3 vW; uniform vec3 uSun;
+#define RP 100.0
+#define RA 108.5
+#define NS 16
+#define NL 5
+const vec3 BR = vec3(0.0066, 0.0153, 0.0350);   // Rayleigh scattering (blue scatters most)
+const float BM = 0.0035, HR = 2.5, HM = 0.9;     // Mie scattering and scale heights
+vec2 sph(vec3 ro, vec3 rd, float r){ float b = dot(ro, rd), c = dot(ro, ro) - r * r, d = b * b - c; if (d < 0.0) return vec2(-1.0); float s = sqrt(d); return vec2(-b - s, -b + s); }
 void main(){
-  float a = clamp(0.82 + dot(vNV, vec3(0.0, 0.0, 1.0)), 0.0, 1.0);
-  float glow = pow(a, 3.4);
-  float ndl = dot(normalize(vNW), normalize(uSun)), day = smoothstep(-0.35, 0.4, ndl);
-  float tw = smoothstep(-0.25, 0.05, ndl) * (1.0 - smoothstep(0.05, 0.4, ndl));
-  vec3 col = mix(vec3(0.20, 0.45, 1.0), vec3(0.45, 0.78, 1.0), glow);
-  col = mix(col, vec3(1.0, 0.45, 0.2), tw * 0.8);
-  float mie = pow(max(dot(normalize(vNW), normalize(uSun)), -0.2) * 0.5 + 0.5, 6.0) * glow;   // forward-scatter halo toward the sun
-  col += vec3(1.0, 0.85, 0.6) * mie * 0.6;
-  gl_FragColor = vec4(col * glow * (0.12 + 1.4 * day), glow * (0.1 + 0.9 * day));
+  vec3 ro = cameraPosition, rd = normalize(vW - ro), L = normalize(uSun);
+  vec2 a = sph(ro, rd, RA); float t0 = max(a.x, 0.0), t1 = a.y;
+  vec2 pl = sph(ro, rd, RP); bool ground = pl.x > 0.0; if (ground) t1 = min(t1, pl.x);
+  if (t1 <= t0) discard;
+  float ds = (t1 - t0) / float(NS), odR = 0.0, odM = 0.0; vec3 sR = vec3(0.0), sM = vec3(0.0);
+  for (int i = 0; i < NS; i++) {
+    vec3 pos = ro + rd * (t0 + (float(i) + 0.5) * ds); float h = max(length(pos) - RP, 0.0);
+    float dR = exp(-h / HR) * ds, dM = exp(-h / HM) * ds; odR += dR; odM += dM;
+    if (sph(pos, L, RP).x > 0.0) continue;                 // in the planet's shadow
+    float ls = sph(pos, L, RA).y / float(NL), lR = 0.0, lM = 0.0;
+    for (int j = 0; j < NL; j++) { float hh = max(length(pos + L * ((float(j) + 0.5) * ls)) - RP, 0.0); lR += exp(-hh / HR) * ls; lM += exp(-hh / HM) * ls; }
+    vec3 att = exp(-(BR * (odR + lR) + vec3(BM * 1.15) * (odM + lM)));
+    sR += att * dR; sM += att * dM;
+  }
+  float mu = dot(rd, L), g = 0.78;
+  float pR = 0.75 * (1.0 + mu * mu);                                                              // Rayleigh phase
+  float pM = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * mu, 1.5) * 0.5;                          // Henyey-Greenstein
+  vec3 col = (sR * BR * pR + sM * BM * pM) * 5.5;
+  col = 1.0 - exp(-col);                              // soft exposure
+  float a2 = max(max(col.r, col.g), col.b);
+  gl_FragColor = vec4(col, a2);
 }`;
 const MOON_FS = `#define OCT 5
 precision highp float; varying vec3 vObj; varying vec3 vW; varying vec3 vNW; uniform vec3 uSun;
@@ -152,7 +171,7 @@ export class OrbitalView {
     const earthGeo = new THREE.SphereGeometry(R_EARTH, lowQ ? 96 : 160, lowQ ? 64 : 112);
     this.earth = new THREE.Mesh(earthGeo, new THREE.ShaderMaterial({ vertexShader: EARTH_VS, fragmentShader: fix(EARTH_FS), uniforms: this.U })); sc.add(this.earth);
     this.cloud = new THREE.Mesh(new THREE.SphereGeometry(R_EARTH * 1.012, lowQ ? 80 : 128, lowQ ? 56 : 96), new THREE.ShaderMaterial({ vertexShader: EARTH_VS, fragmentShader: fix(CLOUD_FS), uniforms: this.U, transparent: true, depthWrite: false })); sc.add(this.cloud);
-    this.atm = new THREE.Mesh(new THREE.SphereGeometry(R_EARTH * 1.085, 96, 72), new THREE.ShaderMaterial({ vertexShader: ATM_VS, fragmentShader: ATM_FS, uniforms: this.U, side: THREE.BackSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); sc.add(this.atm);
+    this.atm = new THREE.Mesh(new THREE.SphereGeometry(R_EARTH * 1.085, 96, 72), new THREE.ShaderMaterial({ vertexShader: ATM_VS, fragmentShader: ATM_FS, uniforms: this.U, side: THREE.FrontSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); sc.add(this.atm);
     // stars + a faint galactic band
     const N = 3600, pos = new Float32Array(N * 3), col = new Float32Array(N * 3); let s = 12345; const rnd = () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296;
     for (let i = 0; i < N; i++) {
