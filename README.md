@@ -197,3 +197,6 @@ tests/save-test.mjs save / load round trip
 - **Production overview** (**C**): bulk-queue, repeat, clear and rally per unit group; **Shift** queues waypoints, quantity selector ×1/5/10/25, SELECT menu and control groups for large armies. **R** opens the Strategic tab.
 - **Colossal** map size (800 cells). Terrain and water are chunked with distance LOD and frustum culling, so the largest map draws roughly 5% of the triangles it used to.
 - **Graphics settings**: presets (auto/low/medium/high/ultra) plus resolution, shadows, view distance, object density, clouds, effects, anti-aliasing, FPS cap, orbital quality and an FPS overlay.
+
+## Releasing
+Run `node tools/stamp.mjs` before committing: it puts a content hash on every module URL in the import map in `index.html`, so browsers (especially iPad Safari) never mix a fresh page with stale cached scripts.

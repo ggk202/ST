@@ -9,7 +9,56 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0d1217">
 <script type="importmap">
-{ "imports": { "three": "./js/vendor/three.module.min.js" } }
+{
+ "imports": {
+  "three": "./js/vendor/three.module.min.js",
+  "./js/aircraft-gfx.js": "./js/aircraft-gfx.js?v=9534e2ce",
+  "./js/airfield-gfx.js": "./js/airfield-gfx.js?v=fc18d998",
+  "./js/biomes.js": "./js/biomes.js?v=f4cafe97",
+  "./js/decals.js": "./js/decals.js?v=cc994a8e",
+  "./js/fx.js": "./js/fx.js?v=d239f435",
+  "./js/game.js": "./js/game.js?v=8ba338d1",
+  "./js/gfx.js": "./js/gfx.js?v=6e124b7d",
+  "./js/input.js": "./js/input.js?v=d4b4d816",
+  "./js/logi-gfx.js": "./js/logi-gfx.js?v=ca0722d2",
+  "./js/logi-ui.js": "./js/logi-ui.js?v=e4f5e1e3",
+  "./js/main.js": "./js/main.js?v=c9973381",
+  "./js/model-air.js": "./js/model-air.js?v=97d62914",
+  "./js/model-air2.js": "./js/model-air2.js?v=90233f9c",
+  "./js/model-air3.js": "./js/model-air3.js?v=6c84b361",
+  "./js/model-buildings.js": "./js/model-buildings.js?v=03f6386f",
+  "./js/model-core.js": "./js/model-core.js?v=1ec4389c",
+  "./js/model-drones.js": "./js/model-drones.js?v=0f8a8858",
+  "./js/model-ground.js": "./js/model-ground.js?v=6743433d",
+  "./js/model-late.js": "./js/model-late.js?v=ebc34fb1",
+  "./js/model-logi.js": "./js/model-logi.js?v=21a35749",
+  "./js/model-space.js": "./js/model-space.js?v=5a01a015",
+  "./js/model-tier.js": "./js/model-tier.js?v=230f2520",
+  "./js/models.js": "./js/models.js?v=7790254e",
+  "./js/net.js": "./js/net.js?v=2c021794",
+  "./js/orbital.js": "./js/orbital.js?v=5fc73cf1",
+  "./js/overlay.js": "./js/overlay.js?v=99a939f2",
+  "./js/procanim.js": "./js/procanim.js?v=8cd3244b",
+  "./js/prod-ui.js": "./js/prod-ui.js?v=5f97f89d",
+  "./js/projectile-gfx.js": "./js/projectile-gfx.js?v=2ec4b81b",
+  "./js/render.js": "./js/render.js?v=65474546",
+  "./js/sim/ai.js": "./js/sim/ai.js?v=ca43c5ca",
+  "./js/sim/airops.js": "./js/sim/airops.js?v=cad5fbaa",
+  "./js/sim/cargo.js": "./js/sim/cargo.js?v=a424367c",
+  "./js/sim/defs.js": "./js/sim/defs.js?v=1c34aa67",
+  "./js/sim/flight.js": "./js/sim/flight.js?v=5d5e79d6",
+  "./js/sim/logistics.js": "./js/sim/logistics.js?v=d99120ec",
+  "./js/sim/map.js": "./js/sim/map.js?v=438ec206",
+  "./js/sim/path.js": "./js/sim/path.js?v=75fdfeb1",
+  "./js/sim/save.js": "./js/sim/save.js?v=ec393b6c",
+  "./js/sim/sim.js": "./js/sim/sim.js?v=858d89a0",
+  "./js/sim/space.js": "./js/sim/space.js?v=08509580",
+  "./js/sim/util.js": "./js/sim/util.js?v=d8ff3f69",
+  "./js/terrain-chunks.js": "./js/terrain-chunks.js?v=dffee037",
+  "./js/ui.js": "./js/ui.js?v=19975cb4",
+  "./js/viewer.js": "./js/viewer.js?v=7c55b7e7"
+ }
+}
 </script>
 <style>
 :root { --bg:#0d1217; --panel:rgba(14,19,25,.86); --line:#2b3745; --txt:#dfe7ee; --dim:#8a99a8; --acc:#8fd14f; --acc2:#f0b429; --bad:#ef5350; --blue:#4aa3ff; }
@@ -346,7 +395,7 @@ body.touch .item { min-height:66px; } body.touch .btn { min-height:44px; }
   <div id="endscreen" class="hidden"><div class="card" id="endCard"></div></div>
 </div>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script type="module" src="js/main.js"></script>
+<script type="module">import "./js/main.js";</script>
 <script>
 setTimeout(function(){ if(!window.__loaded){ var l=document.getElementById("loading"); if(l) l.innerHTML="<div style='text-align:center;max-width:420px;padding:20px'>Could not load the game.<br><small style='letter-spacing:0;color:#8a99a8'>The 3D library is loaded from a CDN (jsdelivr). Check your internet connection and that the page is served over http(s) (GitHub Pages), not opened as a local file, then reload.</small></div>"; } }, 9000);
 </script>
